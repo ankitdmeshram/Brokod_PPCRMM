@@ -1,5 +1,7 @@
 import { Button, Checkbox, FormControl, FormLabel, Input, Stack } from "@mui/joy";
+import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../context/AuthContext";
+import { APP_ROUTES } from "../../router/authRoutes";
 import PasswordInput from "./PasswordInput";
 import {
   checkboxStyles,
@@ -8,6 +10,7 @@ import {
 } from "./authStyles";
 
 export default function SignInForm() {
+  const navigate = useNavigate();
   const { signInValues, signInStatus, updateSignInField, submitSignIn } =
     useAuthContext();
 
@@ -17,7 +20,10 @@ export default function SignInForm() {
       component="form"
       onSubmit={async (event) => {
         event.preventDefault();
-        await submitSignIn();
+        const result = await submitSignIn();
+        if (result) {
+          navigate(APP_ROUTES.workspace, { replace: true });
+        }
       }}
     >
       <FormControl>

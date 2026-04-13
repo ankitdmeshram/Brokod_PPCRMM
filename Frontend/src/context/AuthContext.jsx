@@ -193,6 +193,7 @@ export function AuthProvider({ children }) {
   const value = useMemo(
     () => ({
       authSession,
+      isAuthenticated: Boolean(authSession?.token),
       signInValues,
       signInStatus,
       signUpValues,

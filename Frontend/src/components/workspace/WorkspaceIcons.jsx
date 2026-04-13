@@ -1,0 +1,9 @@
+export { default as MenuIcon } from "@mui/icons-material/Menu";
+export { default as WorkspaceIcon } from "@mui/icons-material/WorkspacesOutline";
+export { default as ArrowIcon } from "@mui/icons-material/ChevronRight";
+export { default as PlusIcon } from "@mui/icons-material/Add";
+export { default as EditIcon } from "@mui/icons-material/EditOutlined";
+export { default as DeleteIcon } from "@mui/icons-material/DeleteOutline";
+export { default as EnterIcon } from "@mui/icons-material/Login";
+export { default as ExpandIcon } from "@mui/icons-material/Fullscreen";
+export { default as BellIcon } from "@mui/icons-material/NotificationsNone";
