@@ -1,53 +1,14 @@
-:root {
-  font-family: var(--font-body);
-  line-height: 1.5;
-  font-weight: 400;
-  color: #2a211a;
-  background:
-    linear-gradient(160deg, #fbf3e6 0%, #f4e6d4 48%, #dfe8e6 100%);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  --font-display: "Avenir Next", "Trebuchet MS", sans-serif;
-  --font-body: "Segoe UI", "Helvetica Neue", sans-serif;
-  --color-ink: #2a211a;
-  --color-ink-soft: #6d5d52;
-  --color-accent-deep: #b9573d;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
+  font-family: sans-serif;
 }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-a {
-  color: inherit;
-}
-
-code {
-  padding: 0.18rem 0.4rem;
-  border-radius: 0.45rem;
-  background: rgba(42, 33, 26, 0.08);
-  font-family: "Consolas", "Courier New", monospace;
-}
-
-#root {
-  min-height: 100vh;
+* {
+  box-sizing: border-box;
 }
