@@ -9,6 +9,7 @@ export default function AppLayout({
   title,
   fullName,
   initial,
+  userRole,
   currentYear,
   children,
 }) {
@@ -45,6 +46,7 @@ export default function AppLayout({
           title={title}
           fullName={fullName}
           initial={initial}
+          userRole={userRole}
           onMenuClick={() => setIsSidebarCollapsed((value) => !value)}
         />
         <AppMain>{children}</AppMain>

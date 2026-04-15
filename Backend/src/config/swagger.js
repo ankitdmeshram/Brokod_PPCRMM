@@ -155,6 +155,10 @@ const swaggerSpec = swaggerJsdoc({
               type: "integer",
               example: 1,
             },
+            workspaceId: {
+              type: "integer",
+              example: 2,
+            },
             projectName: {
               type: "string",
               example: "CRM Revamp",
@@ -285,8 +289,12 @@ const swaggerSpec = swaggerJsdoc({
         },
         CreateProjectRequest: {
           type: "object",
-          required: ["projectName", "description", "status", "startDate", "endDate"],
+          required: ["workspaceId", "projectName", "description", "status", "startDate", "endDate"],
           properties: {
+            workspaceId: {
+              type: "integer",
+              example: 2,
+            },
             projectName: {
               type: "string",
               example: "CRM Revamp",
@@ -328,6 +336,10 @@ const swaggerSpec = swaggerJsdoc({
         UpdateProjectRequest: {
           type: "object",
           properties: {
+            workspaceId: {
+              type: "integer",
+              example: 3,
+            },
             projectName: {
               type: "string",
               example: "CRM Revamp Phase 2",
@@ -429,6 +441,43 @@ const swaggerSpec = swaggerJsdoc({
               items: {
                 $ref: "#/components/schemas/ProjectUser",
               },
+            },
+          },
+        },
+        Workspace: {
+          type: "object",
+          properties: {
+            id: {
+              type: "integer",
+              example: 2,
+            },
+            workspaceName: {
+              type: "string",
+              example: "My Workspace",
+            },
+            workspaceDescription: {
+              type: "string",
+              example: "Workspace for product planning and delivery.",
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+            },
+            membershipRole: {
+              type: "string",
+              nullable: true,
+              example: "owner",
+            },
+            membershipStatus: {
+              type: "string",
+              nullable: true,
+              example: "active",
             },
           },
         },

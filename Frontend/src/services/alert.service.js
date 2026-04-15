@@ -33,3 +33,17 @@ export function showInfoAlert(title, text) {
     text,
   });
 }
+
+export function showConfirmAlert(title, text, options = {}) {
+  return Swal.fire({
+    ...baseOptions,
+    icon: "warning",
+    title,
+    text,
+    showCancelButton: true,
+    confirmButtonText: "Delete",
+    cancelButtonText: "Cancel",
+    focusCancel: true,
+    ...options,
+  });
+}

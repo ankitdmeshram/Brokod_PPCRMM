@@ -11,6 +11,7 @@ exports.up = async function up(knex) {
   await knex.schema.createTable("project_users", (table) => {
     table.increments("id").primary();
     table.integer("project_id").unsigned().notNullable();
+    table.integer("user_id").unsigned().notNullable();
     table.string("role", 50).notNullable();
     table.string("status", 50).notNullable();
     table.timestamp("created_at").notNullable().defaultTo(knex.fn.now());
@@ -24,6 +25,11 @@ exports.up = async function up(knex) {
       .foreign("project_id", "project_users_project_id_foreign")
       .references("id")
       .inTable("projects")
+      .onDelete("CASCADE");
+    table
+      .foreign("user_id", "project_users_user_id_foreign")
+      .references("id")
+      .inTable("users")
       .onDelete("CASCADE");
     table
       .foreign("created_by", "project_users_created_by_foreign")

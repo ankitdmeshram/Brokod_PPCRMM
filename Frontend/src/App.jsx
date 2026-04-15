@@ -6,6 +6,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import WorkspacePage from "./pages/WorkspacePage";
+import WorkspaceProjectsPage from "./pages/WorkspaceProjectsPage";
 import { APP_ROUTES, AUTH_ROUTES } from "./router/authRoutes";
 import { joyTheme } from "./theme/joyTheme";
 
@@ -32,10 +33,18 @@ export default function App() {
             }
           />
           <Route
-            path={`${APP_ROUTES.workspace}/*`}
+            path={APP_ROUTES.workspace}
             element={
               <ProtectedRoute>
                 <WorkspacePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceName/projects`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage />
               </ProtectedRoute>
             }
           />

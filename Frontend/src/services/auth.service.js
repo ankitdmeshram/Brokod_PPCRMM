@@ -33,3 +33,14 @@ export async function signinUser(payload) {
 
   return parseApiResponse(response);
 }
+
+export async function fetchCurrentUser(token) {
+  const response = await fetch(`${AUTH_API_BASE}/me`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseApiResponse(response);
+}

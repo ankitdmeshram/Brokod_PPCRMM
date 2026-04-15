@@ -8,6 +8,7 @@ export default function WorkspacePage() {
   const currentYear = new Date().getFullYear();
   const firstName = authSession?.user?.firstName || "Ankit";
   const lastName = authSession?.user?.lastName || "Meshram";
+  const userRole = authSession?.user?.role || "";
   const fullName = `${firstName} ${lastName}`.trim();
   const initial = firstName.charAt(0).toUpperCase() || "A";
 
@@ -17,6 +18,7 @@ export default function WorkspacePage() {
       title="Workspaces"
       fullName={fullName}
       initial={initial}
+      userRole={userRole}
       currentYear={currentYear}
     >
       <WorkspaceMain />

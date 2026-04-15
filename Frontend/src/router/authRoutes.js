@@ -6,3 +6,6 @@ export const AUTH_ROUTES = {
 export const APP_ROUTES = {
   workspace: "/workspace",
 };
+
+export const buildWorkspaceProjectsRoute = (workspaceName) =>
+  `/workspace/${workspaceName}/projects`;

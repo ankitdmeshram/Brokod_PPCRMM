@@ -2,6 +2,8 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  // Compatibility migration for databases created before user_id
+  // was added directly to the project_users table definition.
   const hasProjectUsersTable = await knex.schema.hasTable("project_users");
 
   if (!hasProjectUsersTable) {
@@ -34,6 +36,7 @@ exports.up = async function up(knex) {
  * @param {import('knex').Knex} knex
  */
 exports.down = async function down(knex) {
+  // Preserve rollback behavior for legacy databases only.
   const hasProjectUsersTable = await knex.schema.hasTable("project_users");
 
   if (!hasProjectUsersTable) {

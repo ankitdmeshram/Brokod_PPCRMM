@@ -25,3 +25,7 @@ body {
 * {
   box-sizing: border-box;
 }
+
+.swal2-container {
+  z-index: 20000 !important;
+}

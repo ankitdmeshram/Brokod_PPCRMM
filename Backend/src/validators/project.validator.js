@@ -28,18 +28,20 @@ const validateProjectDates = (startDate, endDate) => {
 };
 
 const validateCreateProjectPayload = (payload) => {
+  const workspaceId = Number(payload?.workspaceId);
   const projectName = payload?.projectName?.trim();
-  const description = payload?.description?.trim();
-  const status = payload?.status?.trim().toLowerCase();
-  const startDate = payload?.startDate?.trim();
-  const endDate = payload?.endDate?.trim();
+  const description = payload?.description?.trim() || "";
+  const status = payload?.status?.trim().toLowerCase() || "planned";
+  const startDate = payload?.startDate?.trim() || null;
+  const endDate = payload?.endDate?.trim() || null;
   const tags = normalizeTags(payload?.tags);
 
-  if (!projectName || !description || !status || !startDate || !endDate) {
-    throw new AppError(
-      "projectName, description, status, startDate, and endDate are required.",
-      400
-    );
+  if (!Number.isInteger(workspaceId) || workspaceId <= 0) {
+    throw new AppError("workspaceId is required and must be a valid integer.", 400);
+  }
+
+  if (!projectName) {
+    throw new AppError("workspaceId and projectName are required.", 400);
   }
 
   if (!allowedStatuses.has(status)) {
@@ -49,9 +51,12 @@ const validateCreateProjectPayload = (payload) => {
     );
   }
 
-  validateProjectDates(startDate, endDate);
+  if (startDate && endDate) {
+    validateProjectDates(startDate, endDate);
+  }
 
   return {
+    workspaceId,
     projectName,
     description,
     status,
@@ -72,12 +77,16 @@ const validateUpdateProjectPayload = (payload, currentProject) => {
     updates.projectName = projectName;
   }
 
-  if (payload?.description !== undefined) {
-    const description = payload.description?.trim();
-    if (!description) {
-      throw new AppError("description cannot be empty.", 400);
+  if (payload?.workspaceId !== undefined) {
+    const workspaceId = Number(payload.workspaceId);
+    if (!Number.isInteger(workspaceId) || workspaceId <= 0) {
+      throw new AppError("workspaceId must be a valid integer.", 400);
     }
-    updates.description = description;
+    updates.workspaceId = workspaceId;
+  }
+
+  if (payload?.description !== undefined) {
+    updates.description = payload.description?.trim() || "";
   }
 
   if (payload?.status !== undefined) {
@@ -92,19 +101,11 @@ const validateUpdateProjectPayload = (payload, currentProject) => {
   }
 
   if (payload?.startDate !== undefined) {
-    const startDate = payload.startDate?.trim();
-    if (!startDate) {
-      throw new AppError("startDate cannot be empty.", 400);
-    }
-    updates.startDate = startDate;
+    updates.startDate = payload.startDate?.trim() || null;
   }
 
   if (payload?.endDate !== undefined) {
-    const endDate = payload.endDate?.trim();
-    if (!endDate) {
-      throw new AppError("endDate cannot be empty.", 400);
-    }
-    updates.endDate = endDate;
+    updates.endDate = payload.endDate?.trim() || null;
   }
 
   if (payload?.tags !== undefined) {
@@ -118,7 +119,9 @@ const validateUpdateProjectPayload = (payload, currentProject) => {
   const finalStartDate = updates.startDate ?? currentProject.start_date ?? currentProject.startDate;
   const finalEndDate = updates.endDate ?? currentProject.end_date ?? currentProject.endDate;
 
-  validateProjectDates(finalStartDate, finalEndDate);
+  if (finalStartDate && finalEndDate) {
+    validateProjectDates(finalStartDate, finalEndDate);
+  }
 
   return updates;
 };

@@ -1,10 +1,10 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   showErrorAlert,
   showInfoAlert,
   showSuccessAlert,
 } from "../services/alert.service";
-import { signinUser, signupUser } from "../services/auth.service";
+import { fetchCurrentUser, signinUser, signupUser } from "../services/auth.service";
 import { AUTH_STORAGE_KEY } from "../config/common";
 import { getCookie, removeCookie, setCookie } from "../utils/cookie";
 
@@ -67,6 +67,34 @@ export function AuthProvider({ children }) {
     removeCookie(AUTH_STORAGE_KEY);
     setAuthSession(null);
   };
+
+  useEffect(() => {
+    const syncCurrentUser = async () => {
+      if (!authSession?.token) {
+        return;
+      }
+
+      try {
+        const result = await fetchCurrentUser(authSession.token);
+
+        if (!result?.user) {
+          return;
+        }
+
+        const nextSession = {
+          ...authSession,
+          user: result.user,
+        };
+
+        setAuthSession(nextSession);
+        setCookie(AUTH_STORAGE_KEY, JSON.stringify(nextSession));
+      } catch (error) {
+        clearAuthSession();
+      }
+    };
+
+    syncCurrentUser();
+  }, [authSession?.token]);
 
   const submitSignIn = async () => {
     if (!signInValues.email.trim() || !signInValues.password) {

@@ -1,20 +1,50 @@
 import {
   Avatar,
   Box,
+  Button,
   Chip,
   Divider,
+  Dropdown,
   IconButton,
+  Menu,
+  MenuButton,
+  MenuItem,
   Sheet,
   Stack,
   Typography,
 } from "@mui/joy";
+import { useAuthContext } from "../../context/AuthContext";
+import { showErrorAlert } from "../../services/alert.service";
 import {
   BellIcon,
   ExpandIcon,
   MenuIcon,
 } from "../workspace/WorkspaceIcons";
 
-export default function AppHeader({ title, fullName, initial, onMenuClick }) {
+export default function AppHeader({ title, fullName, initial, userRole, onMenuClick }) {
+  const { clearAuthSession } = useAuthContext();
+  const isSuperAdmin = String(userRole || "").toLowerCase() === "super-admin";
+
+  const handleToggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        return;
+      }
+
+      await document.exitFullscreen();
+    } catch {
+      await showErrorAlert(
+        "Fullscreen unavailable",
+        "Your browser could not switch fullscreen mode right now."
+      );
+    }
+  };
+
+  const handleSignOut = () => {
+    clearAuthSession();
+  };
+
   return (
     <Sheet
       sx={{
@@ -45,20 +75,23 @@ export default function AppHeader({ title, fullName, initial, onMenuClick }) {
       </Stack>
 
       <Stack direction="row" spacing={1.5} alignItems="center">
-        <Chip
-          variant="soft"
-          sx={{
-            backgroundColor: "#eef2ff",
-            color: "var(--color-primary)",
-            fontWeight: 700,
-            px: 1.5,
-          }}
-        >
-          Super Admin
-        </Chip>
+        {isSuperAdmin ? (
+          <Chip
+            variant="soft"
+            sx={{
+              backgroundColor: "#eef2ff",
+              color: "var(--color-primary)",
+              fontWeight: 700,
+              px: 1.5,
+            }}
+          >
+            Super Admin
+          </Chip>
+        ) : null}
         <IconButton
           variant="plain"
           color="neutral"
+          onClick={handleToggleFullscreen}
           sx={{ color: "var(--color-font-secondary)" }}
         >
           <ExpandIcon />
@@ -92,18 +125,49 @@ export default function AppHeader({ title, fullName, initial, onMenuClick }) {
           </Sheet>
         </Box>
         <Divider orientation="vertical" />
-        <Avatar
-          size="sm"
-          sx={{ backgroundColor: "#eef2ff", color: "#5f6d8b" }}
-        >
-          {initial}
-        </Avatar>
-        <Typography
-          level="title-md"
-          sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
-        >
-          {fullName}
-        </Typography>
+        <Dropdown>
+          <MenuButton
+            slots={{ root: Button }}
+            variant="plain"
+            color="neutral"
+            sx={{
+              px: 0.625,
+              py: 0.5,
+              borderRadius: "999px",
+              color: "var(--color-font-primary)",
+              backgroundColor: "#eef2ff",
+              minHeight: 42,
+              "&:hover": {
+                backgroundColor: "#e4ebff",
+              },
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Avatar
+                size="sm"
+                sx={{ backgroundColor: "#fff", color: "#5f6d8b" }}
+              >
+                {initial}
+              </Avatar>
+              <Typography
+                level="title-md"
+                sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
+              >
+                {fullName}
+              </Typography>
+            </Stack>
+          </MenuButton>
+          <Menu
+            placement="bottom-end"
+            sx={{
+              minWidth: 180,
+              borderRadius: "8px",
+              p: 0.5,
+            }}
+          >
+            <MenuItem onClick={handleSignOut}>Log out</MenuItem>
+          </Menu>
+        </Dropdown>
       </Stack>
     </Sheet>
   );

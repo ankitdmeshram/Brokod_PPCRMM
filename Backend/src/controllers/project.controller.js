@@ -11,7 +11,10 @@ const createProject = asyncHandler(async (request, response) => {
 });
 
 const getProjects = asyncHandler(async (request, response) => {
-  const projects = await projectService.getProjects(request.user.sub);
+  const projects = await projectService.getProjects(request.user.sub, {
+    workspaceId: request.query.workspaceId,
+    search: request.query.search,
+  });
 
   response.status(200).json({
     projects,
