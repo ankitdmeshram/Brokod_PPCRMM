@@ -5,8 +5,8 @@ export const joyTheme = extendTheme({
     light: {
       palette: {
         primary: {
-          solidBg: "#3155ff",
-          solidHoverBg: "#2446eb",
+          solidBg: "var(--color-primary)",
+          solidHoverBg: "var(--color-secondary)",
           solidActiveBg: "#1d39cc",
         },
         neutral: {

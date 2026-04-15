@@ -1,7 +1,7 @@
 import Swal from "sweetalert2";
 
 const baseOptions = {
-  confirmButtonColor: "#3155ff",
+  confirmButtonColor: "var(--color-primary)",
   customClass: {
     popup: "swal-popup",
   },

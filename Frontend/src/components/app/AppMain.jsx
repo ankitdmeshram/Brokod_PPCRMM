@@ -1,5 +1,14 @@
 import { Box } from "@mui/joy";
 
 export default function AppMain({ children }) {
-  return <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5 }}>{children}</Box>;
+  return (
+    <Box
+      sx={{
+        px: { xs: 0, md: 0 },
+        py: 0,
+      }}
+    >
+      {children}
+    </Box>
+  );
 }

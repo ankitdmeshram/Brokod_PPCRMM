@@ -1,3 +1,16 @@
+:root {
+  --color-primary: #3f4f8f;
+  --color-secondary: #46559a;
+  --color-background: #f5f7ff;
+  --color-font-primary: #111827;
+  --color-font-secondary: #ffffff;
+  /* --color-primary: #31ff42;
+  --color-secondary: #469a51;
+  --color-background: #ecffed;
+  --color-font-primary: #111827;
+  --color-font-secondary: #5b6478; */
+}
+
 html,
 body,
 #root {

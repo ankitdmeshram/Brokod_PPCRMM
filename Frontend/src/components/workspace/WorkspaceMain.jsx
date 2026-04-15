@@ -17,8 +17,8 @@ import {
 
 export default function WorkspaceMain() {
   return (
-    <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5 }}>
-      <Stack spacing={2.5}>
+    <Box sx={{ px: { xs: 1.5, md: 2 }, py: { xs: 1.5, md: 2 } }}>
+      <Stack spacing={1.5}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={1.5}
@@ -26,8 +26,12 @@ export default function WorkspaceMain() {
           alignItems={{ xs: "stretch", sm: "center" }}
         >
           <Typography
-            level="h2"
-            sx={{ fontSize: "2rem", fontWeight: 700, color: "#111827" }}
+            level="title-lg"
+            sx={{
+              fontSize: "1.25rem",
+              fontWeight: 700,
+              color: "var(--color-font-primary)",
+            }}
           >
             Workspaces
           </Typography>
@@ -36,10 +40,8 @@ export default function WorkspaceMain() {
             startDecorator={<PlusIcon />}
             sx={{
               alignSelf: { xs: "flex-start", sm: "auto" },
-              minHeight: 42,
-              px: 2,
-              backgroundColor: "#3155ff",
-              boxShadow: "0 16px 32px rgba(49, 85, 255, 0.26)",
+              minHeight: "42px",
+              color: "var(--color-font-secondary)",
             }}
           >
             Create workspace
@@ -50,21 +52,24 @@ export default function WorkspaceMain() {
           variant="outlined"
           sx={{
             width: "100%",
-            maxWidth: 255,
-            p: 2,
-            borderRadius: "8px",
-            borderColor: "rgba(207, 214, 235, 0.9)",
+            maxWidth: "256px",
+            p: 2.25,
+            borderRadius: "20px",
+            borderColor: "rgba(220, 226, 244, 0.95)",
             backgroundColor: "#fff",
-            boxShadow: "0 22px 40px rgba(170, 180, 214, 0.18)",
+            boxShadow: "0 18px 38px rgba(170, 180, 214, 0.16)",
           }}
         >
-          <Stack spacing={2.25}>
+          <Stack spacing={2}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Stack direction="row" spacing={1} alignItems="center">
-                <Box sx={{ color: "#3155ff", display: "flex" }}>
+                <Box sx={{ color: "var(--color-primary)", display: "flex", fontSize: "1rem" }}>
                   <WorkspaceIcon />
                 </Box>
-                <Typography level="title-lg" sx={{ fontWeight: 700, color: "#1e293b" }}>
+                <Typography
+                  level="title-lg"
+                  sx={{ fontWeight: 700, color: "#1e293b", fontSize: "1.05rem" }}
+                >
                   My Workspace
                 </Typography>
               </Stack>
@@ -73,28 +78,43 @@ export default function WorkspaceMain() {
                 variant="soft"
                 sx={{
                   backgroundColor: "#eef2ff",
-                  color: "#3155ff",
+                  color: "var(--color-primary)",
                   fontWeight: 700,
+                  borderRadius: "999px",
+                  minHeight: 28,
                 }}
               >
                 Admin
               </Chip>
             </Stack>
 
-            <Typography level="body-md" sx={{ color: "#566b91" }}>
+            <Typography
+              level="body-md"
+              sx={{ color: "var(--color-font-secondary)", fontSize: "0.98rem" }}
+            >
               My Workspace
             </Typography>
 
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <IconButton variant="plain" color="neutral" sx={{ color: "#6b7280" }}>
+            <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
+              <IconButton
+                variant="plain"
+                color="neutral"
+                sx={{ color: "var(--color-font-secondary)", minWidth: 30, minHeight: 30 }}
+              >
                 <EditIcon />
               </IconButton>
-              <IconButton variant="plain" color="danger">
+              <IconButton variant="plain" color="danger" sx={{ minWidth: 30, minHeight: 30 }}>
                 <DeleteIcon />
               </IconButton>
               <IconButton
                 variant="soft"
-                sx={{ backgroundColor: "#eef2ff", color: "#3155ff" }}
+                sx={{
+                  backgroundColor: "#eef2ff",
+                  color: "var(--color-primary)",
+                  minWidth: 34,
+                  minHeight: 34,
+                  borderRadius: "10px",
+                }}
               >
                 <EnterIcon />
               </IconButton>

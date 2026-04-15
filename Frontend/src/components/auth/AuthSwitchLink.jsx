@@ -5,7 +5,7 @@ export default function AuthSwitchLink({ isSignUp, href }) {
   return (
     <Typography
       level="body-md"
-      sx={{ textAlign: "center", color: "#111827", pt: 0.5 }}
+      sx={{ textAlign: "center", color: "var(--color-font-primary)", pt: 0.5 }}
     >
       {isSignUp ? "Already have an account ? " : "Don't have an account ? "}
       <Link
@@ -14,7 +14,10 @@ export default function AuthSwitchLink({ isSignUp, href }) {
         underline="none"
         sx={{
           fontWeight: 700,
-          color: "#3155ff",
+          color: "var(--color-primary)",
+          "&:hover": {
+            color: "var(--color-secondary)",
+          },
         }}
       >
         {isSignUp ? "Sign In" : "Signup"}

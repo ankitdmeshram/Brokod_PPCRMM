@@ -11,7 +11,7 @@ export default function AppFooter({ currentYear }) {
         backgroundColor: "#fff",
       }}
     >
-      <Typography level="body-sm" sx={{ color: "#5b6b8a" }}>
+      <Typography level="body-sm" sx={{ color: "var(--color-font-secondary)" }}>
         {currentYear} (c) Brokod.
       </Typography>
     </Sheet>

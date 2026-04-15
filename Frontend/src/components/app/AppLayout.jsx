@@ -13,7 +13,9 @@ export default function AppLayout({
   children,
 }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const sidebarWidth = isSidebarCollapsed ? "68px" : "248px";
+  const sidebarWidth = isSidebarCollapsed
+    ? "56px"
+    : "248px";
 
   return (
     <Box
@@ -24,7 +26,7 @@ export default function AppLayout({
           xs: "1fr",
           md: `${sidebarWidth} minmax(0, 1fr)`,
         },
-        backgroundColor: "#f5f7ff",
+        backgroundColor: "var(--color-background)",
         transition: "grid-template-columns 0.25s ease",
       }}
     >

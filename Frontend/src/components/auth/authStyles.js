@@ -1,5 +1,5 @@
 export const fieldLabelStyles = {
-  color: "#111827",
+  color: "var(--color-font-primary)",
   fontWeight: 700,
   mb: 0.75,
 };
@@ -9,10 +9,11 @@ export const primaryButtonStyles = {
   borderRadius: "8px",
   fontWeight: 700,
   fontSize: "1rem",
+  color: "var(--color-font-secondary)",
 };
 
 export const checkboxStyles = {
   "--Checkbox-size": "20px",
-  color: "#111827",
+  color: "var(--color-font-primary)",
   alignSelf: "flex-start",
 };

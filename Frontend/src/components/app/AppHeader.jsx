@@ -26,17 +26,20 @@ export default function AppHeader({ title, fullName, initial, onMenuClick }) {
         justifyContent: "space-between",
         gap: 2,
       }}
-      >
+    >
       <Stack direction="row" spacing={2} alignItems="center">
         <IconButton
           variant="plain"
           color="neutral"
           onClick={onMenuClick}
-          sx={{ color: "#5b6478" }}
+          sx={{ color: "var(--color-font-secondary)" }}
         >
           <MenuIcon />
         </IconButton>
-        <Typography level="title-lg" sx={{ fontWeight: 700, color: "#111827" }}>
+        <Typography
+          level="title-lg"
+          sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
+        >
           {title}
         </Typography>
       </Stack>
@@ -46,18 +49,26 @@ export default function AppHeader({ title, fullName, initial, onMenuClick }) {
           variant="soft"
           sx={{
             backgroundColor: "#eef2ff",
-            color: "#3155ff",
+            color: "var(--color-primary)",
             fontWeight: 700,
             px: 1.5,
           }}
         >
           Super Admin
         </Chip>
-        <IconButton variant="plain" color="neutral" sx={{ color: "#5b6478" }}>
+        <IconButton
+          variant="plain"
+          color="neutral"
+          sx={{ color: "var(--color-font-secondary)" }}
+        >
           <ExpandIcon />
         </IconButton>
         <Box sx={{ position: "relative" }}>
-          <IconButton variant="plain" color="neutral" sx={{ color: "#5b6478" }}>
+          <IconButton
+            variant="plain"
+            color="neutral"
+            sx={{ color: "var(--color-font-secondary)" }}
+          >
             <BellIcon />
           </IconButton>
           <Sheet
@@ -65,8 +76,8 @@ export default function AppHeader({ title, fullName, initial, onMenuClick }) {
               position: "absolute",
               top: 2,
               right: 0,
-              minWidth: 18,
-              height: 18,
+              minWidth: "18px",
+              height: "18px",
               px: 0.5,
               borderRadius: "999px",
               backgroundColor: "#ff6f59",
@@ -81,10 +92,16 @@ export default function AppHeader({ title, fullName, initial, onMenuClick }) {
           </Sheet>
         </Box>
         <Divider orientation="vertical" />
-        <Avatar size="sm" sx={{ backgroundColor: "#eff3ff", color: "#5f6d8b" }}>
+        <Avatar
+          size="sm"
+          sx={{ backgroundColor: "#eef2ff", color: "#5f6d8b" }}
+        >
           {initial}
         </Avatar>
-        <Typography level="title-md" sx={{ fontWeight: 700, color: "#111827" }}>
+        <Typography
+          level="title-md"
+          sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
+        >
           {fullName}
         </Typography>
       </Stack>

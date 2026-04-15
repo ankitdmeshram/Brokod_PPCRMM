@@ -13,7 +13,7 @@ export default function AuthShell({ showQuotePanel, quotePanel, header, form, fo
         px: 2,
         py: 4,
         background:
-          "radial-gradient(circle at top, rgba(255,255,255,0.96), rgba(240,244,252,0.98) 46%, #edf2f9 100%)",
+          "radial-gradient(circle at top, rgba(255,255,255,0.96), rgba(240,244,252,0.98) 46%, var(--color-background) 100%)",
       }}
     >
       <Sheet
@@ -35,10 +35,12 @@ export default function AuthShell({ showQuotePanel, quotePanel, header, form, fo
             gridTemplateColumns: showQuotePanel
               ? { xs: "1fr", md: "1fr 1fr" }
               : "1fr",
-            gap: showQuotePanel ? 2 : 0,
+            gap: 0,
           }}
         >
-          {showQuotePanel ? quotePanel : null}
+          {showQuotePanel ? (
+            <Box sx={{ backgroundColor: "var(--color-primary)" }}>{quotePanel}</Box>
+          ) : null}
 
           <Sheet
             variant="plain"

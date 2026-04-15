@@ -7,15 +7,15 @@ export default function WorkspaceSidebar({ isCollapsed = false }) {
       sx={{
         display: { xs: "none", md: "flex" },
         flexDirection: "column",
-        backgroundColor: "#46559a",
-        color: "#fff",
-        px: isCollapsed ? 1.25 : 2,
-        py: 2.5,
+        backgroundColor: "var(--color-primary)",
+        color: "var(--color-font-secondary)",
+        px: isCollapsed ? 1 : 2,
+        py: 2,
         overflow: "hidden",
         transition: "padding 0.25s ease",
       }}
     >
-      <Stack spacing={3}>
+      <Stack spacing={1} alignItems={isCollapsed ? "center" : "stretch"}>
         <Stack
           direction="row"
           spacing={1.25}
@@ -25,7 +25,7 @@ export default function WorkspaceSidebar({ isCollapsed = false }) {
           {isCollapsed ? (
             <Typography
               level="title-lg"
-              sx={{ color: "#fff", fontWeight: 700 }}
+              sx={{ color: "var(--color-font-secondary)", fontWeight: 700 }}
             >
               B
             </Typography>
@@ -33,7 +33,7 @@ export default function WorkspaceSidebar({ isCollapsed = false }) {
             <Typography
               level="title-lg"
               sx={{
-                color: "#fff",
+                color: "var(--color-font-secondary)",
                 fontWeight: 700,
                 whiteSpace: "nowrap",
               }}
@@ -48,7 +48,7 @@ export default function WorkspaceSidebar({ isCollapsed = false }) {
             <Typography
               level="body-xs"
               sx={{
-                color: "rgba(255,255,255,0.78)",
+                color: "var(--color-font-secondary)",
                 letterSpacing: "0.12em",
                 fontWeight: 700,
               }}
@@ -63,11 +63,13 @@ export default function WorkspaceSidebar({ isCollapsed = false }) {
             endDecorator={isCollapsed ? null : <ArrowIcon />}
             sx={{
               justifyContent: isCollapsed ? "center" : "flex-start",
-              minHeight: 40,
+              minHeight: "40px",
               backgroundColor: "rgba(255,255,255,0.08)",
-              color: "#fff",
+              color: "var(--color-font-secondary)",
               px: isCollapsed ? 1 : 1.5,
-              minWidth: isCollapsed ? 40 : "auto",
+              minWidth: isCollapsed ? "40px" : "auto",
+              width: isCollapsed ? "40px" : "100%",
+              alignSelf: isCollapsed ? "center" : "stretch",
               "& .MuiButton-startDecorator": {
                 mr: 1.25,
               },

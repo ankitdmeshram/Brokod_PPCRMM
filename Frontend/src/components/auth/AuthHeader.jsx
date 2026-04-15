@@ -8,7 +8,7 @@ export default function AuthHeader({ title, subtitle }) {
         sx={{
           fontSize: { xs: "1.75rem", sm: "1.875rem" },
           fontWeight: 600,
-          color: "#3155ff",
+          color: "var(--color-primary)",
         }}
       >
         {title}
