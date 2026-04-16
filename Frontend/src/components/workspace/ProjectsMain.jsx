@@ -12,7 +12,7 @@ import {
   Table,
   Typography,
 } from "@mui/joy";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthContext } from "../../context/AuthContext";
 import {
   showConfirmAlert,
@@ -85,7 +85,16 @@ const formatDateInputValue = (value) => {
   return date.toISOString().slice(0, 10);
 };
 
-export default function ProjectsMain({ workspace, workspaceTitle }) {
+const initialProjectFormValues = {
+  projectName: "",
+  status: "planned",
+  startDate: "",
+  endDate: "",
+  tags: [],
+  description: "",
+};
+
+export default function ProjectsMain({ workspace, workspaceTitle, mode = "workspace" }) {
   const { authSession } = useAuthContext();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -98,26 +107,19 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [createValues, setCreateValues] = useState({
-    projectName: "",
-    status: "planned",
-    startDate: "",
-    endDate: "",
-    tags: [],
-    description: "",
-  });
-  const [editValues, setEditValues] = useState({
-    projectName: "",
-    status: "planned",
-    startDate: "",
-    endDate: "",
-    tags: [],
-    description: "",
-  });
+  const [createValues, setCreateValues] = useState(initialProjectFormValues);
+  const [editValues, setEditValues] = useState(initialProjectFormValues);
+
+  const currentUserId = Number(authSession?.user?.id);
+  const isSuperAdminView = mode === "super-admin";
+  const currentUserName = useMemo(
+    () => `${authSession?.user?.firstName || ""} ${authSession?.user?.lastName || ""}`.trim(),
+    [authSession?.user?.firstName, authSession?.user?.lastName]
+  );
 
   useEffect(() => {
     const loadProjects = async () => {
-      if (!authSession?.token || !workspace?.id) {
+      if (!authSession?.token || (!isSuperAdminView && !workspace?.id)) {
         setProjects([]);
         setIsLoadingProjects(false);
         return;
@@ -127,30 +129,43 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
 
       try {
         const result = await fetchProjects(authSession.token, {
-          workspaceId: workspace.id,
+          workspaceId: isSuperAdminView ? null : workspace.id,
         });
-        setProjects(Array.isArray(result?.projects) ? result.projects : []);
+        if (!isCancelled) {
+          setProjects(Array.isArray(result?.projects) ? result.projects : []);
+        }
       } catch (error) {
-        setProjects([]);
-        await showErrorAlert(
-          "Unable to load projects",
-          error.message || "Something went wrong while loading projects."
-        );
+        if (!isCancelled) {
+          setProjects([]);
+          await showErrorAlert(
+            "Unable to load projects",
+            error.message || "Something went wrong while loading projects."
+          );
+        }
       } finally {
-        setIsLoadingProjects(false);
+        if (!isCancelled) {
+          setIsLoadingProjects(false);
+        }
       }
     };
 
-    const timeoutId = window.setTimeout(() => {
-      loadProjects();
-    }, 300);
+    let isCancelled = false;
 
-    return () => window.clearTimeout(timeoutId);
-  }, [authSession?.token, workspace?.id]);
+    void loadProjects();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authSession?.token, isSuperAdminView, workspace?.id]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchValue, rowsPerPage]);
+
+  const projectsById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects]
+  );
 
   const projectRows = useMemo(
     () =>
@@ -159,15 +174,18 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
         id: `PRJ-${project.id}`,
         projectName: project.projectName,
         owner:
-          Number(project.projectOwner) === Number(authSession?.user?.id)
-            ? `${authSession?.user?.firstName || ""} ${authSession?.user?.lastName || ""}`.trim()
+          Number(project.projectOwner) === currentUserId
+            ? currentUserName
             : `User #${project.projectOwner}`,
         status: formatStatusLabel(project.status),
         startDate: formatDateLabel(project.startDate),
         endDate: formatDateLabel(project.endDate),
         tags: Array.isArray(project.tags) ? project.tags : [],
+        workspaceName:
+          project.workspaceName ||
+          (project.workspaceId ? `Workspace #${project.workspaceId}` : "-"),
       })),
-    [projects, authSession?.user?.firstName, authSession?.user?.id, authSession?.user?.lastName]
+    [currentUserId, currentUserName, projects]
   );
 
   const filteredProjectRows = useMemo(() => {
@@ -182,6 +200,7 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
         project.id,
         project.projectName,
         project.owner,
+        project.workspaceName,
         project.tags.join(" "),
       ];
 
@@ -220,38 +239,31 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
     }
   }, [currentPage, safeCurrentPage]);
 
-  const handleFieldChange = (field, value) => {
+  const handleFieldChange = useCallback((field, value) => {
     setCreateValues((currentValues) => ({
       ...currentValues,
       [field]: value,
     }));
-  };
+  }, []);
 
-  const handleCloseCreateModal = (forceClose = false) => {
+  const handleCloseCreateModal = useCallback((forceClose = false) => {
     if (isCreatingProject && !forceClose) {
       return;
     }
 
     setIsCreateModalOpen(false);
-    setCreateValues({
-      projectName: "",
-      status: "planned",
-      startDate: "",
-      endDate: "",
-      tags: [],
-      description: "",
-    });
-  };
+    setCreateValues(initialProjectFormValues);
+  }, [isCreatingProject]);
 
-  const handleEditFieldChange = (field, value) => {
+  const handleEditFieldChange = useCallback((field, value) => {
     setEditValues((currentValues) => ({
       ...currentValues,
       [field]: value,
     }));
-  };
+  }, []);
 
-  const handleOpenEditModal = (projectId) => {
-    const project = projects.find((currentProject) => currentProject.id === projectId);
+  const handleOpenEditModal = useCallback((projectId) => {
+    const project = projectsById.get(projectId);
 
     if (!project) {
       void showErrorAlert("Project missing", "Please refresh the page and try again.");
@@ -268,24 +280,17 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
       description: project.description || "",
     });
     setIsEditModalOpen(true);
-  };
+  }, [projectsById]);
 
-  const handleCloseEditModal = (forceClose = false) => {
+  const handleCloseEditModal = useCallback((forceClose = false) => {
     if (isUpdatingProject && !forceClose) {
       return;
     }
 
     setIsEditModalOpen(false);
     setEditingProjectId(null);
-    setEditValues({
-      projectName: "",
-      status: "planned",
-      startDate: "",
-      endDate: "",
-      tags: [],
-      description: "",
-    });
-  };
+    setEditValues(initialProjectFormValues);
+  }, [isUpdatingProject]);
 
   const handleCreateProject = async (event) => {
     event.preventDefault();
@@ -477,16 +482,21 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
               >
                 Projects
               </Typography>
-              <Typography level="body-sm" sx={{ color: "#5c6d90", maxWidth: 520 }}>
-                Manage active work, owners, delivery timelines, and project actions from one
-                place.
+                <Typography level="body-sm" sx={{ color: "#5c6d90", maxWidth: 520 }}>
+                {isSuperAdminView
+                  ? "Review projects across workspaces from one place."
+                  : "Manage active work, owners, delivery timelines, and project actions from one place."}
               </Typography>
             </Stack>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ minWidth: 0 }}>
               <Input
                 startDecorator={<SearchIcon />}
-                placeholder="Search by ID, project, owner, or tag"
+                placeholder={
+                  isSuperAdminView
+                    ? "Search by ID, project, owner, workspace, or tag"
+                    : "Search by ID, project, owner, or tag"
+                }
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
                 sx={{
@@ -494,18 +504,20 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
                   borderRadius: "14px",
                 }}
               />
-              <Button
-                startDecorator={<PlusIcon />}
-                disabled={!workspace?.id}
-                onClick={() => setIsCreateModalOpen(true)}
-                sx={{
-                  minHeight: "42px",
-                  color: "var(--color-font-secondary)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Create Project
-              </Button>
+              {!isSuperAdminView ? (
+                <Button
+                  startDecorator={<PlusIcon />}
+                  disabled={!workspace?.id}
+                  onClick={() => setIsCreateModalOpen(true)}
+                  sx={{
+                    minHeight: "42px",
+                    color: "var(--color-font-secondary)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Create Project
+                </Button>
+              ) : null}
             </Stack>
           </Stack>
 
@@ -601,6 +613,9 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
                     <th style={{ width: "88px" }}>ID</th>
                     <th style={{ width: "270px", minWidth: "270px" }}>Project Name</th>
                     <th style={{ width: "180px", minWidth: "180px" }}>Owner</th>
+                    {isSuperAdminView ? (
+                      <th style={{ width: "180px", minWidth: "180px" }}>Workspace</th>
+                    ) : null}
                     <th style={{ width: "150px", minWidth: "150px" }}>Status</th>
                     <th style={{ width: "150px", minWidth: "150px" }}>Start Date</th>
                     <th style={{ width: "150px", minWidth: "150px" }}>End Date</th>
@@ -622,6 +637,7 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
                         </Typography>
                       </td>
                       <td>{project.owner}</td>
+                      {isSuperAdminView ? <td>{project.workspaceName}</td> : null}
                       <td>
                         <Chip
                           size="sm"
@@ -801,15 +817,17 @@ export default function ProjectsMain({ workspace, workspaceTitle }) {
         </Stack>
       </Sheet>
 
-      <CreateProjectModal
-        open={isCreateModalOpen}
-        values={createValues}
-        workspaceTitle={workspaceTitle}
-        loading={isCreatingProject}
-        onClose={handleCloseCreateModal}
-        onChange={handleFieldChange}
-        onSubmit={handleCreateProject}
-      />
+      {!isSuperAdminView ? (
+        <CreateProjectModal
+          open={isCreateModalOpen}
+          values={createValues}
+          workspaceTitle={workspaceTitle}
+          loading={isCreatingProject}
+          onClose={handleCloseCreateModal}
+          onChange={handleFieldChange}
+          onSubmit={handleCreateProject}
+        />
+      ) : null}
       <EditProjectModal
         open={isEditModalOpen}
         values={editValues}

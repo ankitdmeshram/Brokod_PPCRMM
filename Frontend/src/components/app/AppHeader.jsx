@@ -13,7 +13,9 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import { Link as RouterLink } from "react-router-dom";
 import { useAuthContext } from "../../context/AuthContext";
+import { APP_ROUTES } from "../../router/authRoutes";
 import { showErrorAlert } from "../../services/alert.service";
 import {
   BellIcon,
@@ -21,7 +23,15 @@ import {
   MenuIcon,
 } from "../workspace/WorkspaceIcons";
 
-export default function AppHeader({ title, fullName, initial, userRole, onMenuClick }) {
+export default function AppHeader({
+  title,
+  titleContent,
+  fullName,
+  initial,
+  userRole,
+  showSuperAdminChip = true,
+  onMenuClick,
+}) {
   const { clearAuthSession } = useAuthContext();
   const isSuperAdmin = String(userRole || "").toLowerCase() === "super-admin";
 
@@ -66,23 +76,32 @@ export default function AppHeader({ title, fullName, initial, userRole, onMenuCl
         >
           <MenuIcon />
         </IconButton>
-        <Typography
-          level="title-lg"
-          sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
-        >
-          {title}
-        </Typography>
+        {titleContent || (
+          <Typography
+            level="title-lg"
+            sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
+          >
+            {title}
+          </Typography>
+        )}
       </Stack>
 
       <Stack direction="row" spacing={1.5} alignItems="center">
-        {isSuperAdmin ? (
+        {isSuperAdmin && showSuperAdminChip ? (
           <Chip
+            component={RouterLink}
+            to={APP_ROUTES.superAdmin}
             variant="soft"
             sx={{
               backgroundColor: "#eef2ff",
               color: "var(--color-primary)",
               fontWeight: 700,
               px: 1.5,
+              textDecoration: "none",
+              cursor: "pointer",
+              "&:hover": {
+                backgroundColor: "#e3eaff",
+              },
             }}
           >
             Super Admin

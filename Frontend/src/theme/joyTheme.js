@@ -19,10 +19,4 @@ export const joyTheme = extendTheme({
     body: "sans-serif",
     display: "sans-serif",
   },
-  radius: {
-    sm: "6px",
-    md: "8px",
-    lg: "8px",
-    xl: "8px",
-  },
 });

@@ -5,9 +5,10 @@ import AuthRedirect from "./components/auth/AuthRedirect";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
+import SuperAdminProjectsPage from "./pages/SuperAdminProjectsPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import WorkspaceProjectsPage from "./pages/WorkspaceProjectsPage";
-import { APP_ROUTES, AUTH_ROUTES } from "./router/authRoutes";
+import { APP_ROUTES, AUTH_ROUTES, SUPER_ADMIN_ROUTES } from "./router/authRoutes";
 import { joyTheme } from "./theme/joyTheme";
 
 export default function App() {
@@ -45,6 +46,30 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <WorkspaceProjectsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={SUPER_ADMIN_ROUTES.overview}
+            element={
+              <ProtectedRoute requireSuperAdmin>
+                <SuperAdminProjectsPage section="overview" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={SUPER_ADMIN_ROUTES.users}
+            element={
+              <ProtectedRoute requireSuperAdmin>
+                <SuperAdminProjectsPage section="users" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={SUPER_ADMIN_ROUTES.settings}
+            element={
+              <ProtectedRoute requireSuperAdmin>
+                <SuperAdminProjectsPage section="settings" />
               </ProtectedRoute>
             }
           />

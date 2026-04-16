@@ -11,6 +11,7 @@ const {
 const mapProject = (project) => ({
   id: project.id,
   workspaceId: project.workspace_id ?? project.workspaceId ?? null,
+  workspaceName: project.workspace_name ?? project.workspaceName ?? null,
   projectName: project.project_name ?? project.projectName,
   projectOwner: project.project_owner ?? project.projectOwner,
   description: project.description,
@@ -31,6 +32,9 @@ const mapProject = (project) => ({
   membershipRole: project.membership_role ?? project.membershipRole ?? null,
   membershipStatus: project.membership_status ?? project.membershipStatus ?? null,
 });
+
+const isSuperAdmin = (role = "") =>
+  String(role).trim().toLowerCase() === "super-admin";
 
 const mapProjectUser = (projectUser) => ({
   id: projectUser.id,
@@ -94,7 +98,7 @@ const createProject = async (payload, userId) => {
   return mapProject(project);
 };
 
-const getProjects = async (userId, filters = {}) => {
+const getProjects = async (userId, filters = {}, userRole = "") => {
   const normalizedFilters = {};
 
   if (filters.workspaceId !== undefined) {
@@ -111,18 +115,22 @@ const getProjects = async (userId, filters = {}) => {
     normalizedFilters.search = String(filters.search).trim();
   }
 
-  const projects = await projectRepository.findAllByUserId(userId, normalizedFilters);
+  const projects = isSuperAdmin(userRole)
+    ? await projectRepository.findAll(normalizedFilters)
+    : await projectRepository.findAllByUserId(userId, normalizedFilters);
   return projects.map(mapProject);
 };
 
-const getProjectById = async (projectId, userId) => {
+const getProjectById = async (projectId, userId, userRole = "") => {
   const normalizedProjectId = Number(projectId);
 
   if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
     throw new AppError("Please provide a valid project id.", 400);
   }
 
-  const project = await projectRepository.findByIdForUser(normalizedProjectId, userId);
+  const project = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
 
   if (!project) {
     throw new AppError("Project not found.", 404);
@@ -131,14 +139,16 @@ const getProjectById = async (projectId, userId) => {
   return mapProject(project);
 };
 
-const getProjectUsers = async (projectId, userId) => {
+const getProjectUsers = async (projectId, userId, userRole = "") => {
   const normalizedProjectId = Number(projectId);
 
   if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
     throw new AppError("Please provide a valid project id.", 400);
   }
 
-  const existingProject = await projectRepository.findByIdForUser(normalizedProjectId, userId);
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
 
   if (!existingProject) {
     throw new AppError("Project not found.", 404);
@@ -152,30 +162,31 @@ const getProjectUsers = async (projectId, userId) => {
   };
 };
 
-const updateProject = async (projectId, payload, userId) => {
+const updateProject = async (projectId, payload, userId, userRole = "") => {
   const normalizedProjectId = Number(projectId);
 
   if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
     throw new AppError("Please provide a valid project id.", 400);
   }
 
-  const existingProject = await projectRepository.findByIdForUser(normalizedProjectId, userId);
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
 
   if (!existingProject) {
     throw new AppError("Project not found.", 404);
   }
 
-  if (existingProject.membership_role !== "owner") {
+  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
     throw new AppError("Only the project owner can update this project.", 403);
   }
 
   const updates = validateUpdateProjectPayload(payload, existingProject);
 
   if (updates.workspaceId !== undefined) {
-    const workspace = await workspaceRepository.findByIdForUser(
-      updates.workspaceId,
-      userId
-    );
+    const workspace = isSuperAdmin(userRole)
+      ? await workspaceRepository.findById(updates.workspaceId)
+      : await workspaceRepository.findByIdForUser(updates.workspaceId, userId);
 
     if (!workspace) {
       throw new AppError("Workspace not found.", 404);
@@ -184,25 +195,29 @@ const updateProject = async (projectId, payload, userId) => {
 
   await projectRepository.updateById(normalizedProjectId, updates);
 
-  const updatedProject = await projectRepository.findByIdForUser(normalizedProjectId, userId);
+  const updatedProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
 
   return mapProject(updatedProject);
 };
 
-const deleteProject = async (projectId, userId) => {
+const deleteProject = async (projectId, userId, userRole = "") => {
   const normalizedProjectId = Number(projectId);
 
   if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
     throw new AppError("Please provide a valid project id.", 400);
   }
 
-  const existingProject = await projectRepository.findByIdForUser(normalizedProjectId, userId);
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
 
   if (!existingProject) {
     throw new AppError("Project not found.", 404);
   }
 
-  if (existingProject.membership_role !== "owner") {
+  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
     throw new AppError("Only the project owner can delete this project.", 403);
   }
 

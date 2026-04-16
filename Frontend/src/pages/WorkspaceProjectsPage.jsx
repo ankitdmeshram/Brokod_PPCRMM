@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
 import ProjectsMain from "../components/workspace/ProjectsMain";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import { useAuthContext } from "../context/AuthContext";
+import { APP_ROUTES } from "../router/authRoutes";
 import { fetchWorkspaces } from "../services/workspace.service";
 import { showErrorAlert } from "../services/alert.service";
 
@@ -17,8 +18,10 @@ const formatWorkspaceTitle = (workspaceName = "") =>
 export default function WorkspaceProjectsPage() {
   const { authSession } = useAuthContext();
   const location = useLocation();
+  const navigate = useNavigate();
   const { workspaceName = "" } = useParams();
   const [workspace, setWorkspace] = useState(() => location.state?.workspace || null);
+  const [isResolvingWorkspace, setIsResolvingWorkspace] = useState(!location.state?.workspace);
   const currentYear = new Date().getFullYear();
   const firstName = authSession?.user?.firstName || "Ankit";
   const lastName = authSession?.user?.lastName || "Meshram";
@@ -34,12 +37,16 @@ export default function WorkspaceProjectsPage() {
     const resolveWorkspace = async () => {
       if (location.state?.workspace) {
         setWorkspace(location.state.workspace);
+        setIsResolvingWorkspace(false);
         return;
       }
 
       if (!authSession?.token) {
+        setIsResolvingWorkspace(false);
         return;
       }
+
+      setIsResolvingWorkspace(true);
 
       try {
         const result = await fetchWorkspaces(authSession.token);
@@ -60,11 +67,21 @@ export default function WorkspaceProjectsPage() {
           "Unable to load workspace",
           error.message || "Something went wrong while loading the workspace."
         );
+      } finally {
+        setIsResolvingWorkspace(false);
       }
     };
 
-    resolveWorkspace();
+    void resolveWorkspace();
   }, [authSession?.token, location.state, workspaceName]);
+
+  useEffect(() => {
+    if (isResolvingWorkspace || workspace) {
+      return;
+    }
+
+    navigate(APP_ROUTES.workspace, { replace: true });
+  }, [isResolvingWorkspace, navigate, workspace]);
 
   return (
     <AppLayout

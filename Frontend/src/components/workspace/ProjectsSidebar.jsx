@@ -1,4 +1,5 @@
 import { Button, Sheet, Stack, Typography } from "@mui/joy";
+import { Link as RouterLink } from "react-router-dom";
 import {
   ArrowIcon,
   FolderIcon,
@@ -16,7 +17,11 @@ const navItems = [
   { key: "settings", icon: <SettingsIcon />, label: "Settings" },
 ];
 
-export default function ProjectsSidebar({ isCollapsed = false }) {
+export default function ProjectsSidebar({
+  isCollapsed = false,
+  sectionLabel = "WORKSPACE",
+  items = navItems,
+}) {
   return (
     <Sheet
       sx={{
@@ -68,13 +73,15 @@ export default function ProjectsSidebar({ isCollapsed = false }) {
                 fontWeight: 700,
               }}
             >
-              WORKSPACE
+              {sectionLabel}
             </Typography>
           ) : null}
 
-          {navItems.map((item) => (
+          {items.map((item) => (
             <Button
               key={item.key}
+              component={item.to ? RouterLink : "button"}
+              to={item.to}
               variant={item.active ? "soft" : "plain"}
               startDecorator={isCollapsed ? null : item.icon}
               endDecorator={isCollapsed ? null : item.active ? <ArrowIcon /> : null}
@@ -87,6 +94,7 @@ export default function ProjectsSidebar({ isCollapsed = false }) {
                 minWidth: isCollapsed ? "40px" : "auto",
                 width: isCollapsed ? "40px" : "100%",
                 alignSelf: isCollapsed ? "center" : "stretch",
+                textDecoration: "none",
                 "& .MuiButton-startDecorator": {
                   mr: 1.25,
                 },

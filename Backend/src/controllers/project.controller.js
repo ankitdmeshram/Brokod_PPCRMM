@@ -11,10 +11,14 @@ const createProject = asyncHandler(async (request, response) => {
 });
 
 const getProjects = asyncHandler(async (request, response) => {
-  const projects = await projectService.getProjects(request.user.sub, {
-    workspaceId: request.query.workspaceId,
-    search: request.query.search,
-  });
+  const projects = await projectService.getProjects(
+    request.user.sub,
+    {
+      workspaceId: request.query.workspaceId,
+      search: request.query.search,
+    },
+    request.user.role
+  );
 
   response.status(200).json({
     projects,
@@ -22,7 +26,11 @@ const getProjects = asyncHandler(async (request, response) => {
 });
 
 const getProjectById = asyncHandler(async (request, response) => {
-  const project = await projectService.getProjectById(request.params.projectId, request.user.sub);
+  const project = await projectService.getProjectById(
+    request.params.projectId,
+    request.user.sub,
+    request.user.role
+  );
 
   response.status(200).json({
     project,
@@ -30,7 +38,11 @@ const getProjectById = asyncHandler(async (request, response) => {
 });
 
 const getProjectUsers = asyncHandler(async (request, response) => {
-  const result = await projectService.getProjectUsers(request.params.projectId, request.user.sub);
+  const result = await projectService.getProjectUsers(
+    request.params.projectId,
+    request.user.sub,
+    request.user.role
+  );
 
   response.status(200).json(result);
 });
@@ -39,7 +51,8 @@ const updateProject = asyncHandler(async (request, response) => {
   const project = await projectService.updateProject(
     request.params.projectId,
     request.body,
-    request.user.sub
+    request.user.sub,
+    request.user.role
   );
 
   response.status(200).json({
@@ -49,7 +62,11 @@ const updateProject = asyncHandler(async (request, response) => {
 });
 
 const deleteProject = asyncHandler(async (request, response) => {
-  await projectService.deleteProject(request.params.projectId, request.user.sub);
+  await projectService.deleteProject(
+    request.params.projectId,
+    request.user.sub,
+    request.user.role
+  );
 
   response.status(200).json({
     message: "Project deleted successfully.",

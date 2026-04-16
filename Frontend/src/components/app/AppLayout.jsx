@@ -7,9 +7,11 @@ import AppMain from "./AppMain";
 export default function AppLayout({
   sidebar,
   title,
+  titleContent,
   fullName,
   initial,
   userRole,
+  showSuperAdminChip = true,
   currentYear,
   children,
 }) {
@@ -44,9 +46,11 @@ export default function AppLayout({
       >
         <AppHeader
           title={title}
+          titleContent={titleContent}
           fullName={fullName}
           initial={initial}
           userRole={userRole}
+          showSuperAdminChip={showSuperAdminChip}
           onMenuClick={() => setIsSidebarCollapsed((value) => !value)}
         />
         <AppMain>{children}</AppMain>
