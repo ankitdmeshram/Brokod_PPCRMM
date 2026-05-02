@@ -469,6 +469,335 @@ const swaggerSpec = swaggerJsdoc({
             },
           },
         },
+        Task: {
+          type: "object",
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            projectId: {
+              type: "integer",
+              example: 12,
+            },
+            workspaceId: {
+              type: "integer",
+              example: 3,
+            },
+            title: {
+              type: "string",
+              example: "Plan CRM backlog",
+            },
+            description: {
+              type: "string",
+              example: "Organize the initial project backlog and ownership.",
+            },
+            status: {
+              type: "string",
+              example: "todo",
+            },
+            priority: {
+              type: "string",
+              example: "high",
+            },
+            assignedBy: {
+              type: "integer",
+              nullable: true,
+              example: 4,
+            },
+            assignedTo: {
+              type: "integer",
+              nullable: true,
+              example: 7,
+            },
+            createdBy: {
+              type: "integer",
+              example: 4,
+            },
+            startDate: {
+              type: "string",
+              format: "date",
+              nullable: true,
+              example: "2026-05-03",
+            },
+            dueDate: {
+              type: "string",
+              format: "date",
+              nullable: true,
+              example: "2026-05-10",
+            },
+            completedAt: {
+              type: "string",
+              format: "date",
+              nullable: true,
+              example: "2026-05-12",
+            },
+            taskType: {
+              type: "string",
+              example: "feature",
+            },
+            tags: {
+              type: "array",
+              items: {
+                type: "string",
+              },
+              example: ["planning", "backlog"],
+            },
+            assignedByName: {
+              type: "string",
+              nullable: true,
+              example: "Ankit Sharma",
+            },
+            assignedToName: {
+              type: "string",
+              nullable: true,
+              example: "Priya Singh",
+            },
+            createdByName: {
+              type: "string",
+              nullable: true,
+              example: "Ankit Sharma",
+            },
+            commentsCount: {
+              type: "integer",
+              example: 4,
+            },
+            activityLogsCount: {
+              type: "integer",
+              example: 7,
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+            },
+          },
+        },
+        CreateTaskRequest: {
+          type: "object",
+          required: ["projectId", "workspaceId", "title"],
+          properties: {
+            projectId: {
+              type: "integer",
+              example: 12,
+            },
+            workspaceId: {
+              type: "integer",
+              example: 3,
+            },
+            title: {
+              type: "string",
+              example: "Plan CRM backlog",
+            },
+            description: {
+              type: "string",
+              example: "Organize the initial project backlog and ownership.",
+            },
+            status: {
+              type: "string",
+              example: "todo",
+            },
+            priority: {
+              type: "string",
+              example: "high",
+            },
+            assignedBy: {
+              type: "integer",
+              example: 4,
+            },
+            assignedTo: {
+              type: "integer",
+              example: 7,
+            },
+            startDate: {
+              type: "string",
+              format: "date",
+              example: "2026-05-03",
+            },
+            dueDate: {
+              type: "string",
+              format: "date",
+              example: "2026-05-10",
+            },
+            completedAt: {
+              type: "string",
+              format: "date",
+              example: "2026-05-12",
+            },
+            taskType: {
+              type: "string",
+              example: "feature",
+            },
+            tags: {
+              oneOf: [
+                {
+                  type: "array",
+                  items: {
+                    type: "string",
+                  },
+                },
+                {
+                  type: "string",
+                },
+              ],
+              example: ["planning", "backlog"],
+            },
+            initialComment: {
+              type: "string",
+              example: "Initial planning notes added.",
+            },
+            initialActivityLog: {
+              type: "string",
+              example: "Task created and assigned for planning.",
+            },
+          },
+        },
+        UpdateTaskRequest: {
+          type: "object",
+          required: ["title", "status", "priority", "taskType"],
+          properties: {
+            title: {
+              type: "string",
+              example: "Plan CRM backlog",
+            },
+            description: {
+              type: "string",
+              example: "Organize the initial project backlog and ownership.",
+            },
+            status: {
+              type: "string",
+              example: "todo",
+            },
+            priority: {
+              type: "string",
+              example: "high",
+            },
+            assignedBy: {
+              type: "integer",
+              nullable: true,
+              example: 4,
+            },
+            assignedTo: {
+              type: "integer",
+              nullable: true,
+              example: 7,
+            },
+            startDate: {
+              type: "string",
+              format: "date",
+              nullable: true,
+              example: "2026-05-03",
+            },
+            dueDate: {
+              type: "string",
+              format: "date",
+              nullable: true,
+              example: "2026-05-10",
+            },
+            completedAt: {
+              type: "string",
+              format: "date",
+              nullable: true,
+              example: "2026-05-12",
+            },
+            taskType: {
+              type: "string",
+              example: "feature",
+            },
+            tags: {
+              oneOf: [
+                {
+                  type: "array",
+                  items: {
+                    type: "string",
+                  },
+                },
+                {
+                  type: "string",
+                },
+              ],
+              example: ["planning", "backlog"],
+            },
+          },
+        },
+        CreateTaskResponse: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              example: "Task created successfully.",
+            },
+            task: {
+              $ref: "#/components/schemas/Task",
+            },
+          },
+        },
+        UpdateTaskResponse: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              example: "Task updated successfully.",
+            },
+            task: {
+              $ref: "#/components/schemas/Task",
+            },
+          },
+        },
+        GetTaskResponse: {
+          type: "object",
+          properties: {
+            task: {
+              $ref: "#/components/schemas/Task",
+            },
+          },
+        },
+        FetchTasksResponse: {
+          type: "object",
+          properties: {
+            tasks: {
+              type: "array",
+              items: {
+                $ref: "#/components/schemas/Task",
+              },
+            },
+            pagination: {
+              type: "object",
+              properties: {
+                page: {
+                  type: "integer",
+                  example: 1,
+                },
+                limit: {
+                  type: "integer",
+                  example: 10,
+                },
+                total: {
+                  type: "integer",
+                  example: 42,
+                },
+                totalPages: {
+                  type: "integer",
+                  example: 5,
+                },
+              },
+            },
+          },
+        },
+        DeleteTaskResponse: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              example: "Task deleted successfully.",
+            },
+          },
+        },
         Workspace: {
           type: "object",
           properties: {

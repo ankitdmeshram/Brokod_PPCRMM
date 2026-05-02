@@ -6,6 +6,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import SuperAdminProjectsPage from "./pages/SuperAdminProjectsPage";
+import WorkspaceTaskDetailsPage from "./pages/WorkspaceTaskDetailsPage";
 import WorkspaceProjectTasksPage from "./pages/WorkspaceProjectTasksPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import WorkspaceProjectsPage from "./pages/WorkspaceProjectsPage";
@@ -63,6 +64,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <WorkspaceProjectTasksPage section="tasks" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/task/:taskName`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceTaskDetailsPage />
               </ProtectedRoute>
             }
           />

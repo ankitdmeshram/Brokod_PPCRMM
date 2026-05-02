@@ -63,6 +63,17 @@ export async function fetchProjectById(projectId, token) {
   return parseApiResponse(response);
 }
 
+export async function fetchProjectUsers(projectId, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/users`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseApiResponse(response);
+}
+
 export async function updateProject(projectId, payload, token) {
   const response = await fetch(`${PROJECT_API_BASE}/${projectId}`, {
     method: "PUT",

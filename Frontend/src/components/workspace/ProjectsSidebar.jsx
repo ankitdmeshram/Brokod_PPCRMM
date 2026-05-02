@@ -24,8 +24,23 @@ export default function ProjectsSidebar({
   sectionLabel = "",
   items = navItems,
   backToProjectsRoute = "",
+  backToProjectsLabel = "Back to Projects",
   showBackToWorkspace = true,
+  onNavigateAttempt = null,
 }) {
+  const buildNavigationProps = (to) =>
+    onNavigateAttempt && to
+      ? {
+          component: "button",
+          onClick: () => {
+            void onNavigateAttempt(to);
+          },
+        }
+      : {
+          component: to ? RouterLink : "button",
+          to,
+        };
+
   const renderSidebarAction = (content, tooltipTitle) =>
     isCollapsed ? (
       <Tooltip title={tooltipTitle} placement="right" variant="soft">
@@ -98,8 +113,7 @@ export default function ProjectsSidebar({
             renderSidebarAction(
               <Button
                 key={item.key}
-                component={item.to ? RouterLink : "button"}
-                to={item.to}
+                {...buildNavigationProps(item.to)}
                 variant={item.active ? "soft" : "plain"}
                 startDecorator={isCollapsed ? null : item.icon}
                 endDecorator={isCollapsed ? null : item.active ? <ArrowIcon /> : null}
@@ -139,8 +153,7 @@ export default function ProjectsSidebar({
           {backToProjectsRoute ? (
             renderSidebarAction(
               <Button
-                component={RouterLink}
-                to={backToProjectsRoute}
+                {...buildNavigationProps(backToProjectsRoute)}
                 variant="plain"
                 startDecorator={isCollapsed ? null : <SidebarBackIcon />}
                 sx={{
@@ -166,17 +179,16 @@ export default function ProjectsSidebar({
                   },
                 }}
               >
-                {isCollapsed ? <SidebarBackIcon /> : "Back to Projects"}
+                {isCollapsed ? <SidebarBackIcon /> : backToProjectsLabel}
               </Button>,
-              "Back to Projects"
+              backToProjectsLabel
             )
           ) : null}
 
           {showBackToWorkspace ? (
             renderSidebarAction(
               <Button
-                component={RouterLink}
-                to={APP_ROUTES.workspace}
+                {...buildNavigationProps(APP_ROUTES.workspace)}
                 variant="plain"
                 startDecorator={isCollapsed ? null : <SidebarBackIcon />}
                 sx={{

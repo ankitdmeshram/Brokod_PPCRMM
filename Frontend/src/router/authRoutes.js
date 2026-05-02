@@ -36,3 +36,17 @@ export const buildProjectTasksRoute = (workspaceSlug, projectName, projectId) =>
     buildProjectRouteSegment(projectName, projectId),
     "tasks"
   );
+
+export const buildTaskRouteSegment = (taskTitle, taskId) =>
+  `${slugifyRouteSegment(taskTitle)}-${taskId}`;
+
+export const buildTaskDetailsRoute = (
+  workspaceSlug,
+  projectRouteSegment,
+  taskTitle,
+  taskId
+) =>
+  `/workspace/${workspaceSlug}/projects/${projectRouteSegment}/task/${buildTaskRouteSegment(
+    taskTitle,
+    taskId
+  )}`;

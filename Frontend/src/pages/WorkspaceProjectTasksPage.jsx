@@ -2,6 +2,7 @@ import { Box, Chip, Sheet, Stack, Typography } from "@mui/joy";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
+import ProjectTasksMain from "../components/workspace/ProjectTasksMain";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import {
   GridIcon,
@@ -214,71 +215,79 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
       userRole={userRole}
       currentYear={currentYear}
     >
-      <Box
-        sx={{
-          width: "100%",
-          minWidth: 0,
-          maxWidth: "100%",
-          px: { xs: 1.5, md: 2 },
-          py: { xs: 1.5, md: 2 },
-        }}
-      >
-        <Sheet
-          variant="outlined"
+      {section === "tasks" ? (
+        <ProjectTasksMain
+          projectTitle={projectTitle}
+          project={project}
+          workspace={workspace}
+        />
+      ) : (
+        <Box
           sx={{
             width: "100%",
-            minHeight: { xs: "calc(100vh - 180px)", md: "calc(100vh - 170px)" },
-            borderRadius: "10px",
-            borderColor: "rgba(220, 226, 244, 0.95)",
-            backgroundColor: "#fff",
-            boxShadow: "0 18px 38px rgba(170, 180, 214, 0.12)",
-            display: "grid",
-            placeItems: "center",
-            px: 3,
-            py: 4,
+            minWidth: 0,
+            maxWidth: "100%",
+            px: { xs: 1.5, md: 2 },
+            py: { xs: 1.5, md: 2 },
           }}
         >
-          <Stack spacing={2} alignItems="center" sx={{ maxWidth: 560, textAlign: "center" }}>
-            <Chip
-              variant="soft"
-              sx={{
-                borderRadius: "999px",
-                px: 1.5,
-                py: 0.75,
-                backgroundColor: "#eef2ff",
-                color: "#3155ff",
-                fontWeight: 700,
-              }}
-            >
-              {projectTitle}
-            </Chip>
-            <Typography
-              level="h2"
-              sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
-            >
-              {currentSection.label}
-            </Typography>
-            <Typography level="body-md" sx={{ color: "#5c6d90", lineHeight: 1.7 }}>
-              {isResolving
-                ? `Loading ${currentSection.label.toLowerCase()}...`
-                : currentSection.description}
-            </Typography>
-            <Chip
-              variant="soft"
-              sx={{
-                borderRadius: "8px",
-                px: 1.5,
-                py: 0.75,
-                backgroundColor: "#eef2ff",
-                color: "#3155ff",
-                fontWeight: 700,
-              }}
-            >
-              {currentSection.label} Coming Soon
-            </Chip>
-          </Stack>
-        </Sheet>
-      </Box>
+          <Sheet
+            variant="outlined"
+            sx={{
+              width: "100%",
+              minHeight: { xs: "calc(100vh - 180px)", md: "calc(100vh - 170px)" },
+              borderRadius: "10px",
+              borderColor: "rgba(220, 226, 244, 0.95)",
+              backgroundColor: "#fff",
+              boxShadow: "0 18px 38px rgba(170, 180, 214, 0.12)",
+              display: "grid",
+              placeItems: "center",
+              px: 3,
+              py: 4,
+            }}
+          >
+            <Stack spacing={2} alignItems="center" sx={{ maxWidth: 560, textAlign: "center" }}>
+              <Chip
+                variant="soft"
+                sx={{
+                  borderRadius: "999px",
+                  px: 1.5,
+                  py: 0.75,
+                  backgroundColor: "#eef2ff",
+                  color: "#3155ff",
+                  fontWeight: 700,
+                }}
+              >
+                {projectTitle}
+              </Chip>
+              <Typography
+                level="h2"
+                sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
+              >
+                {currentSection.label}
+              </Typography>
+              <Typography level="body-md" sx={{ color: "#5c6d90", lineHeight: 1.7 }}>
+                {isResolving
+                  ? `Loading ${currentSection.label.toLowerCase()}...`
+                  : currentSection.description}
+              </Typography>
+              <Chip
+                variant="soft"
+                sx={{
+                  borderRadius: "8px",
+                  px: 1.5,
+                  py: 0.75,
+                  backgroundColor: "#eef2ff",
+                  color: "#3155ff",
+                  fontWeight: 700,
+                }}
+              >
+                {currentSection.label} Coming Soon
+              </Chip>
+            </Stack>
+          </Sheet>
+        </Box>
+      )}
     </AppLayout>
   );
 }
