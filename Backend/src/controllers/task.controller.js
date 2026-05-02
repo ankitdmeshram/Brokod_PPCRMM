@@ -42,6 +42,18 @@ const getTaskById = asyncHandler(async (request, response) => {
   });
 });
 
+const getTaskBySlug = asyncHandler(async (request, response) => {
+  const task = await taskService.getTaskBySlug(
+    request.params.taskSlug,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    task,
+  });
+});
+
 const updateTask = asyncHandler(async (request, response) => {
   const task = await taskService.updateTask(
     request.params.taskId,
@@ -72,6 +84,7 @@ module.exports = {
   createTask,
   deleteTask,
   getTaskById,
+  getTaskBySlug,
   getTasks,
   updateTask,
 };

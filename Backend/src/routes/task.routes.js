@@ -241,6 +241,7 @@ const router = Router();
  */
 router.get("/", requireAuth, taskController.getTasks);
 router.post("/", requireAuth, taskController.createTask);
+router.get("/slug/:taskSlug", requireAuth, taskController.getTaskBySlug);
 router.get("/:taskId", requireAuth, taskController.getTaskById);
 router.patch("/:taskId", requireAuth, taskController.updateTask);
 router.delete("/:taskId", requireAuth, taskController.deleteTask);

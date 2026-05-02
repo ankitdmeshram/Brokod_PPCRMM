@@ -52,7 +52,7 @@ export default function App() {
             }
           />
           <Route
-            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/overview`}
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/overview`}
             element={
               <ProtectedRoute>
                 <WorkspaceProjectTasksPage section="overview" />
@@ -60,7 +60,7 @@ export default function App() {
             }
           />
           <Route
-            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/tasks`}
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/tasks`}
             element={
               <ProtectedRoute>
                 <WorkspaceProjectTasksPage section="tasks" />
@@ -68,7 +68,7 @@ export default function App() {
             }
           />
           <Route
-            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/task/:taskName`}
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/task/:taskSlug`}
             element={
               <ProtectedRoute>
                 <WorkspaceTaskDetailsPage />
@@ -76,7 +76,7 @@ export default function App() {
             }
           />
           <Route
-            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/notifications`}
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/notifications`}
             element={
               <ProtectedRoute>
                 <WorkspaceProjectTasksPage section="notifications" />
@@ -84,7 +84,7 @@ export default function App() {
             }
           />
           <Route
-            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/settings`}
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/settings`}
             element={
               <ProtectedRoute>
                 <WorkspaceProjectTasksPage section="settings" />

@@ -317,8 +317,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
       navigate(
         buildProjectTasksRoute(
           workspaceSlug,
-          project.projectName,
-          project.id
+          project.slug
         ),
         {
           state: {

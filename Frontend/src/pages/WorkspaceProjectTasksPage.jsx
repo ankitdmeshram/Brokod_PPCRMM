@@ -17,7 +17,7 @@ import {
   buildWorkspaceProjectsRoute,
 } from "../router/authRoutes";
 import { showErrorAlert } from "../services/alert.service";
-import { fetchProjectById } from "../services/project.service";
+import { fetchProjectBySlug } from "../services/project.service";
 import { fetchWorkspaces } from "../services/workspace.service";
 
 const formatTitle = (value = "") =>
@@ -26,11 +26,6 @@ const formatTitle = (value = "") =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-
-const getProjectIdFromSlug = (projectSlug = "") => {
-  const match = String(projectSlug || "").match(/-(\d+)$/);
-  return match ? Number(match[1]) : null;
-};
 
 const sectionContent = {
   overview: {
@@ -55,7 +50,7 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
   const { authSession } = useAuthContext();
   const location = useLocation();
   const navigate = useNavigate();
-  const { workspaceSlug = "", projectName = "" } = useParams();
+  const { workspaceSlug = "", projectSlug = "" } = useParams();
   const routedWorkspace = location.state?.workspace || null;
   const routedProject = location.state?.project || null;
   const [workspace, setWorkspace] = useState(() => routedWorkspace);
@@ -73,41 +68,40 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
       return project.projectName;
     }
 
-    const normalizedProjectName = String(projectName || "").replace(/-\d+$/, "");
-    return formatTitle(normalizedProjectName) || "Project";
-  }, [project?.projectName, projectName]);
+    return formatTitle(projectSlug) || "Project";
+  }, [project?.projectName, projectSlug]);
   const sidebarItems = useMemo(
     () => [
       {
         key: "overview",
         icon: <GridIcon />,
         label: "Overview",
-        to: buildProjectSectionRoute(workspaceSlug, projectName, "overview"),
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "overview"),
         active: section === "overview",
       },
       {
         key: "tasks",
         icon: <TasksIcon />,
         label: "Tasks",
-        to: buildProjectSectionRoute(workspaceSlug, projectName, "tasks"),
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "tasks"),
         active: section === "tasks",
       },
       {
         key: "notifications",
         icon: <NotificationIcon />,
         label: "Notifications",
-        to: buildProjectSectionRoute(workspaceSlug, projectName, "notifications"),
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "notifications"),
         active: section === "notifications",
       },
       {
         key: "settings",
         icon: <SettingsIcon />,
         label: "Settings",
-        to: buildProjectSectionRoute(workspaceSlug, projectName, "settings"),
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "settings"),
         active: section === "settings",
       },
     ],
-    [projectName, section, workspaceSlug]
+    [projectSlug, section, workspaceSlug]
   );
 
   useEffect(() => {
@@ -139,22 +133,12 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
 
         setWorkspace(resolvedWorkspace);
 
-        if (
-          routedProject &&
-          Number(routedProject.id) === getProjectIdFromSlug(projectName)
-        ) {
+        if (routedProject && routedProject.slug === projectSlug) {
           setProject(routedProject);
           return;
         }
 
-        const projectId = getProjectIdFromSlug(projectName);
-
-        if (!projectId) {
-          setProject(null);
-          return;
-        }
-
-        const projectResult = await fetchProjectById(projectId, authSession.token);
+        const projectResult = await fetchProjectBySlug(projectSlug, authSession.token);
         const resolvedProject = projectResult?.project || null;
 
         if (
@@ -178,7 +162,7 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
     };
 
     void resolveContext();
-  }, [authSession?.token, projectName, routedProject, routedWorkspace, workspace, workspaceSlug]);
+  }, [authSession?.token, projectSlug, routedProject, routedWorkspace, workspace, workspaceSlug]);
 
   useEffect(() => {
     if (isResolving) {

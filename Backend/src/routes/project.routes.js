@@ -255,6 +255,7 @@ const router = Router();
  */
 router.get("/", requireAuth, projectController.getProjects);
 router.post("/", requireAuth, projectController.createProject);
+router.get("/slug/:projectSlug", requireAuth, projectController.getProjectBySlug);
 router.get("/:projectId/users", requireAuth, projectController.getProjectUsers);
 router.get("/:projectId", requireAuth, projectController.getProjectById);
 router.put("/:projectId", requireAuth, projectController.updateProject);

@@ -40,6 +40,18 @@ const getProjectById = asyncHandler(async (request, response) => {
   });
 });
 
+const getProjectBySlug = asyncHandler(async (request, response) => {
+  const project = await projectService.getProjectBySlug(
+    request.params.projectSlug,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    project,
+  });
+});
+
 const getProjectUsers = asyncHandler(async (request, response) => {
   const result = await projectService.getProjectUsers(
     request.params.projectId,
@@ -80,6 +92,7 @@ module.exports = {
   createProject,
   deleteProject,
   getProjectById,
+  getProjectBySlug,
   getProjects,
   getProjectUsers,
   updateProject,

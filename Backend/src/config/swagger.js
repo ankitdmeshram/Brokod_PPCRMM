@@ -167,6 +167,10 @@ const swaggerSpec = swaggerJsdoc({
               type: "string",
               example: "CRM Revamp",
             },
+            slug: {
+              type: "string",
+              example: "crm-revamp",
+            },
             projectOwner: {
               type: "integer",
               example: 4,
@@ -487,6 +491,10 @@ const swaggerSpec = swaggerJsdoc({
             title: {
               type: "string",
               example: "Plan CRM backlog",
+            },
+            slug: {
+              type: "string",
+              example: "plan-crm-backlog",
             },
             description: {
               type: "string",

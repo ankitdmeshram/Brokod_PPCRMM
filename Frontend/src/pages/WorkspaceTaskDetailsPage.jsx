@@ -33,8 +33,8 @@ import {
   showErrorAlert,
   showSuccessAlert,
 } from "../services/alert.service";
-import { fetchProjectUsers, fetchProjectById } from "../services/project.service";
-import { fetchTaskById, updateTask } from "../services/task.service";
+import { fetchProjectUsers, fetchProjectBySlug } from "../services/project.service";
+import { fetchTaskBySlug, updateTask } from "../services/task.service";
 import { fetchWorkspaces } from "../services/workspace.service";
 
 const statusOptions = [
@@ -79,16 +79,6 @@ const formatDateTime = (value) => {
   });
 };
 
-const getProjectIdFromSlug = (projectSlug = "") => {
-  const match = String(projectSlug || "").match(/-(\d+)$/);
-  return match ? Number(match[1]) : null;
-};
-
-const getTaskIdFromSlug = (taskSlug = "") => {
-  const match = String(taskSlug || "").match(/-(\d+)$/);
-  return match ? Number(match[1]) : null;
-};
-
 const buildUserLabel = (user = {}) =>
   `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim() ||
   user.email ||
@@ -126,7 +116,7 @@ export default function WorkspaceTaskDetailsPage() {
   const { authSession } = useAuthContext();
   const location = useLocation();
   const navigate = useNavigate();
-  const { workspaceSlug = "", projectName = "", taskName = "" } = useParams();
+  const { workspaceSlug = "", projectSlug = "", taskSlug = "" } = useParams();
   const routedWorkspace = location.state?.workspace || null;
   const routedProject = location.state?.project || null;
   const routedTask = location.state?.task || null;
@@ -153,29 +143,29 @@ export default function WorkspaceTaskDetailsPage() {
         key: "overview",
         icon: <GridIcon />,
         label: "Overview",
-        to: buildProjectSectionRoute(workspaceSlug, projectName, "overview"),
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "overview"),
       },
       {
         key: "tasks",
         icon: <TasksIcon />,
         label: "Tasks",
-        to: buildProjectSectionRoute(workspaceSlug, projectName, "tasks"),
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "tasks"),
         active: true,
       },
       {
         key: "notifications",
         icon: <NotificationIcon />,
         label: "Notifications",
-        to: buildProjectSectionRoute(workspaceSlug, projectName, "notifications"),
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "notifications"),
       },
       {
         key: "settings",
         icon: <SettingsIcon />,
         label: "Settings",
-        to: buildProjectSectionRoute(workspaceSlug, projectName, "settings"),
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "settings"),
       },
     ],
-    [projectName, workspaceSlug]
+    [projectSlug, workspaceSlug]
   );
 
   const projectUserOptions = useMemo(
@@ -225,11 +215,11 @@ export default function WorkspaceTaskDetailsPage() {
 
         setWorkspace(resolvedWorkspace);
 
-        let resolvedProject = routedProject || project;
-        const projectId = getProjectIdFromSlug(projectName);
+        let resolvedProject =
+          routedProject?.slug === projectSlug ? routedProject : project?.slug === projectSlug ? project : null;
 
-        if (!resolvedProject && projectId) {
-          const projectResult = await fetchProjectById(projectId, authSession.token);
+        if (!resolvedProject && projectSlug) {
+          const projectResult = await fetchProjectBySlug(projectSlug, authSession.token);
           resolvedProject = projectResult?.project || null;
         }
 
@@ -244,19 +234,17 @@ export default function WorkspaceTaskDetailsPage() {
 
         setProject(resolvedProject);
 
-        const taskId = getTaskIdFromSlug(taskName);
-
-        if (routedTask && Number(routedTask.id) === taskId) {
+        if (routedTask && routedTask.slug === taskSlug) {
           setTask(routedTask);
           return;
         }
 
-        if (!taskId) {
+        if (!taskSlug) {
           setTask(null);
           return;
         }
 
-        const taskResult = await fetchTaskById(taskId, authSession.token);
+        const taskResult = await fetchTaskBySlug(taskSlug, authSession.token);
         const resolvedTask = taskResult?.task || null;
 
         if (
@@ -282,7 +270,7 @@ export default function WorkspaceTaskDetailsPage() {
     };
 
     void resolveContext();
-  }, [authSession?.token, project, projectName, routedProject, routedTask, routedWorkspace, taskName, workspace, workspaceSlug]);
+  }, [authSession?.token, project, projectSlug, routedProject, routedTask, routedWorkspace, taskSlug, workspace, workspaceSlug]);
 
   useEffect(() => {
     const loadProjectUsers = async () => {
@@ -343,12 +331,12 @@ export default function WorkspaceTaskDetailsPage() {
     }
 
     if (!task) {
-      navigate(buildProjectSectionRoute(workspaceSlug, projectName, "tasks"), {
+      navigate(buildProjectSectionRoute(workspaceSlug, projectSlug, "tasks"), {
         replace: true,
         state: { workspace, project },
       });
     }
-  }, [isResolving, navigate, project, projectName, task, workspace, workspaceSlug]);
+  }, [isResolving, navigate, project, projectSlug, task, workspace, workspaceSlug]);
 
   const handleFieldChange = (field, value) => {
     setSaveState("idle");
@@ -461,7 +449,7 @@ export default function WorkspaceTaskDetailsPage() {
       sidebar={
         <ProjectsSidebar
           items={sidebarItems}
-          backToProjectsRoute={buildProjectSectionRoute(workspaceSlug, projectName, "tasks")}
+          backToProjectsRoute={buildProjectSectionRoute(workspaceSlug, projectSlug, "tasks")}
           backToProjectsLabel="Back to Tasks"
           showBackToWorkspace={false}
           onNavigateAttempt={handleAttemptNavigation}

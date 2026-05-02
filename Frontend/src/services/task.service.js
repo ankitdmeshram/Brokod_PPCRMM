@@ -67,6 +67,17 @@ export async function fetchTaskById(taskId, token) {
   return parseApiResponse(response);
 }
 
+export async function fetchTaskBySlug(taskSlug, token) {
+  const response = await fetch(`${TASK_API_BASE}/slug/${taskSlug}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseApiResponse(response);
+}
+
 export async function updateTask(taskId, payload, token) {
   const response = await fetch(`${TASK_API_BASE}/${taskId}`, {
     method: "PATCH",

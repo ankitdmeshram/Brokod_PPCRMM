@@ -24,29 +24,18 @@ export const slugifyRouteSegment = (value = "") =>
 export const buildWorkspaceProjectsRoute = (workspaceSlug) =>
   `/workspace/${workspaceSlug}/projects`;
 
-export const buildProjectRouteSegment = (projectName, projectId) =>
-  `${slugifyRouteSegment(projectName)}-${projectId}`;
-
 export const buildProjectSectionRoute = (workspaceSlug, projectRouteSegment, section) =>
   `/workspace/${workspaceSlug}/projects/${projectRouteSegment}/${section}`;
 
-export const buildProjectTasksRoute = (workspaceSlug, projectName, projectId) =>
-  buildProjectSectionRoute(
-    workspaceSlug,
-    buildProjectRouteSegment(projectName, projectId),
-    "tasks"
-  );
+export const buildProjectTasksRoute = (workspaceSlug, projectSlug) =>
+  buildProjectSectionRoute(workspaceSlug, projectSlug, "tasks");
 
-export const buildTaskRouteSegment = (taskTitle, taskId) =>
-  `${slugifyRouteSegment(taskTitle)}-${taskId}`;
+export const buildTaskRouteSegment = (taskSlug) =>
+  String(taskSlug || "");
 
 export const buildTaskDetailsRoute = (
   workspaceSlug,
   projectRouteSegment,
-  taskTitle,
-  taskId
+  taskSlug
 ) =>
-  `/workspace/${workspaceSlug}/projects/${projectRouteSegment}/task/${buildTaskRouteSegment(
-    taskTitle,
-    taskId
-  )}`;
+  `/workspace/${workspaceSlug}/projects/${projectRouteSegment}/task/${buildTaskRouteSegment(taskSlug)}`;

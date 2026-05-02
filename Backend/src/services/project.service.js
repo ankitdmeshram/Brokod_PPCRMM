@@ -3,6 +3,7 @@ const projectUserRepository = require("../repositories/project-user.repository")
 const projectRepository = require("../repositories/project.repository");
 const workspaceRepository = require("../repositories/workspace.repository");
 const AppError = require("../utils/app-error");
+const { buildTimestampedSlug, slugify } = require("../utils/slug");
 const {
   validateCreateProjectPayload,
   validateUpdateProjectPayload,
@@ -14,6 +15,7 @@ const mapProject = (project) => ({
   workspaceName: project.workspace_name ?? project.workspaceName ?? null,
   workspaceSlug: project.workspace_slug ?? project.workspaceSlug ?? null,
   projectName: project.project_name ?? project.projectName,
+  slug: project.slug ?? null,
   projectOwner: project.project_owner ?? project.projectOwner,
   description: project.description,
   status: project.status,
@@ -36,6 +38,27 @@ const mapProject = (project) => ({
 
 const isSuperAdmin = (role = "") =>
   String(role).trim().toLowerCase() === "super-admin";
+
+const buildUniqueProjectSlug = async (
+  projectName,
+  excludeProjectId = null,
+  trx = getDb()
+) => {
+  const baseSlug = slugify(projectName, "project");
+  let candidateSlug = baseSlug;
+  let timestampSeed = Date.now();
+
+  while (true) {
+    const existingProject = await projectRepository.findBySlug(candidateSlug, trx);
+
+    if (!existingProject || Number(existingProject.id) === Number(excludeProjectId)) {
+      return candidateSlug;
+    }
+
+    timestampSeed += 1;
+    candidateSlug = buildTimestampedSlug(baseSlug, timestampSeed);
+  }
+};
 
 const mapProjectUser = (projectUser) => ({
   id: projectUser.id,
@@ -67,10 +90,12 @@ const createProject = async (payload, userId) => {
   }
 
   const project = await getDb().transaction(async (trx) => {
+    const slug = await buildUniqueProjectSlug(projectName, null, trx);
     const projectId = await projectRepository.create(
       {
         workspaceId,
         projectName,
+        slug,
         projectOwner: userId,
         description,
         status,
@@ -168,6 +193,24 @@ const getProjectById = async (projectId, userId, userRole = "") => {
   return mapProject(project);
 };
 
+const getProjectBySlug = async (projectSlug, userId, userRole = "") => {
+  const normalizedProjectSlug = String(projectSlug || "").trim();
+
+  if (!normalizedProjectSlug) {
+    throw new AppError("Please provide a valid project slug.", 400);
+  }
+
+  const project = isSuperAdmin(userRole)
+    ? await projectRepository.findBySlug(normalizedProjectSlug)
+    : await projectRepository.findBySlugForUser(normalizedProjectSlug, userId);
+
+  if (!project) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  return mapProject(project);
+};
+
 const getProjectUsers = async (projectId, userId, userRole = "") => {
   const normalizedProjectId = Number(projectId);
 
@@ -211,6 +254,12 @@ const updateProject = async (projectId, payload, userId, userRole = "") => {
   }
 
   const updates = validateUpdateProjectPayload(payload, existingProject);
+  const currentProjectName =
+    existingProject.project_name ?? existingProject.projectName;
+  const nextSlug =
+    updates.projectName === undefined || updates.projectName === currentProjectName
+      ? existingProject.slug
+      : await buildUniqueProjectSlug(updates.projectName, normalizedProjectId);
 
   if (updates.workspaceId !== undefined) {
     const workspace = isSuperAdmin(userRole)
@@ -222,7 +271,10 @@ const updateProject = async (projectId, payload, userId, userRole = "") => {
     }
   }
 
-  await projectRepository.updateById(normalizedProjectId, updates);
+  await projectRepository.updateById(normalizedProjectId, {
+    ...updates,
+    slug: nextSlug,
+  });
 
   const updatedProject = isSuperAdmin(userRole)
     ? await projectRepository.findById(normalizedProjectId)
@@ -257,6 +309,7 @@ module.exports = {
   createProject,
   deleteProject,
   getProjectById,
+  getProjectBySlug,
   getProjects,
   getProjectUsers,
   updateProject,

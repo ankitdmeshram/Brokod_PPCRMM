@@ -10,7 +10,6 @@ import {
 import { fetchProjectUsers } from "../../services/project.service";
 import { createTask, deleteTask, fetchTasks } from "../../services/task.service";
 import {
-  buildProjectRouteSegment,
   buildTaskDetailsRoute,
 } from "../../router/authRoutes";
 import CreateTaskModal from "./CreateTaskModal";
@@ -129,6 +128,7 @@ const buildUserLabel = (user = {}) =>
 const mapApiTaskToTableRow = (task) => ({
   rawId: Number(task.id),
   rawTask: task,
+  slug: task.slug || "",
   id: formatTaskCode(task.id),
   title: task.title,
   description: task.description || "",
@@ -463,16 +463,15 @@ export default function ProjectTasksMain({
   };
 
   const handleShowTask = (task) => {
-    if (!workspace?.slug || !project?.id || !project?.projectName || !task?.rawId) {
+    if (!workspace?.slug || !project?.slug || !task?.rawId) {
       return;
     }
 
     navigate(
       buildTaskDetailsRoute(
         workspace.slug,
-        buildProjectRouteSegment(project.projectName, project.id),
-        task.title,
-        task.rawId
+        project.slug,
+        task.rawTask?.slug || task.slug
       ),
       {
         state: {
@@ -480,6 +479,7 @@ export default function ProjectTasksMain({
           project,
           task: task.rawTask || {
             id: task.rawId,
+            slug: task.slug,
             title: task.title,
             projectId: Number(task.projectId),
             workspaceId: Number(task.workspaceId),
@@ -797,8 +797,14 @@ export default function ProjectTasksMain({
                     <td>{formatDateLabel(task.updatedAt, true)}</td>
                     <td>
                       <Stack direction="row" spacing={0.5} alignItems="center">
-                        <Tooltip title="Task editing is coming soon" variant="soft">
-                          <IconButton variant="plain" sx={{ color: "#3155ff" }}>
+                        <Tooltip title="Edit task" variant="soft">
+                          <IconButton
+                            variant="plain"
+                            sx={{ color: "#3155ff" }}
+                            onClick={() => {
+                              handleShowTask(task);
+                            }}
+                          >
                             <EditIcon />
                           </IconButton>
                         </Tooltip>

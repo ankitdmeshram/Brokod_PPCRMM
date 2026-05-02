@@ -6,6 +6,7 @@ const taskRepository = require("../repositories/task.repository");
 const userRepository = require("../repositories/user.repository");
 const workspaceRepository = require("../repositories/workspace.repository");
 const AppError = require("../utils/app-error");
+const { buildTimestampedSlug, slugify } = require("../utils/slug");
 const {
   validateCreateTaskPayload,
   validateGetTasksFilters,
@@ -21,6 +22,7 @@ const mapTask = (task) => ({
   projectId: task.project_id ?? task.projectId,
   workspaceId: task.workspace_id ?? task.workspaceId,
   title: task.title,
+  slug: task.slug ?? null,
   description: task.description,
   status: task.status,
   priority: task.priority,
@@ -66,6 +68,23 @@ const assertUserExists = async (userId, label) => {
 
   if (!user) {
     throw new AppError(`${label} user not found.`, 404);
+  }
+};
+
+const buildUniqueTaskSlug = async (title, excludeTaskId = null, trx = getDb()) => {
+  const baseSlug = slugify(title, "task");
+  let candidateSlug = baseSlug;
+  let timestampSeed = Date.now();
+
+  while (true) {
+    const existingTask = await taskRepository.findBySlug(candidateSlug, trx);
+
+    if (!existingTask || Number(existingTask.id) === Number(excludeTaskId)) {
+      return candidateSlug;
+    }
+
+    timestampSeed += 1;
+    candidateSlug = buildTimestampedSlug(baseSlug, timestampSeed);
   }
 };
 
@@ -117,11 +136,13 @@ const createTask = async (payload, userId, userRole = "") => {
   ]);
 
   const task = await getDb().transaction(async (trx) => {
+    const slug = await buildUniqueTaskSlug(title, null, trx);
     const taskId = await taskRepository.create(
       {
         projectId,
         workspaceId,
         title,
+        slug,
         description,
         status,
         priority,
@@ -238,6 +259,33 @@ const getTaskById = async (taskId, userId, userRole = "") => {
   return mapTask(task);
 };
 
+const getTaskBySlug = async (taskSlug, userId, userRole = "") => {
+  const normalizedTaskSlug = String(taskSlug || "").trim();
+
+  if (!normalizedTaskSlug) {
+    throw new AppError("Please provide a valid task slug.", 400);
+  }
+
+  const task = await taskRepository.findBySlug(normalizedTaskSlug);
+
+  if (!task) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  const project = isSuperAdmin(userRole)
+    ? await projectRepository.findById(Number(task.project_id ?? task.projectId))
+    : await projectRepository.findByIdForUser(
+        Number(task.project_id ?? task.projectId),
+        userId
+      );
+
+  if (!project) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  return mapTask(task);
+};
+
 const updateTask = async (taskId, payload, userId, userRole = "") => {
   const normalizedTaskId = validateTaskId(taskId);
   const updates = validateUpdateTaskPayload(payload);
@@ -273,7 +321,16 @@ const updateTask = async (taskId, payload, userId, userRole = "") => {
     assertUserExists(updates.assignedTo, "assignedTo"),
   ]);
 
-  await taskRepository.updateById(normalizedTaskId, updates);
+  const currentTitle = task.title;
+  const nextSlug =
+    updates.title === currentTitle
+      ? task.slug
+      : await buildUniqueTaskSlug(updates.title, normalizedTaskId);
+
+  await taskRepository.updateById(normalizedTaskId, {
+    ...updates,
+    slug: nextSlug,
+  });
 
   const updatedTask = await taskRepository.findById(normalizedTaskId);
   return mapTask(updatedTask);
@@ -316,6 +373,7 @@ module.exports = {
   createTask,
   deleteTask,
   getTaskById,
+  getTaskBySlug,
   getTasks,
   updateTask,
 };

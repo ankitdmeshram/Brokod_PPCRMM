@@ -5,6 +5,7 @@ const taskSelectColumns = [
   "tasks.project_id",
   "tasks.workspace_id",
   "tasks.title",
+  "tasks.slug",
   "tasks.description",
   "tasks.status",
   "tasks.priority",
@@ -89,6 +90,7 @@ const create = async (
     projectId,
     workspaceId,
     title,
+    slug,
     description,
     status,
     priority,
@@ -107,6 +109,7 @@ const create = async (
     project_id: projectId,
     workspace_id: workspaceId,
     title,
+    slug,
     description,
     status,
     priority,
@@ -125,6 +128,9 @@ const create = async (
 
 const findById = async (id, trx = getDb()) =>
   buildTaskBaseQuery(trx).where("tasks.id", id).first();
+
+const findBySlug = async (slug, trx = getDb()) =>
+  buildTaskBaseQuery(trx).where("tasks.slug", slug).first();
 
 const findAll = async (filters = {}, trx = getDb()) => {
   const query = buildTaskBaseQuery(trx);
@@ -166,6 +172,7 @@ const softDeleteById = async (id, deletedBy, trx = getDb()) =>
 const updateById = async (id, updates, trx = getDb()) =>
   trx("tasks").where({ id }).whereNull("deleted_at").update({
     title: updates.title,
+    slug: updates.slug,
     description: updates.description,
     status: updates.status,
     priority: updates.priority,
@@ -183,6 +190,7 @@ module.exports = {
   create,
   findAll,
   findById,
+  findBySlug,
   softDeleteById,
   updateById,
 };

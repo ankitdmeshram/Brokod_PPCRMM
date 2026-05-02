@@ -4,6 +4,7 @@ const projectSelectColumns = [
   "projects.id",
   "projects.workspace_id",
   "projects.project_name",
+  "projects.slug",
   "projects.project_owner",
   "projects.description",
   "projects.status",
@@ -22,6 +23,7 @@ const projectSelectColumns = [
 const create = async ({
   workspaceId,
   projectName,
+  slug,
   projectOwner,
   description,
   status,
@@ -33,6 +35,7 @@ const create = async ({
   const result = await trx("projects").insert({
     workspace_id: workspaceId,
     project_name: projectName,
+    slug,
     project_owner: projectOwner,
     description,
     status,
@@ -50,6 +53,30 @@ const findById = async (id, trx = getDb()) => {
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(projectSelectColumns)
     .where("projects.id", id)
+    .whereNull("projects.deleted_at")
+    .first();
+};
+
+const findBySlug = async (slug, trx = getDb()) => {
+  return trx("projects")
+    .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
+    .select(projectSelectColumns)
+    .where("projects.slug", slug)
+    .whereNull("projects.deleted_at")
+    .first();
+};
+
+const findBySlugForUser = async (slug, userId, trx = getDb()) => {
+  return trx("projects")
+    .join("project_users", "project_users.project_id", "projects.id")
+    .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
+    .select(
+      ...projectSelectColumns,
+      "project_users.role as membership_role",
+      "project_users.status as membership_status"
+    )
+    .where("projects.slug", slug)
+    .andWhere("project_users.user_id", userId)
     .whereNull("projects.deleted_at")
     .first();
 };
@@ -171,6 +198,10 @@ const updateById = async (id, updates, trx = getDb()) => {
     mappedUpdates.project_name = updates.projectName;
   }
 
+  if (updates.slug !== undefined) {
+    mappedUpdates.slug = updates.slug;
+  }
+
   if (updates.workspaceId !== undefined) {
     mappedUpdates.workspace_id = updates.workspaceId;
   }
@@ -213,6 +244,8 @@ module.exports = {
   findAllByUserId,
   findById,
   findByIdForUser,
+  findBySlug,
+  findBySlugForUser,
   softDeleteById,
   updateById,
 };
