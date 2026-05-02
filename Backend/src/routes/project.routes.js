@@ -14,6 +14,32 @@ const router = Router();
  *     summary: Fetch projects for the logged-in user
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: workspaceId
+ *         schema:
+ *           type: integer
+ *         description: Filter projects by workspace id
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search projects by id, owner, name, description, status, workspace, or tags
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Number of projects to return per page
  *     responses:
  *       200:
  *         description: Projects fetched successfully

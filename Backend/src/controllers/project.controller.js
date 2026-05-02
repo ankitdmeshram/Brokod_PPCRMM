@@ -11,17 +11,20 @@ const createProject = asyncHandler(async (request, response) => {
 });
 
 const getProjects = asyncHandler(async (request, response) => {
-  const projects = await projectService.getProjects(
+  const result = await projectService.getProjects(
     request.user.sub,
     {
       workspaceId: request.query.workspaceId,
       search: request.query.search,
+      page: request.query.page,
+      limit: request.query.limit,
     },
     request.user.role
   );
 
   response.status(200).json({
-    projects,
+    projects: result.projects,
+    pagination: result.pagination,
   });
 });
 

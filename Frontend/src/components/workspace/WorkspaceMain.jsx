@@ -32,13 +32,6 @@ import {
 import { useNavigate } from "react-router-dom";
 
 export default function WorkspaceMain() {
-  const slugifyWorkspaceName = (name) =>
-    String(name || "")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-
   const navigate = useNavigate();
   const { authSession } = useAuthContext();
   const hasShownLoadErrorRef = useRef(false);
@@ -434,7 +427,7 @@ export default function WorkspaceMain() {
                           variant="soft"
                           onClick={() =>
                             navigate(
-                              buildWorkspaceProjectsRoute(slugifyWorkspaceName(workspace.workspaceName)),
+                              buildWorkspaceProjectsRoute(workspace.slug),
                               {
                                 state: {
                                   workspace,

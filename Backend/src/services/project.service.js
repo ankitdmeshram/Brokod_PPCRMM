@@ -12,6 +12,7 @@ const mapProject = (project) => ({
   id: project.id,
   workspaceId: project.workspace_id ?? project.workspaceId ?? null,
   workspaceName: project.workspace_name ?? project.workspaceName ?? null,
+  workspaceSlug: project.workspace_slug ?? project.workspaceSlug ?? null,
   projectName: project.project_name ?? project.projectName,
   projectOwner: project.project_owner ?? project.projectOwner,
   description: project.description,
@@ -100,6 +101,16 @@ const createProject = async (payload, userId) => {
 
 const getProjects = async (userId, filters = {}, userRole = "") => {
   const normalizedFilters = {};
+  const page = Number(filters.page ?? 1);
+  const limit = Number(filters.limit ?? 10);
+
+  if (!Number.isInteger(page) || page <= 0) {
+    throw new AppError("Please provide a valid page number.", 400);
+  }
+
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+    throw new AppError("Please provide a valid limit between 1 and 100.", 400);
+  }
 
   if (filters.workspaceId !== undefined) {
     const workspaceId = Number(filters.workspaceId);
@@ -115,10 +126,28 @@ const getProjects = async (userId, filters = {}, userRole = "") => {
     normalizedFilters.search = String(filters.search).trim();
   }
 
-  const projects = isSuperAdmin(userRole)
-    ? await projectRepository.findAll(normalizedFilters)
-    : await projectRepository.findAllByUserId(userId, normalizedFilters);
-  return projects.map(mapProject);
+  normalizedFilters.limit = limit;
+  normalizedFilters.offset = (page - 1) * limit;
+
+  const [projects, total] = await (isSuperAdmin(userRole)
+    ? Promise.all([
+        projectRepository.findAll(normalizedFilters),
+        projectRepository.countAll(normalizedFilters),
+      ])
+    : Promise.all([
+        projectRepository.findAllByUserId(userId, normalizedFilters),
+        projectRepository.countAllByUserId(userId, normalizedFilters),
+      ]));
+
+  return {
+    projects: projects.map(mapProject),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    },
+  };
 };
 
 const getProjectById = async (projectId, userId, userRole = "") => {

@@ -12,10 +12,11 @@ export default function AppLayout({
   initial,
   userRole,
   showSuperAdminChip = true,
+  initialSidebarCollapsed = false,
   currentYear,
   children,
 }) {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(initialSidebarCollapsed);
   const sidebarWidth = isSidebarCollapsed
     ? "56px"
     : "248px";

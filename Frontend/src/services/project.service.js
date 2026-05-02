@@ -21,6 +21,14 @@ export async function fetchProjects(token, filters = {}) {
     query.set("search", filters.search.trim());
   }
 
+  if (filters.page) {
+    query.set("page", String(filters.page));
+  }
+
+  if (filters.limit) {
+    query.set("limit", String(filters.limit));
+  }
+
   const response = await fetch(`${PROJECT_API_BASE}${query.toString() ? `?${query}` : ""}`, {
     method: "GET",
     headers: {
@@ -39,6 +47,17 @@ export async function createProject(payload, token) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function fetchProjectById(projectId, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   return parseApiResponse(response);

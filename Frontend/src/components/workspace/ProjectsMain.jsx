@@ -10,15 +10,20 @@ import {
   Sheet,
   Stack,
   Table,
+  Tooltip,
   Typography,
 } from "@mui/joy";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../context/AuthContext";
 import {
   showConfirmAlert,
   showErrorAlert,
   showSuccessAlert,
 } from "../../services/alert.service";
+import {
+  buildProjectTasksRoute,
+} from "../../router/authRoutes";
 import {
   createProject,
   deleteProject,
@@ -28,6 +33,7 @@ import {
 import {
   DeleteIcon,
   EditIcon,
+  EnterIcon,
   PlusIcon,
   SearchIcon,
 } from "./WorkspaceIcons";
@@ -95,6 +101,7 @@ const initialProjectFormValues = {
 };
 
 export default function ProjectsMain({ workspace, workspaceTitle, mode = "workspace" }) {
+  const navigate = useNavigate();
   const { authSession } = useAuthContext();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -102,11 +109,15 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
   const [isUpdatingProject, setIsUpdatingProject] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [searchValue, setSearchValue] = useState("");
+  const [debouncedSearchValue, setDebouncedSearchValue] = useState("");
   const [projects, setProjects] = useState([]);
   const [deletingProjectId, setDeletingProjectId] = useState(null);
   const [editingProjectId, setEditingProjectId] = useState(null);
+  const [projectRefreshKey, setProjectRefreshKey] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalProjects, setTotalProjects] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [createValues, setCreateValues] = useState(initialProjectFormValues);
   const [editValues, setEditValues] = useState(initialProjectFormValues);
 
@@ -118,9 +129,23 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
   );
 
   useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchValue(searchValue);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchValue]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchValue, rowsPerPage]);
+
+  useEffect(() => {
     const loadProjects = async () => {
       if (!authSession?.token || (!isSuperAdminView && !workspace?.id)) {
         setProjects([]);
+        setTotalProjects(0);
+        setTotalPages(1);
         setIsLoadingProjects(false);
         return;
       }
@@ -130,13 +155,20 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
       try {
         const result = await fetchProjects(authSession.token, {
           workspaceId: isSuperAdminView ? null : workspace.id,
+          search: debouncedSearchValue,
+          page: currentPage,
+          limit: rowsPerPage,
         });
         if (!isCancelled) {
           setProjects(Array.isArray(result?.projects) ? result.projects : []);
+          setTotalProjects(Number(result?.pagination?.total || 0));
+          setTotalPages(Number(result?.pagination?.totalPages || 1));
         }
       } catch (error) {
         if (!isCancelled) {
           setProjects([]);
+          setTotalProjects(0);
+          setTotalPages(1);
           await showErrorAlert(
             "Unable to load projects",
             error.message || "Something went wrong while loading projects."
@@ -156,11 +188,15 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
     return () => {
       isCancelled = true;
     };
-  }, [authSession?.token, isSuperAdminView, workspace?.id]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchValue, rowsPerPage]);
+  }, [
+    authSession?.token,
+    currentPage,
+    debouncedSearchValue,
+    isSuperAdminView,
+    projectRefreshKey,
+    rowsPerPage,
+    workspace?.id,
+  ]);
 
   const projectsById = useMemo(
     () => new Map(projects.map((project) => [project.id, project])),
@@ -181,6 +217,8 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
         startDate: formatDateLabel(project.startDate),
         endDate: formatDateLabel(project.endDate),
         tags: Array.isArray(project.tags) ? project.tags : [],
+        description: project.description || "",
+        workspaceSlug: project.workspaceSlug || "",
         workspaceName:
           project.workspaceName ||
           (project.workspaceId ? `Workspace #${project.workspaceId}` : "-"),
@@ -188,36 +226,9 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
     [currentUserId, currentUserName, projects]
   );
 
-  const filteredProjectRows = useMemo(() => {
-    const normalizedSearch = searchValue.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return projectRows;
-    }
-
-    return projectRows.filter((project) => {
-      const searchFields = [
-        project.id,
-        project.projectName,
-        project.owner,
-        project.workspaceName,
-        project.tags.join(" "),
-      ];
-
-      return searchFields.some((field) =>
-        String(field || "").toLowerCase().includes(normalizedSearch)
-      );
-    });
-  }, [projectRows, searchValue]);
-
-  const totalProjects = filteredProjectRows.length;
-  const totalPages = Math.max(1, Math.ceil(totalProjects / rowsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = totalProjects === 0 ? 0 : (safeCurrentPage - 1) * rowsPerPage;
-  const paginatedProjectRows = filteredProjectRows.slice(
-    pageStartIndex,
-    pageStartIndex + rowsPerPage
-  );
+  const paginatedProjectRows = projectRows;
   const pageEndIndex =
     totalProjects === 0 ? 0 : Math.min(pageStartIndex + rowsPerPage, totalProjects);
 
@@ -292,6 +303,34 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
     setEditValues(initialProjectFormValues);
   }, [isUpdatingProject]);
 
+  const handleEnterProject = useCallback(
+    (projectId) => {
+      const project = projectsById.get(projectId);
+
+      const workspaceSlug = workspace?.slug || project?.workspaceSlug;
+
+      if (!project || !workspaceSlug) {
+        void showErrorAlert("Project missing", "Please refresh the page and try again.");
+        return;
+      }
+
+      navigate(
+        buildProjectTasksRoute(
+          workspaceSlug,
+          project.projectName,
+          project.id
+        ),
+        {
+          state: {
+            workspace,
+            project,
+          },
+        }
+      );
+    },
+    [navigate, projectsById, workspace]
+  );
+
   const handleCreateProject = async (event) => {
     event.preventDefault();
 
@@ -326,9 +365,10 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
         authSession.token
       );
 
-      setProjects((currentProjects) => [result.project, ...currentProjects]);
       setIsCreatingProject(false);
       handleCloseCreateModal(true);
+      setCurrentPage(1);
+      setProjectRefreshKey((currentKey) => currentKey + 1);
 
       await showSuccessAlert(
         "Project created",
@@ -369,9 +409,11 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
     try {
       const result = await deleteProject(project.projectId, authSession.token);
 
-      setProjects((currentProjects) =>
-        currentProjects.filter((currentProject) => currentProject.id !== project.projectId)
-      );
+      if (paginatedProjectRows.length === 1 && currentPage > 1) {
+        setCurrentPage((page) => Math.max(1, page - 1));
+      } else {
+        setProjectRefreshKey((currentKey) => currentKey + 1);
+      }
 
       await showSuccessAlert(
         "Project deleted",
@@ -421,13 +463,8 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
         authSession.token
       );
 
-      setProjects((currentProjects) =>
-        currentProjects.map((project) =>
-          project.id === editingProjectId ? result.project : project
-        )
-      );
-
       handleCloseEditModal(true);
+      setProjectRefreshKey((currentKey) => currentKey + 1);
 
       await showSuccessAlert(
         "Project updated",
@@ -603,8 +640,14 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
                   "& tbody tr:nth-of-type(even)": {
                     backgroundColor: "#fcfdff",
                   },
+                  "& tbody tr:hover td": {
+                    backgroundColor: "#f7f9ff",
+                  },
                   "& tbody tr:nth-of-type(even) td:nth-of-type(1), & tbody tr:nth-of-type(even) td:nth-of-type(2)": {
                     backgroundColor: "#fcfdff",
+                  },
+                  "& tbody tr:hover td:nth-of-type(1), & tbody tr:hover td:nth-of-type(2)": {
+                    backgroundColor: "#f7f9ff",
                   },
                 }}
               >
@@ -632,9 +675,49 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
                         </Typography>
                       </td>
                       <td>
-                        <Typography sx={{ fontWeight: 700, color: "#4b5563" }}>
-                          {project.projectName}
-                        </Typography>
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          justifyContent="space-between"
+                          sx={{ width: "100%" }}
+                        >
+                          <Typography
+                            onClick={() => handleEnterProject(project.projectId)}
+                            sx={{
+                              fontWeight: 700,
+                              color: "#4b5563",
+                              cursor: "pointer",
+                              transition: "color 0.2s ease",
+                              "&:hover": {
+                                color: "#3155ff",
+                              },
+                            }}
+                          >
+                            {project.projectName}
+                          </Typography>
+                          <Tooltip title="Enter project" variant="soft">
+                            <IconButton
+                              variant="soft"
+                              size="sm"
+                              onClick={() => handleEnterProject(project.projectId)}
+                              sx={{
+                                opacity: 0,
+                                transform: "translateX(-6px)",
+                                transition: "opacity 0.2s ease, transform 0.2s ease",
+                                backgroundColor: "#eef2ff",
+                                color: "#3155ff",
+                                borderRadius: "10px",
+                                "tr:hover &": {
+                                  opacity: 1,
+                                  transform: "translateX(0)",
+                                },
+                              }}
+                            >
+                              <EnterIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
                       </td>
                       <td>{project.owner}</td>
                       {isSuperAdminView ? <td>{project.workspaceName}</td> : null}
@@ -673,7 +756,18 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
                         </Stack>
                       </td>
                       <td>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          sx={{
+                            opacity: 0.72,
+                            transition: "opacity 0.2s ease",
+                            "tr:hover &": {
+                              opacity: 1,
+                            },
+                          }}
+                        >
                           <IconButton
                             variant="plain"
                             sx={{ color: "#3155ff" }}

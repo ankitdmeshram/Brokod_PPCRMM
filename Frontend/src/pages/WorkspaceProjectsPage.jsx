@@ -19,7 +19,7 @@ export default function WorkspaceProjectsPage() {
   const { authSession } = useAuthContext();
   const location = useLocation();
   const navigate = useNavigate();
-  const { workspaceName = "" } = useParams();
+  const { workspaceSlug = "" } = useParams();
   const [workspace, setWorkspace] = useState(() => location.state?.workspace || null);
   const [isResolvingWorkspace, setIsResolvingWorkspace] = useState(!location.state?.workspace);
   const currentYear = new Date().getFullYear();
@@ -29,8 +29,8 @@ export default function WorkspaceProjectsPage() {
   const fullName = `${firstName} ${lastName}`.trim();
   const initial = firstName.charAt(0).toUpperCase() || "A";
   const workspaceTitle = useMemo(
-    () => formatWorkspaceTitle(workspaceName) || "Workspace",
-    [workspaceName]
+    () => workspace?.workspaceName || formatWorkspaceTitle(workspaceSlug) || "Workspace",
+    [workspace?.workspaceName, workspaceSlug]
   );
 
   useEffect(() => {
@@ -51,15 +51,7 @@ export default function WorkspaceProjectsPage() {
       try {
         const result = await fetchWorkspaces(authSession.token);
         const workspaces = Array.isArray(result?.workspaces) ? result.workspaces : [];
-        const matchedWorkspace = workspaces.find((item) => {
-          const slug = String(item.workspaceName || "")
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/(^-|-$)/g, "");
-
-          return slug === workspaceName;
-        });
+        const matchedWorkspace = workspaces.find((item) => item.slug === workspaceSlug);
 
         setWorkspace(matchedWorkspace || null);
       } catch (error) {
@@ -73,7 +65,7 @@ export default function WorkspaceProjectsPage() {
     };
 
     void resolveWorkspace();
-  }, [authSession?.token, location.state, workspaceName]);
+  }, [authSession?.token, location.state, workspaceSlug]);
 
   useEffect(() => {
     if (isResolvingWorkspace || workspace) {
@@ -85,7 +77,7 @@ export default function WorkspaceProjectsPage() {
 
   return (
     <AppLayout
-      sidebar={<ProjectsSidebar workspaceName={workspaceName} />}
+      sidebar={<ProjectsSidebar workspaceName={workspaceSlug} />}
       title="Project Management"
       fullName={fullName}
       initial={initial}

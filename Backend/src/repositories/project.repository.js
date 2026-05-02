@@ -16,6 +16,7 @@ const projectSelectColumns = [
   "projects.deleted_at",
   "projects.deleted_by",
   "workspaces.workspace_name",
+  "workspaces.slug as workspace_slug",
 ];
 
 const create = async ({
@@ -60,11 +61,16 @@ const applyProjectFilters = (query, filters = {}) => {
 
   if (filters.search) {
     query.andWhere((builder) => {
+      const likeSearch = `%${filters.search}%`;
+
       builder
-        .where("projects.project_name", "like", `%${filters.search}%`)
-        .orWhere("projects.description", "like", `%${filters.search}%`)
-        .orWhere("projects.status", "like", `%${filters.search}%`)
-        .orWhere("workspaces.workspace_name", "like", `%${filters.search}%`);
+        .whereRaw("CAST(projects.id AS CHAR) like ?", [likeSearch])
+        .orWhereRaw("CAST(projects.project_owner AS CHAR) like ?", [likeSearch])
+        .orWhere("projects.project_name", "like", likeSearch)
+        .orWhere("projects.description", "like", likeSearch)
+        .orWhere("projects.status", "like", likeSearch)
+        .orWhere("projects.tags", "like", likeSearch)
+        .orWhere("workspaces.workspace_name", "like", likeSearch);
     });
   }
 
@@ -78,6 +84,14 @@ const findAll = async (filters = {}, trx = getDb()) => {
     .whereNull("projects.deleted_at");
 
   applyProjectFilters(query, filters);
+
+  if (filters.limit) {
+    query.limit(filters.limit);
+  }
+
+  if (filters.offset) {
+    query.offset(filters.offset);
+  }
 
   return query.orderBy("projects.created_at", "desc");
 };
@@ -96,7 +110,43 @@ const findAllByUserId = async (userId, filters = {}, trx = getDb()) => {
 
   applyProjectFilters(query, filters);
 
+  if (filters.limit) {
+    query.limit(filters.limit);
+  }
+
+  if (filters.offset) {
+    query.offset(filters.offset);
+  }
+
   return query.orderBy("projects.created_at", "desc");
+};
+
+const countAll = async (filters = {}, trx = getDb()) => {
+  const query = trx("projects")
+    .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
+    .whereNull("projects.deleted_at")
+    .countDistinct({ count: "projects.id" })
+    .first();
+
+  applyProjectFilters(query, filters);
+
+  const result = await query;
+  return Number(result?.count || 0);
+};
+
+const countAllByUserId = async (userId, filters = {}, trx = getDb()) => {
+  const query = trx("projects")
+    .join("project_users", "project_users.project_id", "projects.id")
+    .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
+    .where("project_users.user_id", userId)
+    .whereNull("projects.deleted_at")
+    .countDistinct({ count: "projects.id" })
+    .first();
+
+  applyProjectFilters(query, filters);
+
+  const result = await query;
+  return Number(result?.count || 0);
 };
 
 const findByIdForUser = async (projectId, userId, trx = getDb()) => {
@@ -156,6 +206,8 @@ const softDeleteById = async (id, deletedBy, trx = getDb()) => {
 };
 
 module.exports = {
+  countAll,
+  countAllByUserId,
   create,
   findAll,
   findAllByUserId,

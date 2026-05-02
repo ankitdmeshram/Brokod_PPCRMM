@@ -1,4 +1,5 @@
-import { Button, Sheet, Stack, Typography } from "@mui/joy";
+import { APP_ROUTES } from "../../router/authRoutes";
+import { Button, Sheet, Stack, Tooltip, Typography } from "@mui/joy";
 import { Link as RouterLink } from "react-router-dom";
 import {
   ArrowIcon,
@@ -6,6 +7,7 @@ import {
   GridIcon,
   NotificationIcon,
   SettingsIcon,
+  SidebarBackIcon,
   UsersIcon,
 } from "./WorkspaceIcons";
 
@@ -19,9 +21,20 @@ const navItems = [
 
 export default function ProjectsSidebar({
   isCollapsed = false,
-  sectionLabel = "WORKSPACE",
+  sectionLabel = "",
   items = navItems,
+  backToProjectsRoute = "",
+  showBackToWorkspace = true,
 }) {
+  const renderSidebarAction = (content, tooltipTitle) =>
+    isCollapsed ? (
+      <Tooltip title={tooltipTitle} placement="right" variant="soft">
+        {content}
+      </Tooltip>
+    ) : (
+      content
+    );
+
   return (
     <Sheet
       sx={{
@@ -35,7 +48,11 @@ export default function ProjectsSidebar({
         transition: "padding 0.25s ease",
       }}
     >
-      <Stack spacing={1} alignItems={isCollapsed ? "center" : "stretch"}>
+      <Stack
+        spacing={1}
+        alignItems={isCollapsed ? "center" : "stretch"}
+        sx={{ flex: 1, minHeight: 0 }}
+      >
         <Stack
           direction="row"
           spacing={1.25}
@@ -64,7 +81,7 @@ export default function ProjectsSidebar({
         </Stack>
 
         <Stack spacing={1.5}>
-          {!isCollapsed ? (
+          {!isCollapsed && sectionLabel ? (
             <Typography
               level="body-xs"
               sx={{
@@ -77,42 +94,119 @@ export default function ProjectsSidebar({
             </Typography>
           ) : null}
 
-          {items.map((item) => (
-            <Button
-              key={item.key}
-              component={item.to ? RouterLink : "button"}
-              to={item.to}
-              variant={item.active ? "soft" : "plain"}
-              startDecorator={isCollapsed ? null : item.icon}
-              endDecorator={isCollapsed ? null : item.active ? <ArrowIcon /> : null}
-              sx={{
-                justifyContent: isCollapsed ? "center" : "flex-start",
-                minHeight: "40px",
-                backgroundColor: item.active ? "rgba(255,255,255,0.08)" : "transparent",
-                color: "var(--color-font-secondary)",
-                px: isCollapsed ? 1 : 1.5,
-                minWidth: isCollapsed ? "40px" : "auto",
-                width: isCollapsed ? "40px" : "100%",
-                alignSelf: isCollapsed ? "center" : "stretch",
-                textDecoration: "none",
-                "& .MuiButton-startDecorator": {
-                  mr: 1.25,
-                },
-                "& .MuiButton-endDecorator": {
-                  ml: "auto",
-                },
-                "& .MuiButton-label": {
-                  flex: isCollapsed ? "0 0 auto" : 1,
-                  textAlign: "left",
-                },
-                "&:hover": {
-                  backgroundColor: "rgba(255,255,255,0.16)",
-                },
-              }}
-            >
-              {isCollapsed ? item.icon : item.label}
-            </Button>
-          ))}
+          {items.map((item) =>
+            renderSidebarAction(
+              <Button
+                key={item.key}
+                component={item.to ? RouterLink : "button"}
+                to={item.to}
+                variant={item.active ? "soft" : "plain"}
+                startDecorator={isCollapsed ? null : item.icon}
+                endDecorator={isCollapsed ? null : item.active ? <ArrowIcon /> : null}
+                sx={{
+                  justifyContent: isCollapsed ? "center" : "flex-start",
+                  minHeight: "40px",
+                  backgroundColor: item.active ? "rgba(255,255,255,0.08)" : "transparent",
+                  color: "var(--color-font-secondary)",
+                  px: isCollapsed ? 1 : 1.5,
+                  minWidth: isCollapsed ? "40px" : "auto",
+                  width: isCollapsed ? "40px" : "100%",
+                  alignSelf: isCollapsed ? "center" : "stretch",
+                  textDecoration: "none",
+                  "& .MuiButton-startDecorator": {
+                    mr: 1.25,
+                  },
+                  "& .MuiButton-endDecorator": {
+                    ml: "auto",
+                  },
+                  "& .MuiButton-label": {
+                    flex: isCollapsed ? "0 0 auto" : 1,
+                    textAlign: "left",
+                  },
+                  "&:hover": {
+                    backgroundColor: "rgba(255,255,255,0.16)",
+                  },
+                }}
+              >
+                {isCollapsed ? item.icon : item.label}
+              </Button>,
+              item.label
+            )
+          )}
+        </Stack>
+
+        <Stack spacing={1} sx={{ mt: "auto", width: "100%" }}>
+          {backToProjectsRoute ? (
+            renderSidebarAction(
+              <Button
+                component={RouterLink}
+                to={backToProjectsRoute}
+                variant="plain"
+                startDecorator={isCollapsed ? null : <SidebarBackIcon />}
+                sx={{
+                  justifyContent: isCollapsed ? "center" : "flex-start",
+                  minHeight: "40px",
+                  color: "var(--color-font-secondary)",
+                  px: isCollapsed ? 1 : 1.5,
+                  minWidth: isCollapsed ? "40px" : "auto",
+                  width: isCollapsed ? "40px" : "100%",
+                  alignSelf: isCollapsed ? "center" : "stretch",
+                  textDecoration: "none",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                  "& .MuiButton-startDecorator": {
+                    mr: 1.25,
+                  },
+                  "& .MuiButton-label": {
+                    flex: isCollapsed ? "0 0 auto" : 1,
+                    textAlign: "left",
+                  },
+                  "&:hover": {
+                    backgroundColor: "rgba(255,255,255,0.16)",
+                  },
+                }}
+              >
+                {isCollapsed ? <SidebarBackIcon /> : "Back to Projects"}
+              </Button>,
+              "Back to Projects"
+            )
+          ) : null}
+
+          {showBackToWorkspace ? (
+            renderSidebarAction(
+              <Button
+                component={RouterLink}
+                to={APP_ROUTES.workspace}
+                variant="plain"
+                startDecorator={isCollapsed ? null : <SidebarBackIcon />}
+                sx={{
+                  justifyContent: isCollapsed ? "center" : "flex-start",
+                  minHeight: "40px",
+                  color: "var(--color-font-secondary)",
+                  px: isCollapsed ? 1 : 1.5,
+                  minWidth: isCollapsed ? "40px" : "auto",
+                  width: isCollapsed ? "40px" : "100%",
+                  alignSelf: isCollapsed ? "center" : "stretch",
+                  textDecoration: "none",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                  "& .MuiButton-startDecorator": {
+                    mr: 1.25,
+                  },
+                  "& .MuiButton-label": {
+                    flex: isCollapsed ? "0 0 auto" : 1,
+                    textAlign: "left",
+                  },
+                  "&:hover": {
+                    backgroundColor: "rgba(255,255,255,0.16)",
+                  },
+                }}
+              >
+                {isCollapsed ? <SidebarBackIcon /> : "Back to Workspace"}
+              </Button>,
+              "Back to Workspace"
+            )
+          ) : null}
         </Stack>
       </Stack>
     </Sheet>

@@ -12,6 +12,7 @@ export { default as EyeIcon } from "@mui/icons-material/VisibilityOutlined";
 export { default as SidebarBackIcon } from "@mui/icons-material/ArrowBack";
 export { default as GridIcon } from "@mui/icons-material/GridViewOutlined";
 export { default as FolderIcon } from "@mui/icons-material/FolderOpenOutlined";
+export { default as TasksIcon } from "@mui/icons-material/ChecklistOutlined";
 export { default as NotificationIcon } from "@mui/icons-material/NotificationsOutlined";
 export { default as SettingsIcon } from "@mui/icons-material/SettingsOutlined";
 export { default as UsersIcon } from "@mui/icons-material/GroupOutlined";

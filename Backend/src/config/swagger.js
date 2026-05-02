@@ -159,6 +159,10 @@ const swaggerSpec = swaggerJsdoc({
               type: "integer",
               example: 2,
             },
+            workspaceSlug: {
+              type: "string",
+              example: "my-workspace",
+            },
             projectName: {
               type: "string",
               example: "CRM Revamp",
@@ -428,6 +432,27 @@ const swaggerSpec = swaggerJsdoc({
                 $ref: "#/components/schemas/Project",
               },
             },
+            pagination: {
+              type: "object",
+              properties: {
+                page: {
+                  type: "integer",
+                  example: 1,
+                },
+                limit: {
+                  type: "integer",
+                  example: 10,
+                },
+                total: {
+                  type: "integer",
+                  example: 42,
+                },
+                totalPages: {
+                  type: "integer",
+                  example: 5,
+                },
+              },
+            },
           },
         },
         FetchProjectUsersResponse: {
@@ -450,6 +475,10 @@ const swaggerSpec = swaggerJsdoc({
             id: {
               type: "integer",
               example: 2,
+            },
+            slug: {
+              type: "string",
+              example: "my-workspace",
             },
             workspaceName: {
               type: "string",

@@ -6,6 +6,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import SuperAdminProjectsPage from "./pages/SuperAdminProjectsPage";
+import WorkspaceProjectTasksPage from "./pages/WorkspaceProjectTasksPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import WorkspaceProjectsPage from "./pages/WorkspaceProjectsPage";
 import { APP_ROUTES, AUTH_ROUTES, SUPER_ADMIN_ROUTES } from "./router/authRoutes";
@@ -42,10 +43,42 @@ export default function App() {
             }
           />
           <Route
-            path={`${APP_ROUTES.workspace}/:workspaceName/projects`}
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects`}
             element={
               <ProtectedRoute>
                 <WorkspaceProjectsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/overview`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectTasksPage section="overview" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/tasks`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectTasksPage section="tasks" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/notifications`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectTasksPage section="notifications" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectName/settings`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectTasksPage section="settings" />
               </ProtectedRoute>
             }
           />
