@@ -1,0 +1,413 @@
+.page {
+  min-height: 100vh;
+  padding: 16px 22px 36px;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.5), transparent 30%),
+    linear-gradient(180deg, #ece4ff 0%, #e8e0ff 100%);
+  display: flex;
+  justify-content: center;
+}
+
+.heroShell {
+  width: min(1280px, 100%);
+  margin: 0 auto;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border: 1px solid rgba(121, 74, 255, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 40px rgba(91, 54, 170, 0.08);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #17171f;
+  font-weight: 800;
+}
+
+.brandMark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #6d39ff 0%, #7f56ff 100%);
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.brandText {
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.navLink,
+.navLinkActive {
+  color: #4c4b67;
+  font-weight: 500;
+  padding-bottom: 8px;
+  font-size: 0.96rem;
+}
+
+.navLinkActive {
+  color: #6d39ff;
+  border-bottom: 3px solid #6d39ff;
+}
+
+.navCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 128px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6d39ff 0%, #7c4dff 100%);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 12px 28px rgba(109, 57, 255, 0.22);
+}
+
+.hero {
+  position: relative;
+  padding: 72px 0 56px;
+  text-align: center;
+}
+
+.pill {
+  display: inline-block;
+  margin-bottom: 20px;
+  padding: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 30px rgba(91, 54, 170, 0.08);
+}
+
+.pillTag,
+.pillText {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: 999px;
+  padding: 0 14px;
+}
+
+.pillTag {
+  background: linear-gradient(135deg, #6d39ff 0%, #7c4dff 100%);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.pillText {
+  color: #6d39ff;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.title {
+  max-width: 980px;
+  margin: 0 auto;
+  color: #1e1d27;
+  font-size: clamp(2.5rem, 6vw, 4.8rem);
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+}
+
+.description {
+  max-width: 760px;
+  margin: 20px auto 0;
+  color: #666287;
+  font-size: 1.2rem;
+  line-height: 1.6;
+}
+
+.ctaRow {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  max-width: 620px;
+  margin: 28px auto 0;
+}
+
+.primaryHeroCta,
+.secondaryHeroCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 240px;
+  height: 56px;
+  border-radius: 14px;
+  padding: 0 22px;
+  font-weight: 700;
+  box-shadow: 0 16px 34px rgba(91, 54, 170, 0.08);
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.primaryHeroCta {
+  background: linear-gradient(135deg, #5a58f2 0%, #6948ff 100%);
+  color: #ffffff;
+}
+
+.secondaryHeroCta {
+  background: rgba(255, 255, 255, 0.96);
+  color: #1e1d27;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(76, 57, 118, 0.3);
+  backdrop-filter: blur(6px);
+}
+
+.modalCard {
+  position: relative;
+  width: min(100%, 640px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 20px 20px 18px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 30px 80px rgba(73, 47, 133, 0.2);
+}
+
+.modalClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(109, 57, 255, 0.08);
+  color: #5a58f2;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modalTitle {
+  margin: 2px 0 16px;
+  color: #1e1d27;
+  font-size: clamp(1.45rem, 2.8vw, 2.15rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  text-align: center;
+}
+
+.modalForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.fieldGroup,
+.messageGroup {
+  display: grid;
+  gap: 5px;
+}
+
+.messageGroup {
+  grid-column: 1 / -1;
+}
+
+.fieldLabel {
+  color: #3f3563;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.fieldInput,
+.messageInput {
+  width: 100%;
+  border: 1px solid rgba(109, 57, 255, 0.16);
+  border-radius: 12px;
+  background: #f8f5ff;
+  color: #1e1d27;
+  font: inherit;
+  font-size: 0.94rem;
+}
+
+.fieldInput {
+  height: 44px;
+  padding: 0 12px;
+}
+
+.messageInput {
+  resize: vertical;
+  min-height: 96px;
+  padding: 12px;
+}
+
+.fieldInput::placeholder,
+.messageInput::placeholder {
+  color: #9c98b4;
+}
+
+.submitButton {
+  grid-column: 1 / -1;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #5a58f2 0%, #6948ff 100%);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 16px 34px rgba(109, 57, 255, 0.2);
+}
+
+.floatingLeft,
+.floatingRight {
+  position: absolute;
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  will-change: transform;
+}
+
+.floatingLeft {
+  left: 5%;
+  top: 75%;
+  animation: floatLeftIcon 7.5s ease-in-out infinite;
+}
+
+.floatingRight {
+  right: 5%;
+  top: 25%;
+  animation: floatRightIcon 8.25s ease-in-out infinite;
+}
+
+@keyframes floatLeftIcon {
+  0% {
+    transform: translate3d(0, -50%, 0) rotate(-10deg);
+  }
+
+  20% {
+    transform: translate3d(10%, -58%, 0) rotate(-4deg);
+  }
+
+  45% {
+    transform: translate3d(-14%, -44%, 0) rotate(-13deg);
+  }
+
+  70% {
+    transform: translate3d(25%, -54%, 0) rotate(-6deg);
+  }
+
+  100% {
+    transform: translate3d(0, -50%, 0) rotate(-10deg);
+  }
+}
+
+@keyframes floatRightIcon {
+  0% {
+    transform: translate3d(0, -50%, 0) rotate(0deg);
+  }
+
+  18% {
+    transform: translate3d(-12%, -42%, 0) rotate(8deg);
+  }
+
+  40% {
+    transform: translate3d(18%, -57%, 0) rotate(-6deg);
+  }
+
+  68% {
+    transform: translate3d(-25%, -48%, 0) rotate(10deg);
+  }
+
+  100% {
+    transform: translate3d(0, -50%, 0) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floatingLeft,
+  .floatingRight {
+    animation: none;
+    transform: translate3d(0, -50%, 0);
+  }
+}
+
+@media (max-width: 960px) {
+  .navbar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .navLinks {
+    order: 3;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 18px 24px;
+  }
+
+  .floatingLeft,
+  .floatingRight {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 14px 12px 28px;
+  }
+
+  .navbar {
+    padding: 14px;
+  }
+
+  .brandText {
+    font-size: 1.35rem;
+  }
+
+  .hero {
+    padding: 56px 0 32px;
+  }
+
+  .description {
+    font-size: 0.94rem;
+    line-height: 1.55;
+  }
+
+  .ctaRow {
+    flex-direction: column;
+  }
+
+  .primaryHeroCta,
+  .secondaryHeroCta {
+    width: 100%;
+  }
+
+  .modalCard {
+    padding: 18px 14px 16px;
+    border-radius: 16px;
+  }
+
+  .modalForm {
+    grid-template-columns: 1fr;
+  }
+}
