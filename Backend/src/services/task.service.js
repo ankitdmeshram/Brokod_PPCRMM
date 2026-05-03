@@ -6,7 +6,6 @@ const taskRepository = require("../repositories/task.repository");
 const userRepository = require("../repositories/user.repository");
 const workspaceRepository = require("../repositories/workspace.repository");
 const AppError = require("../utils/app-error");
-const { buildTimestampedSlug, slugify } = require("../utils/slug");
 const {
   validateCreateTaskPayload,
   validateGetTasksFilters,
@@ -71,20 +70,24 @@ const assertUserExists = async (userId, label) => {
   }
 };
 
-const buildUniqueTaskSlug = async (title, excludeTaskId = null, trx = getDb()) => {
-  const baseSlug = slugify(title, "task");
-  let candidateSlug = baseSlug;
-  let timestampSeed = Date.now();
+const buildRandomTaskSlug = () => {
+  const timestamp = Date.now();
+  const randomNumber = Math.floor(Math.random() * 100000) + 1;
+
+  return `${timestamp}-${randomNumber}`;
+};
+
+const buildUniqueTaskSlug = async (trx = getDb()) => {
+  let candidateSlug = buildRandomTaskSlug();
 
   while (true) {
     const existingTask = await taskRepository.findBySlug(candidateSlug, trx);
 
-    if (!existingTask || Number(existingTask.id) === Number(excludeTaskId)) {
+    if (!existingTask) {
       return candidateSlug;
     }
 
-    timestampSeed += 1;
-    candidateSlug = buildTimestampedSlug(baseSlug, timestampSeed);
+    candidateSlug = buildRandomTaskSlug();
   }
 };
 
@@ -136,7 +139,7 @@ const createTask = async (payload, userId, userRole = "") => {
   ]);
 
   const task = await getDb().transaction(async (trx) => {
-    const slug = await buildUniqueTaskSlug(title, null, trx);
+    const slug = await buildUniqueTaskSlug(trx);
     const taskId = await taskRepository.create(
       {
         projectId,
@@ -321,15 +324,9 @@ const updateTask = async (taskId, payload, userId, userRole = "") => {
     assertUserExists(updates.assignedTo, "assignedTo"),
   ]);
 
-  const currentTitle = task.title;
-  const nextSlug =
-    updates.title === currentTitle
-      ? task.slug
-      : await buildUniqueTaskSlug(updates.title, normalizedTaskId);
-
   await taskRepository.updateById(normalizedTaskId, {
     ...updates,
-    slug: nextSlug,
+    slug: task.slug,
   });
 
   const updatedTask = await taskRepository.findById(normalizedTaskId);

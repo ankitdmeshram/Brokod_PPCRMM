@@ -59,25 +59,7 @@ const taskTypeOptions = [
   { value: "research", label: "Research" },
 ];
 
-const formatDateTime = (value) => {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
+const tagSuggestions = ["Planning", "Backend", "Frontend", "Bugfix", "Research", "Sprint"];
 
 const buildUserLabel = (user = {}) =>
   `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim() ||
@@ -234,7 +216,7 @@ export default function WorkspaceTaskDetailsPage() {
 
         setProject(resolvedProject);
 
-        if (routedTask && routedTask.slug === taskSlug) {
+        if (routedTask && routedTask.slug === taskSlug && !task?.id) {
           setTask(routedTask);
           return;
         }
@@ -270,7 +252,20 @@ export default function WorkspaceTaskDetailsPage() {
     };
 
     void resolveContext();
-  }, [authSession?.token, project, projectSlug, routedProject, routedTask, routedWorkspace, taskSlug, workspace, workspaceSlug]);
+  }, [
+    authSession?.token,
+    project?.id,
+    project?.slug,
+    projectSlug,
+    routedProject,
+    routedTask,
+    routedWorkspace,
+    task?.id,
+    taskSlug,
+    workspace?.id,
+    workspace?.slug,
+    workspaceSlug,
+  ]);
 
   useEffect(() => {
     const loadProjectUsers = async () => {
@@ -387,6 +382,10 @@ export default function WorkspaceTaskDetailsPage() {
     } catch (error) {
       setSaveState("error");
       setSaveMessage(error.message || "Unable to save changes");
+      await showErrorAlert(
+        "Unable to update task",
+        error.message || "Something went wrong while saving the task."
+      );
       return false;
     }
   };
@@ -457,7 +456,7 @@ export default function WorkspaceTaskDetailsPage() {
       }
       titleContent={
         <Typography sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}>
-          {task?.title || "Task"}
+          {taskValues.title || task?.title || "Task"}
         </Typography>
       }
       fullName={fullName}
@@ -498,31 +497,40 @@ export default function WorkspaceTaskDetailsPage() {
               <Box sx={{ px: 2.5, py: 2.5 }}>
                 <Stack spacing={2.5}>
                 <Stack spacing={1.25}>
-                  <Typography level="title-md" sx={{ fontWeight: 700, color: "#23314d" }}>
-                    Core Details
-                  </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Task title</FormLabel>
-                      <Input
-                        value={taskValues.title}
-                        onChange={(event) => handleFieldChange("title", event.target.value)}
-                      />
-                    </FormControl>
-                    <FormControl sx={{ width: { xs: "100%", md: 220 } }}>
-                      <FormLabel>Task type</FormLabel>
-                      <Select
-                        value={taskValues.taskType}
-                        onChange={handleSelectChange("taskType")}
-                      >
-                        {taskTypeOptions.map((option) => (
-                          <Option key={option.value} value={option.value}>
-                            {option.label}
-                          </Option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Stack>
+                  <Input
+                    value={taskValues.title}
+                    onChange={(event) => handleFieldChange("title", event.target.value)}
+                    variant="outlined"
+                    placeholder="Task title"
+                    aria-label="Task title"
+                    sx={{
+                      px: 0.5,
+                      py: 0.25,
+                      minHeight: "auto",
+                      borderRadius: "sm",
+                      backgroundColor: "transparent",
+                      borderColor: "transparent",
+                      boxShadow: "none",
+                      fontSize: "1.3rem",
+                      fontWeight: 700,
+                      color: "#23314d",
+                      "--Input-focusedThickness": "0px",
+                      "--Input-focusedHighlight": "transparent",
+                      "&:hover": {
+                        backgroundColor: "rgba(0, 0, 0, 0.04)",
+                        borderColor: "var(--joy-palette-neutral-outlinedBorder)",
+                      },
+                      "&.Mui-focused": {
+                        backgroundColor: "var(--joy-palette-background-surface)",
+                        borderColor: "var(--joy-palette-primary-outlinedBorder)",
+                      },
+                      "& input": {
+                        p: 0,
+                        font: "inherit",
+                        color: "inherit",
+                      },
+                    }}
+                  />
                   <FormControl>
                     <FormLabel>Description</FormLabel>
                     <Textarea
@@ -558,6 +566,19 @@ export default function WorkspaceTaskDetailsPage() {
                         onChange={handleSelectChange("priority")}
                       >
                         {priorityOptions.map((option) => (
+                          <Option key={option.value} value={option.value}>
+                            {option.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl sx={{ flex: 1 }}>
+                      <FormLabel>Task type</FormLabel>
+                      <Select
+                        value={taskValues.taskType}
+                        onChange={handleSelectChange("taskType")}
+                      >
+                        {taskTypeOptions.map((option) => (
                           <Option key={option.value} value={option.value}>
                             {option.label}
                           </Option>
@@ -640,57 +661,12 @@ export default function WorkspaceTaskDetailsPage() {
                     <Autocomplete
                       multiple
                       freeSolo
+                      options={tagSuggestions}
                       value={taskValues.tags}
                       onChange={handleTagsChange}
                       placeholder="Add task tags"
                     />
                   </FormControl>
-                </Stack>
-
-                <Stack spacing={1.25}>
-                  <Typography level="title-md" sx={{ fontWeight: 700, color: "#23314d" }}>
-                    Metadata
-                  </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                    <Sheet variant="soft" sx={{ flex: 1, borderRadius: "12px", px: 1.5, py: 1.25, backgroundColor: "#f7f9ff" }}>
-                      <Typography level="body-xs" sx={{ color: "#60708e", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        Project ID
-                      </Typography>
-                      <Typography sx={{ fontWeight: 700, color: "#22304b" }}>{task?.projectId || "-"}</Typography>
-                    </Sheet>
-                    <Sheet variant="soft" sx={{ flex: 1, borderRadius: "12px", px: 1.5, py: 1.25, backgroundColor: "#f7f9ff" }}>
-                      <Typography level="body-xs" sx={{ color: "#60708e", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        Workspace ID
-                      </Typography>
-                      <Typography sx={{ fontWeight: 700, color: "#22304b" }}>{task?.workspaceId || "-"}</Typography>
-                    </Sheet>
-                    <Sheet variant="soft" sx={{ flex: 1, borderRadius: "12px", px: 1.5, py: 1.25, backgroundColor: "#f7f9ff" }}>
-                      <Typography level="body-xs" sx={{ color: "#60708e", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        Comments
-                      </Typography>
-                      <Typography sx={{ fontWeight: 700, color: "#22304b" }}>{task?.commentsCount ?? 0}</Typography>
-                    </Sheet>
-                    <Sheet variant="soft" sx={{ flex: 1, borderRadius: "12px", px: 1.5, py: 1.25, backgroundColor: "#f7f9ff" }}>
-                      <Typography level="body-xs" sx={{ color: "#60708e", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        Activity Logs
-                      </Typography>
-                      <Typography sx={{ fontWeight: 700, color: "#22304b" }}>{task?.activityLogsCount ?? 0}</Typography>
-                    </Sheet>
-                  </Stack>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                    <Sheet variant="soft" sx={{ flex: 1, borderRadius: "12px", px: 1.5, py: 1.25, backgroundColor: "#f7f9ff" }}>
-                      <Typography level="body-xs" sx={{ color: "#60708e", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        Created At
-                      </Typography>
-                      <Typography sx={{ fontWeight: 700, color: "#22304b" }}>{formatDateTime(task?.createdAt)}</Typography>
-                    </Sheet>
-                    <Sheet variant="soft" sx={{ flex: 1, borderRadius: "12px", px: 1.5, py: 1.25, backgroundColor: "#f7f9ff" }}>
-                      <Typography level="body-xs" sx={{ color: "#60708e", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        Updated At
-                      </Typography>
-                      <Typography sx={{ fontWeight: 700, color: "#22304b" }}>{formatDateTime(task?.updatedAt)}</Typography>
-                    </Sheet>
-                  </Stack>
                 </Stack>
 
                 <Typography
