@@ -1,11 +1,11 @@
 const path = require("path");
-const mysql = require("mysql");
+const mysql = require("mysql2");
 const knex = require("knex");
 
 const env = require("./env");
 
 const knexConfig = {
-  client: "mysql",
+  client: "mysql2",
   connection: {
     host: env.dbHost,
     user: env.dbUser,

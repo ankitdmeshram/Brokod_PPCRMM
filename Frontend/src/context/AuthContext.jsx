@@ -30,13 +30,25 @@ const initialAuthStatus = {
 
 const AuthContext = createContext(null);
 
+function readSavedSession() {
+  const savedSession = getCookie(AUTH_STORAGE_KEY);
+
+  if (!savedSession) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(savedSession);
+  } catch (_error) {
+    removeCookie(AUTH_STORAGE_KEY);
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [signInValues, setSignInValues] = useState(initialSignInValues);
   const [signUpValues, setSignUpValues] = useState(initialSignUpValues);
-  const [authSession, setAuthSession] = useState(() => {
-    const savedSession = getCookie(AUTH_STORAGE_KEY);
-    return savedSession ? JSON.parse(savedSession) : null;
-  });
+  const [authSession, setAuthSession] = useState(readSavedSession);
   const [signInStatus, setSignInStatus] = useState(initialAuthStatus);
   const [signUpStatus, setSignUpStatus] = useState(initialAuthStatus);
 
