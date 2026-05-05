@@ -211,8 +211,8 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
             width: "100%",
             minWidth: 0,
             maxWidth: "100%",
-            px: { xs: 1.5, md: 2 },
-            py: { xs: 1.5, md: 2 },
+            px: { xs: 1.25, md: 1.75 },
+            py: { xs: 1.25, md: 1.75 },
           }}
         >
           <Sheet
@@ -226,11 +226,11 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
               boxShadow: "0 18px 38px rgba(170, 180, 214, 0.12)",
               display: "grid",
               placeItems: "center",
-              px: 3,
-              py: 4,
+              px: 2.5,
+              py: 3.5,
             }}
           >
-            <Stack spacing={2} alignItems="center" sx={{ maxWidth: 560, textAlign: "center" }}>
+            <Stack spacing={1.75} alignItems="center" sx={{ maxWidth: 560, textAlign: "center" }}>
               <Chip
                 variant="soft"
                 sx={{
@@ -245,7 +245,7 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
                 {projectTitle}
               </Chip>
               <Typography
-                level="h2"
+                level="h3"
                 sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
               >
                 {currentSection.label}

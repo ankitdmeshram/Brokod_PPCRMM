@@ -22,13 +22,14 @@ services:
   backend:
     build:
       context: ./Backend
+      target: dev
     container_name: BROKOD_BACKEND
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 5000
       FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-http://localhost:5000}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-.env}
@@ -36,27 +37,45 @@ services:
       DB_USER: root
       DB_PASS: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       DB_DATABASE: ${MYSQL_DATABASE:-BROKOD}
+    volumes:
+      - ./Backend:/app
+      - backend_node_modules:/app/node_modules
     expose:
       - "5000"
 
   frontend:
     build:
       context: ./Frontend
-      args:
-        VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
-        VITE_BASE_PATH: ${VITE_BASE_PATH:-/projects/}
+      target: dev
     container_name: BROKOD_FRONTEND
     restart: unless-stopped
     depends_on:
       - backend
+    environment:
+      VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
+      VITE_BASE_PATH: ${VITE_BASE_PATH:-/projects/}
+      VITE_PROXY_TARGET: http://backend:5000
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./Frontend:/app
+      - frontend_node_modules:/app/node_modules
     expose:
-      - "80"
+      - "5173"
 
   web:
     build:
       context: ./web
+      target: dev
     container_name: BROKOD_WEB
     restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+      - web_next:/app/.next
     expose:
       - "3000"
 
@@ -75,3 +94,7 @@ services:
 
 volumes:
   mysql_data:
+  backend_node_modules:
+  frontend_node_modules:
+  web_node_modules:
+  web_next:

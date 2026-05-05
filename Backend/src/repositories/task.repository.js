@@ -3,6 +3,7 @@ const { getDb } = require("../config/database");
 const taskSelectColumns = [
   "tasks.id",
   "tasks.project_id",
+  "tasks.project_task_number",
   "tasks.workspace_id",
   "tasks.title",
   "tasks.slug",
@@ -65,6 +66,7 @@ const applyTaskFilters = (query, filters = {}) => {
     query.andWhere((builder) => {
       builder
         .whereRaw("CAST(tasks.id AS CHAR) like ?", [likeSearch])
+        .orWhereRaw("CAST(tasks.project_task_number AS CHAR) like ?", [likeSearch])
         .orWhereRaw("CAST(tasks.project_id AS CHAR) like ?", [likeSearch])
         .orWhereRaw("CAST(tasks.workspace_id AS CHAR) like ?", [likeSearch])
         .orWhere("tasks.title", "like", likeSearch)
@@ -89,6 +91,7 @@ const create = async (
   {
     projectId,
     workspaceId,
+    projectTaskNumber,
     title,
     slug,
     description,
@@ -107,6 +110,7 @@ const create = async (
 ) => {
   const result = await trx("tasks").insert({
     project_id: projectId,
+    project_task_number: projectTaskNumber,
     workspace_id: workspaceId,
     title,
     slug,
@@ -131,6 +135,18 @@ const findById = async (id, trx = getDb()) =>
 
 const findBySlug = async (slug, trx = getDb()) =>
   buildTaskBaseQuery(trx).where("tasks.slug", slug).first();
+
+const getNextProjectTaskNumber = async (projectId, trx = getDb()) => {
+  const latestTask = await trx("tasks")
+    .select("project_task_number")
+    .where("project_id", projectId)
+    .whereNull("deleted_at")
+    .orderBy("project_task_number", "desc")
+    .forUpdate()
+    .first();
+
+  return Number(latestTask?.project_task_number || 0) + 1;
+};
 
 const findAll = async (filters = {}, trx = getDb()) => {
   const query = buildTaskBaseQuery(trx);
@@ -191,6 +207,7 @@ module.exports = {
   findAll,
   findById,
   findBySlug,
+  getNextProjectTaskNumber,
   softDeleteById,
   updateById,
 };

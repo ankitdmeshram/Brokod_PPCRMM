@@ -295,8 +295,8 @@ export default function WorkspaceMain() {
   };
 
   return (
-    <Box sx={{ px: { xs: 1.5, md: 2 }, py: { xs: 1.5, md: 2 } }}>
-      <Stack spacing={1.5}>
+    <Box sx={{ px: { xs: 1.25, md: 1.75 }, py: { xs: 1.25, md: 1.75 } }}>
+      <Stack spacing={1.25}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={1.5}
@@ -306,7 +306,7 @@ export default function WorkspaceMain() {
           <Typography
             level="title-lg"
             sx={{
-              fontSize: "1.25rem",
+              fontSize: "1.1rem",
               fontWeight: 700,
               color: "var(--color-font-primary)",
             }}
@@ -319,7 +319,7 @@ export default function WorkspaceMain() {
             onClick={() => setIsCreateModalOpen(true)}
             sx={{
               alignSelf: { xs: "flex-start", sm: "auto" },
-              minHeight: "42px",
+              minHeight: "38px",
               color: "var(--color-font-secondary)",
             }}
           >
@@ -341,7 +341,7 @@ export default function WorkspaceMain() {
             <LinearProgress />
           </Sheet>
         ) : (
-          <Stack direction="row" flexWrap="wrap" useFlexGap spacing={2}>
+          <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1.75}>
             {workspaces.length > 0 ? (
               workspaces.map((workspace) => (
                 <Sheet
@@ -350,14 +350,14 @@ export default function WorkspaceMain() {
                   sx={{
                     width: "100%",
                     maxWidth: "256px",
-                    p: 2.25,
-                    borderRadius: "20px",
+                    p: 2,
+                    borderRadius: "18px",
                     borderColor: "rgba(220, 226, 244, 0.95)",
                     backgroundColor: "#fff",
                     boxShadow: "0 18px 38px rgba(170, 180, 214, 0.16)",
                   }}
                 >
-                  <Stack spacing={2}>
+                  <Stack spacing={1.75}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Box
@@ -371,7 +371,7 @@ export default function WorkspaceMain() {
                         </Box>
                         <Typography
                           level="title-lg"
-                          sx={{ fontWeight: 700, color: "#1e293b", fontSize: "1.05rem" }}
+                          sx={{ fontWeight: 700, color: "#1e293b", fontSize: "0.96rem" }}
                         >
                           {workspace.workspaceName}
                         </Typography>
@@ -392,7 +392,7 @@ export default function WorkspaceMain() {
                       </Chip>
                     </Stack>
 
-                    <Typography level="body-md" sx={{ color: "#64748b", fontSize: "0.98rem" }}>
+                    <Typography level="body-md" sx={{ color: "#64748b", fontSize: "0.9rem" }}>
                       {workspace.workspaceDescription || "No description added yet."}
                     </Typography>
 
@@ -456,8 +456,8 @@ export default function WorkspaceMain() {
                 sx={{
                   width: "100%",
                   maxWidth: "320px",
-                  p: 2.5,
-                  borderRadius: "20px",
+                  p: 2.25,
+                  borderRadius: "18px",
                   borderColor: "rgba(220, 226, 244, 0.95)",
                   backgroundColor: "#fff",
                   boxShadow: "0 18px 38px rgba(170, 180, 214, 0.12)",

@@ -58,19 +58,20 @@ export default function AppHeader({
   return (
     <Sheet
       sx={{
-        px: { xs: 2, md: 3 },
+        px: { xs: 1.5, md: 2.5 },
         borderBottom: "1px solid rgba(198, 205, 228, 0.8)",
         backgroundColor: "#fff",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 2,
+        gap: 1.5,
       }}
     >
-      <Stack direction="row" spacing={2} alignItems="center">
+      <Stack direction="row" spacing={1.5} alignItems="center">
         <IconButton
           variant="plain"
           color="neutral"
+          size="sm"
           onClick={onMenuClick}
           sx={{ color: "var(--color-font-secondary)" }}
         >
@@ -78,7 +79,7 @@ export default function AppHeader({
         </IconButton>
         {titleContent || (
           <Typography
-            level="title-lg"
+            level="title-md"
             sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
           >
             {title}
@@ -86,17 +87,18 @@ export default function AppHeader({
         )}
       </Stack>
 
-      <Stack direction="row" spacing={1.5} alignItems="center">
+      <Stack direction="row" spacing={1.25} alignItems="center">
         {isSuperAdmin && showSuperAdminChip ? (
           <Chip
             component={RouterLink}
             to={APP_ROUTES.superAdmin}
             variant="soft"
+            size="sm"
             sx={{
               backgroundColor: "#eef2ff",
               color: "var(--color-primary)",
               fontWeight: 700,
-              px: 1.5,
+              px: 1.25,
               textDecoration: "none",
               cursor: "pointer",
               "&:hover": {
@@ -110,6 +112,7 @@ export default function AppHeader({
         <IconButton
           variant="plain"
           color="neutral"
+          size="sm"
           onClick={handleToggleFullscreen}
           sx={{ color: "var(--color-font-secondary)" }}
         >
@@ -119,6 +122,7 @@ export default function AppHeader({
           <IconButton
             variant="plain"
             color="neutral"
+            size="sm"
             sx={{ color: "var(--color-font-secondary)" }}
           >
             <BellIcon />
@@ -128,15 +132,15 @@ export default function AppHeader({
               position: "absolute",
               top: 2,
               right: 0,
-              minWidth: "18px",
-              height: "18px",
+              minWidth: "16px",
+              height: "16px",
               px: 0.5,
               borderRadius: "999px",
               backgroundColor: "#ff6f59",
               color: "#fff",
               display: "grid",
               placeItems: "center",
-              fontSize: "0.7rem",
+              fontSize: "0.62rem",
               fontWeight: 700,
             }}
           >
@@ -151,11 +155,11 @@ export default function AppHeader({
             color="neutral"
             sx={{
               px: 0.625,
-              py: 0.5,
+              py: 0.375,
               borderRadius: "999px",
               color: "var(--color-font-primary)",
               backgroundColor: "#eef2ff",
-              minHeight: 42,
+              minHeight: 38,
               "&:hover": {
                 backgroundColor: "#e4ebff",
               },
@@ -169,7 +173,7 @@ export default function AppHeader({
                 {initial}
               </Avatar>
               <Typography
-                level="title-md"
+                level="body-md"
                 sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
               >
                 {fullName}

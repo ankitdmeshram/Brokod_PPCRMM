@@ -8,7 +8,9 @@ const workspaceRepository = require("../repositories/workspace.repository");
 const AppError = require("../utils/app-error");
 const {
   validateCreateTaskPayload,
+  validateExportTasksFilters,
   validateGetTasksFilters,
+  validateImportTasksPayload,
   validateTaskId,
   validateUpdateTaskPayload,
 } = require("../validators/task.validator");
@@ -16,9 +18,20 @@ const {
 const isSuperAdmin = (role = "") =>
   String(role).trim().toLowerCase() === "super-admin";
 
+const sanitizeFileNamePart = (value, fallback) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || fallback;
+};
+
 const mapTask = (task) => ({
   id: task.id,
   projectId: task.project_id ?? task.projectId,
+  projectTaskNumber: task.project_task_number ?? task.projectTaskNumber ?? null,
   workspaceId: task.workspace_id ?? task.workspaceId,
   title: task.title,
   slug: task.slug ?? null,
@@ -91,6 +104,76 @@ const buildUniqueTaskSlug = async (trx = getDb()) => {
   }
 };
 
+const createTaskRecord = async (
+  {
+    projectId,
+    workspaceId,
+    title,
+    description,
+    status,
+    priority,
+    assignedBy,
+    assignedTo,
+    startDate,
+    dueDate,
+    completedAt,
+    taskType,
+    tags,
+    initialComment,
+    initialActivityLog,
+  },
+  userId,
+  trx
+) => {
+  const slug = await buildUniqueTaskSlug(trx);
+  const projectTaskNumber = await taskRepository.getNextProjectTaskNumber(projectId, trx);
+  const taskId = await taskRepository.create(
+    {
+      projectId,
+      projectTaskNumber,
+      workspaceId,
+      title,
+      slug,
+      description,
+      status,
+      priority,
+      assignedBy,
+      assignedTo,
+      createdBy: userId,
+      startDate,
+      dueDate,
+      completedAt,
+      taskType,
+      tags,
+    },
+    trx
+  );
+
+  if (initialComment) {
+    await taskCommentRepository.create(
+      {
+        taskId,
+        comment: initialComment,
+        createdBy: userId,
+      },
+      trx
+    );
+  }
+
+  if (initialActivityLog) {
+    await taskActivityLogRepository.create(
+      {
+        taskId,
+        activity: initialActivityLog,
+        createdBy: userId,
+      },
+      trx
+    );
+  }
+
+  return taskRepository.findById(taskId, trx);
+};
+
 const createTask = async (payload, userId, userRole = "") => {
   const {
     projectId,
@@ -139,51 +222,27 @@ const createTask = async (payload, userId, userRole = "") => {
   ]);
 
   const task = await getDb().transaction(async (trx) => {
-    const slug = await buildUniqueTaskSlug(trx);
-    const taskId = await taskRepository.create(
+    return createTaskRecord(
       {
         projectId,
         workspaceId,
         title,
-        slug,
         description,
         status,
         priority,
         assignedBy: resolvedAssignedBy,
         assignedTo,
-        createdBy: userId,
         startDate,
         dueDate,
         completedAt,
         taskType,
         tags,
+        initialComment,
+        initialActivityLog,
       },
+      userId,
       trx
     );
-
-    if (initialComment) {
-      await taskCommentRepository.create(
-        {
-          taskId,
-          comment: initialComment,
-          createdBy: userId,
-        },
-        trx
-      );
-    }
-
-    if (initialActivityLog) {
-      await taskActivityLogRepository.create(
-        {
-          taskId,
-          activity: initialActivityLog,
-          createdBy: userId,
-        },
-        trx
-      );
-    }
-
-    return taskRepository.findById(taskId, trx);
   });
 
   return mapTask(task);
@@ -236,6 +295,139 @@ const getTasks = async (filters = {}, userId, userRole = "") => {
       total,
       totalPages: Math.max(1, Math.ceil(total / limit)),
     },
+  };
+};
+
+const exportTasks = async (filters = {}, userId, userRole = "") => {
+  const {
+    projectId,
+    workspaceId,
+    search,
+  } = validateExportTasksFilters(filters);
+
+  const project = isSuperAdmin(userRole)
+    ? await projectRepository.findById(projectId)
+    : await projectRepository.findByIdForUser(projectId, userId);
+
+  if (!project) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  const resolvedWorkspaceId = Number(project.workspace_id ?? project.workspaceId);
+
+  if (workspaceId !== null && resolvedWorkspaceId !== workspaceId) {
+    throw new AppError("projectId does not belong to the provided workspaceId.", 400);
+  }
+
+  const tasks = await taskRepository.findAll({
+    projectId,
+    workspaceId: workspaceId ?? resolvedWorkspaceId,
+    search,
+  });
+
+  return {
+    fileName: `${sanitizeFileNamePart(project.project_name ?? project.projectName, "project")}-tasks.json`,
+    content: {
+      project: {
+        id: Number(project.id),
+        name: project.project_name ?? project.projectName ?? null,
+        slug: project.slug ?? null,
+        workspaceId: resolvedWorkspaceId,
+        workspaceSlug: project.workspace_slug ?? project.workspaceSlug ?? null,
+      },
+      filters: {
+        projectId,
+        workspaceId: workspaceId ?? resolvedWorkspaceId,
+        search,
+      },
+      exportedAt: new Date().toISOString(),
+      total: tasks.length,
+      tasks: tasks.map(mapTask),
+    },
+  };
+};
+
+const importTasks = async (payload = {}, userId, userRole = "") => {
+  const {
+    projectId,
+    workspaceId,
+    tasks,
+  } = validateImportTasksPayload(payload);
+
+  const project = isSuperAdmin(userRole)
+    ? await projectRepository.findById(projectId)
+    : await projectRepository.findByIdForUser(projectId, userId);
+
+  if (!project) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  const resolvedWorkspaceId = Number(project.workspace_id ?? project.workspaceId);
+
+  if (workspaceId !== null && resolvedWorkspaceId !== workspaceId) {
+    throw new AppError("projectId does not belong to the provided workspaceId.", 400);
+  }
+
+  const importedTasks = await getDb().transaction(async (trx) => {
+    const createdTasks = [];
+
+    for (let index = 0; index < tasks.length; index += 1) {
+      const sourceTask = tasks[index] || {};
+      let normalizedTaskPayload;
+
+      try {
+        normalizedTaskPayload = validateCreateTaskPayload({
+          title: sourceTask.title,
+          description: sourceTask.description,
+          status: sourceTask.status,
+          priority: sourceTask.priority,
+          taskType: sourceTask.taskType,
+          assignedBy: sourceTask.assignedBy,
+          assignedTo: sourceTask.assignedTo,
+          projectId,
+          workspaceId: resolvedWorkspaceId,
+          startDate: sourceTask.startDate,
+          dueDate: sourceTask.dueDate,
+          completedDate: sourceTask.completedAt || sourceTask.completedDate,
+          tags: sourceTask.tags,
+          comments: sourceTask.initialComment || "",
+          activityLogs: sourceTask.initialActivityLog || "",
+        });
+      } catch (error) {
+        if (error instanceof AppError) {
+          throw new AppError(`Task ${index + 1}: ${error.message}`, error.statusCode);
+        }
+
+        throw error;
+      }
+
+      const resolvedAssignedBy = normalizedTaskPayload.assignedBy ?? Number(userId);
+
+      await Promise.all([
+        assertUserExists(resolvedAssignedBy, "assignedBy"),
+        assertUserExists(normalizedTaskPayload.assignedTo, "assignedTo"),
+      ]);
+
+      const createdTask = await createTaskRecord(
+        {
+          ...normalizedTaskPayload,
+          projectId,
+          workspaceId: resolvedWorkspaceId,
+          assignedBy: resolvedAssignedBy,
+        },
+        userId,
+        trx
+      );
+
+      createdTasks.push(mapTask(createdTask));
+    }
+
+    return createdTasks;
+  });
+
+  return {
+    count: importedTasks.length,
+    tasks: importedTasks,
   };
 };
 
@@ -369,6 +561,8 @@ const deleteTask = async (taskId, userId, userRole = "") => {
 module.exports = {
   createTask,
   deleteTask,
+  exportTasks,
+  importTasks,
   getTaskById,
   getTaskBySlug,
   getTasks,

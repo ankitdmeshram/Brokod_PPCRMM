@@ -233,6 +233,60 @@ const validateGetTasksFilters = (filters = {}) => {
   };
 };
 
+const validateExportTasksFilters = (filters = {}) => {
+  const projectId = Number(filters?.projectId);
+  const workspaceId =
+    filters?.workspaceId === undefined || filters?.workspaceId === null || filters?.workspaceId === ""
+      ? null
+      : Number(filters.workspaceId);
+  const search = String(filters?.search || "").trim();
+
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    throw new AppError("projectId is required and must be a valid integer.", 400);
+  }
+
+  if (workspaceId !== null && (!Number.isInteger(workspaceId) || workspaceId <= 0)) {
+    throw new AppError("workspaceId must be a valid integer when provided.", 400);
+  }
+
+  return {
+    projectId,
+    workspaceId,
+    search,
+  };
+};
+
+const validateImportTasksPayload = (payload = {}) => {
+  const projectId = Number(payload?.projectId);
+  const workspaceId =
+    payload?.workspaceId === undefined || payload?.workspaceId === null || payload?.workspaceId === ""
+      ? null
+      : Number(payload.workspaceId);
+  const tasks = Array.isArray(payload?.tasks) ? payload.tasks : null;
+
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    throw new AppError("projectId is required and must be a valid integer.", 400);
+  }
+
+  if (workspaceId !== null && (!Number.isInteger(workspaceId) || workspaceId <= 0)) {
+    throw new AppError("workspaceId must be a valid integer when provided.", 400);
+  }
+
+  if (!tasks) {
+    throw new AppError("The imported file must contain a tasks array.", 400);
+  }
+
+  if (tasks.length === 0) {
+    throw new AppError("The imported file does not contain any tasks to import.", 400);
+  }
+
+  return {
+    projectId,
+    workspaceId,
+    tasks,
+  };
+};
+
 const validateTaskId = (taskId) => {
   const normalizedTaskId = Number(taskId);
 
@@ -245,7 +299,9 @@ const validateTaskId = (taskId) => {
 
 module.exports = {
   validateCreateTaskPayload,
+  validateExportTasksFilters,
   validateGetTasksFilters,
+  validateImportTasksPayload,
   validateTaskId,
   validateUpdateTaskPayload,
 };

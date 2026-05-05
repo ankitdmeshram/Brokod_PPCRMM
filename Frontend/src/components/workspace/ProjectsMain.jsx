@@ -485,8 +485,8 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
         width: "100%",
         minWidth: 0,
         maxWidth: "100%",
-        px: { xs: 1.5, md: 2 },
-        py: { xs: 1.5, md: 2 },
+        px: { xs: 1.25, md: 1.75 },
+        py: { xs: 1.25, md: 1.75 },
         overflowX: "hidden",
       }}
     >
@@ -509,16 +509,16 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
             spacing={2}
             justifyContent="space-between"
             alignItems={{ xs: "stretch", lg: "center" }}
-            sx={{ px: 2, py: 2.25 }}
+            sx={{ px: 1.75, py: 1.9 }}
           >
             <Stack spacing={0.5}>
               <Typography
                 level="title-lg"
-                sx={{ fontWeight: 700, color: "var(--color-font-primary)", fontSize: "1.2rem" }}
+                sx={{ fontWeight: 700, color: "var(--color-font-primary)", fontSize: "1.08rem" }}
               >
                 Projects
               </Typography>
-                <Typography level="body-sm" sx={{ color: "#5c6d90", maxWidth: 520 }}>
+                <Typography level="body-sm" sx={{ color: "#5c6d90", maxWidth: 520, fontSize: "0.82rem" }}>
                 {isSuperAdminView
                   ? "Review projects across workspaces from one place."
                   : "Manage active work, owners, delivery timelines, and project actions from one place."}
@@ -546,7 +546,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
                   disabled={!workspace?.id}
                   onClick={() => setIsCreateModalOpen(true)}
                   sx={{
-                    minHeight: "42px",
+                    minHeight: "38px",
                     color: "var(--color-font-secondary)",
                     whiteSpace: "nowrap",
                   }}

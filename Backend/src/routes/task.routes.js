@@ -1,9 +1,16 @@
 const { Router } = require("express");
+const multer = require("multer");
 
 const taskController = require("../controllers/task.controller");
 const { requireAuth } = require("../middlewares/auth.middleware");
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 2 * 1024 * 1024,
+  },
+});
 
 /**
  * @swagger
@@ -53,6 +60,104 @@ const router = Router();
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/FetchTasksResponse'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Project not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ * /api/tasks/export/json:
+ *   get:
+ *     tags:
+ *       - Tasks
+ *     summary: Export project tasks as JSON
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Project id to export tasks for
+ *       - in: query
+ *         name: workspaceId
+ *         schema:
+ *           type: integer
+ *         description: Optional workspace id validation for the project
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Optional search string to export the currently filtered tasks
+ *     responses:
+ *       200:
+ *         description: Tasks exported successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Project not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ * /api/tasks/import/json:
+ *   post:
+ *     tags:
+ *       - Tasks
+ *     summary: Import tasks from a JSON file
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *               - projectId
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *               projectId:
+ *                 type: integer
+ *               workspaceId:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Tasks imported successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
  *       400:
  *         description: Validation error
  *         content:
@@ -240,6 +345,8 @@ const router = Router();
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/", requireAuth, taskController.getTasks);
+router.get("/export/json", requireAuth, taskController.exportTasks);
+router.post("/import/json", requireAuth, upload.single("file"), taskController.importTasks);
 router.post("/", requireAuth, taskController.createTask);
 router.get("/slug/:taskSlug", requireAuth, taskController.getTaskBySlug);
 router.get("/:taskId", requireAuth, taskController.getTaskById);

@@ -57,8 +57,8 @@ export default function ProjectsSidebar({
         flexDirection: "column",
         backgroundColor: "var(--color-primary)",
         color: "var(--color-font-secondary)",
-        px: isCollapsed ? 1 : 2,
-        py: 2,
+        px: isCollapsed ? 0.875 : 1.75,
+        py: 1.75,
         overflow: "hidden",
         transition: "padding 0.25s ease",
       }}
@@ -76,14 +76,14 @@ export default function ProjectsSidebar({
         >
           {isCollapsed ? (
             <Typography
-              level="title-lg"
+              level="title-md"
               sx={{ color: "var(--color-font-secondary)", fontWeight: 700 }}
             >
               B
             </Typography>
           ) : (
             <Typography
-              level="title-lg"
+              level="title-md"
               sx={{
                 color: "var(--color-font-secondary)",
                 fontWeight: 700,
@@ -95,7 +95,7 @@ export default function ProjectsSidebar({
           )}
         </Stack>
 
-        <Stack spacing={1.5}>
+        <Stack spacing={1.25}>
           {!isCollapsed && sectionLabel ? (
             <Typography
               level="body-xs"
@@ -103,6 +103,7 @@ export default function ProjectsSidebar({
                 color: "var(--color-font-secondary)",
                 letterSpacing: "0.12em",
                 fontWeight: 700,
+                fontSize: "0.72rem",
               }}
             >
               {sectionLabel}
@@ -119,16 +120,16 @@ export default function ProjectsSidebar({
                 endDecorator={isCollapsed ? null : item.active ? <ArrowIcon /> : null}
                 sx={{
                   justifyContent: isCollapsed ? "center" : "flex-start",
-                  minHeight: "40px",
+                  minHeight: "36px",
                   backgroundColor: item.active ? "rgba(255,255,255,0.08)" : "transparent",
                   color: "var(--color-font-secondary)",
-                  px: isCollapsed ? 1 : 1.5,
-                  minWidth: isCollapsed ? "40px" : "auto",
-                  width: isCollapsed ? "40px" : "100%",
+                  px: isCollapsed ? 0.875 : 1.35,
+                  minWidth: isCollapsed ? "36px" : "auto",
+                  width: isCollapsed ? "36px" : "100%",
                   alignSelf: isCollapsed ? "center" : "stretch",
                   textDecoration: "none",
                   "& .MuiButton-startDecorator": {
-                    mr: 1.25,
+                    mr: 1,
                   },
                   "& .MuiButton-endDecorator": {
                     ml: "auto",
@@ -158,17 +159,17 @@ export default function ProjectsSidebar({
                 startDecorator={isCollapsed ? null : <SidebarBackIcon />}
                 sx={{
                   justifyContent: isCollapsed ? "center" : "flex-start",
-                  minHeight: "40px",
+                  minHeight: "36px",
                   color: "var(--color-font-secondary)",
-                  px: isCollapsed ? 1 : 1.5,
-                  minWidth: isCollapsed ? "40px" : "auto",
-                  width: isCollapsed ? "40px" : "100%",
+                  px: isCollapsed ? 0.875 : 1.35,
+                  minWidth: isCollapsed ? "36px" : "auto",
+                  width: isCollapsed ? "36px" : "100%",
                   alignSelf: isCollapsed ? "center" : "stretch",
                   textDecoration: "none",
                   borderRadius: "10px",
                   backgroundColor: "rgba(255,255,255,0.04)",
                   "& .MuiButton-startDecorator": {
-                    mr: 1.25,
+                    mr: 1,
                   },
                   "& .MuiButton-label": {
                     flex: isCollapsed ? "0 0 auto" : 1,
@@ -193,17 +194,17 @@ export default function ProjectsSidebar({
                 startDecorator={isCollapsed ? null : <SidebarBackIcon />}
                 sx={{
                   justifyContent: isCollapsed ? "center" : "flex-start",
-                  minHeight: "40px",
+                  minHeight: "36px",
                   color: "var(--color-font-secondary)",
-                  px: isCollapsed ? 1 : 1.5,
-                  minWidth: isCollapsed ? "40px" : "auto",
-                  width: isCollapsed ? "40px" : "100%",
+                  px: isCollapsed ? 0.875 : 1.35,
+                  minWidth: isCollapsed ? "36px" : "auto",
+                  width: isCollapsed ? "36px" : "100%",
                   alignSelf: isCollapsed ? "center" : "stretch",
                   textDecoration: "none",
                   borderRadius: "10px",
                   backgroundColor: "rgba(255,255,255,0.04)",
                   "& .MuiButton-startDecorator": {
-                    mr: 1.25,
+                    mr: 1,
                   },
                   "& .MuiButton-label": {
                     flex: isCollapsed ? "0 0 auto" : 1,

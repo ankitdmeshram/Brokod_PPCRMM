@@ -9,6 +9,8 @@ export { default as ExpandIcon } from "@mui/icons-material/Fullscreen";
 export { default as BellIcon } from "@mui/icons-material/NotificationsNone";
 export { default as SearchIcon } from "@mui/icons-material/Search";
 export { default as EyeIcon } from "@mui/icons-material/VisibilityOutlined";
+export { default as ExportIcon } from "@mui/icons-material/FileDownloadOutlined";
+export { default as ImportIcon } from "@mui/icons-material/FileUploadOutlined";
 export { default as SidebarBackIcon } from "@mui/icons-material/ArrowBack";
 export { default as GridIcon } from "@mui/icons-material/GridViewOutlined";
 export { default as FolderIcon } from "@mui/icons-material/FolderOpenOutlined";

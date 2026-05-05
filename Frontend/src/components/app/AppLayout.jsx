@@ -19,11 +19,12 @@ export default function AppLayout({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(initialSidebarCollapsed);
   const sidebarWidth = isSidebarCollapsed
     ? "56px"
-    : "248px";
+    : "232px";
 
   return (
     <Box
       sx={{
+        "--app-scale": 0.92,
         minHeight: "100vh",
         display: "grid",
         gridTemplateColumns: {
@@ -31,6 +32,7 @@ export default function AppLayout({
           md: `${sidebarWidth} minmax(0, 1fr)`,
         },
         backgroundColor: "var(--color-background)",
+        fontSize: "calc(1rem * var(--app-scale))",
         transition: "grid-template-columns 0.25s ease",
       }}
     >
@@ -42,7 +44,7 @@ export default function AppLayout({
         sx={{
           minWidth: 0,
           display: "grid",
-          gridTemplateRows: "72px minmax(0, 1fr) 50px",
+          gridTemplateRows: "64px minmax(0, 1fr) 46px",
         }}
       >
         <AppHeader

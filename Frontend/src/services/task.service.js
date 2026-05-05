@@ -101,3 +101,74 @@ export async function deleteTask(taskId, token) {
 
   return parseApiResponse(response);
 }
+
+function parseFileNameFromDisposition(contentDisposition = "") {
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const standardMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+
+  if (standardMatch?.[1]) {
+    return standardMatch[1];
+  }
+
+  return "tasks.json";
+}
+
+export async function exportTasksJson(token, filters = {}) {
+  const query = new URLSearchParams();
+
+  if (filters.projectId) {
+    query.set("projectId", String(filters.projectId));
+  }
+
+  if (filters.workspaceId) {
+    query.set("workspaceId", String(filters.workspaceId));
+  }
+
+  if (filters.search?.trim()) {
+    query.set("search", filters.search.trim());
+  }
+
+  const response = await fetch(`${TASK_API_BASE}/export/json${query.toString() ? `?${query}` : ""}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    return parseApiResponse(response);
+  }
+
+  const blob = await response.blob();
+
+  return {
+    blob,
+    fileName: parseFileNameFromDisposition(response.headers.get("content-disposition") || ""),
+  };
+}
+
+export async function importTasksJson(token, payload) {
+  const formData = new FormData();
+
+  formData.append("file", payload.file);
+  formData.append("projectId", String(payload.projectId));
+
+  if (payload.workspaceId) {
+    formData.append("workspaceId", String(payload.workspaceId));
+  }
+
+  const response = await fetch(`${TASK_API_BASE}/import/json`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  return parseApiResponse(response);
+}

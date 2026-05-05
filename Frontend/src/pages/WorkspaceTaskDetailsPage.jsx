@@ -66,6 +66,26 @@ const buildUserLabel = (user = {}) =>
   user.email ||
   `User ${user.id}`;
 
+const normalizeDateInputValue = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const normalizedValue = String(value).trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  const parsedDate = new Date(normalizedValue);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  return parsedDate.toISOString().slice(0, 10);
+};
+
 const buildTaskFormValues = (task) => ({
   title: task?.title || "",
   description: task?.description || "",
@@ -74,9 +94,9 @@ const buildTaskFormValues = (task) => ({
   taskType: task?.taskType || "feature",
   assignedBy: task?.assignedBy ? String(task.assignedBy) : "",
   assignedTo: task?.assignedTo ? String(task.assignedTo) : "",
-  startDate: task?.startDate || "",
-  dueDate: task?.dueDate || "",
-  completedDate: task?.completedAt || "",
+  startDate: normalizeDateInputValue(task?.startDate),
+  dueDate: normalizeDateInputValue(task?.dueDate),
+  completedDate: normalizeDateInputValue(task?.completedAt),
   tags: Array.isArray(task?.tags) ? task.tags : [],
 });
 
@@ -101,13 +121,12 @@ export default function WorkspaceTaskDetailsPage() {
   const { workspaceSlug = "", projectSlug = "", taskSlug = "" } = useParams();
   const routedWorkspace = location.state?.workspace || null;
   const routedProject = location.state?.project || null;
-  const routedTask = location.state?.task || null;
   const [workspace, setWorkspace] = useState(() => routedWorkspace);
   const [project, setProject] = useState(() => routedProject);
-  const [task, setTask] = useState(() => routedTask);
+  const [task, setTask] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
-  const [taskValues, setTaskValues] = useState(() => buildTaskFormValues(routedTask));
-  const [lastSavedValues, setLastSavedValues] = useState(() => buildTaskFormValues(routedTask));
+  const [taskValues, setTaskValues] = useState(() => buildTaskFormValues(null));
+  const [lastSavedValues, setLastSavedValues] = useState(() => buildTaskFormValues(null));
   const [saveState, setSaveState] = useState("idle");
   const [saveMessage, setSaveMessage] = useState("");
   const [isResolving, setIsResolving] = useState(true);
@@ -216,15 +235,16 @@ export default function WorkspaceTaskDetailsPage() {
 
         setProject(resolvedProject);
 
-        if (routedTask && routedTask.slug === taskSlug && !task?.id) {
-          setTask(routedTask);
-          return;
-        }
-
         if (!taskSlug) {
           setTask(null);
           return;
         }
+
+        setTask(null);
+        setTaskValues(buildTaskFormValues(null));
+        setLastSavedValues(buildTaskFormValues(null));
+        setSaveState("idle");
+        setSaveMessage("");
 
         const taskResult = await fetchTaskBySlug(taskSlug, authSession.token);
         const resolvedTask = taskResult?.task || null;
@@ -258,9 +278,7 @@ export default function WorkspaceTaskDetailsPage() {
     project?.slug,
     projectSlug,
     routedProject,
-    routedTask,
     routedWorkspace,
-    task?.id,
     taskSlug,
     workspace?.id,
     workspace?.slug,
@@ -454,11 +472,6 @@ export default function WorkspaceTaskDetailsPage() {
           onNavigateAttempt={handleAttemptNavigation}
         />
       }
-      titleContent={
-        <Typography sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}>
-          {taskValues.title || task?.title || "Task"}
-        </Typography>
-      }
       fullName={fullName}
       initial={initial}
       userRole={userRole}
@@ -469,8 +482,8 @@ export default function WorkspaceTaskDetailsPage() {
           width: "100%",
           minWidth: 0,
           maxWidth: "100%",
-          px: { xs: 1.5, md: 2 },
-          py: { xs: 1.5, md: 2 },
+          px: { xs: 1.25, md: 1.75 },
+          py: { xs: 1.25, md: 1.75 },
         }}
       >
         <Sheet
@@ -486,7 +499,7 @@ export default function WorkspaceTaskDetailsPage() {
         >
           {isResolving && !task ? (
             <Stack spacing={0}>
-              <Box sx={{ px: 2.5, py: 3.5 }}>
+              <Box sx={{ px: 2.1, py: 3 }}>
                 <Typography sx={{ fontWeight: 700, color: "#23314d" }}>
                   Loading task details...
                 </Typography>
@@ -494,9 +507,9 @@ export default function WorkspaceTaskDetailsPage() {
             </Stack>
           ) : (
             <Stack spacing={0}>
-              <Box sx={{ px: 2.5, py: 2.5 }}>
-                <Stack spacing={2.5}>
-                <Stack spacing={1.25}>
+              <Box sx={{ px: 2.1, py: 2.1 }}>
+                <Stack spacing={2.1}>
+                <Stack spacing={1}>
                   <Input
                     value={taskValues.title}
                     onChange={(event) => handleFieldChange("title", event.target.value)}
@@ -511,7 +524,7 @@ export default function WorkspaceTaskDetailsPage() {
                       backgroundColor: "transparent",
                       borderColor: "transparent",
                       boxShadow: "none",
-                      fontSize: "1.3rem",
+                      fontSize: "1.14rem",
                       fontWeight: 700,
                       color: "#23314d",
                       "--Input-focusedThickness": "0px",
@@ -541,11 +554,11 @@ export default function WorkspaceTaskDetailsPage() {
                   </FormControl>
                 </Stack>
 
-                <Stack spacing={1.25}>
-                  <Typography level="title-md" sx={{ fontWeight: 700, color: "#23314d" }}>
+                <Stack spacing={1}>
+                  <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
                     Workflow
                   </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
                     <FormControl sx={{ flex: 1 }}>
                       <FormLabel>Status</FormLabel>
                       <Select
@@ -588,11 +601,11 @@ export default function WorkspaceTaskDetailsPage() {
                   </Stack>
                 </Stack>
 
-                <Stack spacing={1.25}>
-                  <Typography level="title-md" sx={{ fontWeight: 700, color: "#23314d" }}>
+                <Stack spacing={1}>
+                  <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
                     Assignment
                   </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
                     <FormControl sx={{ flex: 1 }}>
                       <FormLabel>Assigned by</FormLabel>
                       <Select
@@ -626,11 +639,11 @@ export default function WorkspaceTaskDetailsPage() {
                   </Stack>
                 </Stack>
 
-                <Stack spacing={1.25}>
-                  <Typography level="title-md" sx={{ fontWeight: 700, color: "#23314d" }}>
+                <Stack spacing={1}>
+                  <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
                     Dates And Tags
                   </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
                     <FormControl sx={{ flex: 1 }}>
                       <FormLabel>Start date</FormLabel>
                       <Input
@@ -672,7 +685,7 @@ export default function WorkspaceTaskDetailsPage() {
                 <Typography
                   level="body-sm"
                   sx={{
-                    pt: 0.5,
+                    pt: 0.35,
                     textAlign: "right",
                     color:
                       saveState === "error"
@@ -685,7 +698,7 @@ export default function WorkspaceTaskDetailsPage() {
                 >
                   {saveMessage || (hasUnsavedChanges ? "You have unsaved changes." : "")}
                 </Typography>
-                <Stack direction="row" spacing={1.25} justifyContent="flex-end">
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
                   <Button
                     variant="plain"
                     color="neutral"

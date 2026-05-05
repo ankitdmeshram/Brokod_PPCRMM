@@ -17,7 +17,7 @@ This repo now includes a Docker setup with a single `nginx` entrypoint for all a
 docker compose up --build
 ```
 
-The backend creates the database if needed and runs Knex migrations on startup.
+After the first build, source changes in `Backend`, `Frontend`, and `web` are mounted into the running containers so you can keep working without rebuilding or starting Docker again.
 
 ## Stop everything
 
@@ -34,8 +34,8 @@ docker compose down -v
 ## Notes
 
 - Nginx handles all public routes and forwards `/`, `/projects`, and `/api` to the right container.
-- The React app is built with `VITE_BASE_PATH=/projects/` and is served behind nginx at `/projects`.
+- The React app runs with Vite in Docker dev mode on `/projects`, including HMR through nginx.
 - The React app uses same-origin API calls, so `VITE_API_DOMAIN` can stay empty in Docker.
 - The backend allows the origin defined by `FRONTEND_DOMAIN`.
-- The Next.js `web` app is built using standalone output for a smaller runtime image.
+- The Next.js `web` app runs in `next dev` during local Docker development.
 - The MySQL container is exposed on host port `3307` by default, which avoids conflicts with any local MySQL already using port `3306`.

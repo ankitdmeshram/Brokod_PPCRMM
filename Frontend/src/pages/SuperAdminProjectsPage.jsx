@@ -756,7 +756,7 @@ export default function SuperAdminProjectsPage({ section = "overview" }) {
             px: 0,
             py: 0,
             minHeight: "auto",
-            fontSize: "1.05rem",
+            fontSize: "0.96rem",
             fontWeight: 700,
             color: "var(--color-font-primary)",
             "&:hover": {
@@ -779,8 +779,8 @@ export default function SuperAdminProjectsPage({ section = "overview" }) {
           width: "100%",
           minWidth: 0,
           maxWidth: "100%",
-          px: { xs: 1.5, md: 2 },
-          py: { xs: 1.5, md: 2 },
+          px: { xs: 1.25, md: 1.75 },
+          py: { xs: 1.25, md: 1.75 },
         }}
       >
         {section === "users" ? (
@@ -797,13 +797,13 @@ export default function SuperAdminProjectsPage({ section = "overview" }) {
               boxShadow: "0 18px 38px rgba(170, 180, 214, 0.12)",
               display: "grid",
               placeItems: "center",
-              px: 3,
-              py: 4,
+              px: 2.5,
+              py: 3.5,
             }}
           >
-            <Stack spacing={2} alignItems="center" sx={{ maxWidth: 460, textAlign: "center" }}>
+            <Stack spacing={1.75} alignItems="center" sx={{ maxWidth: 460, textAlign: "center" }}>
               <Typography
-                level="h2"
+                level="h3"
                 sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
               >
                 Coming Soon

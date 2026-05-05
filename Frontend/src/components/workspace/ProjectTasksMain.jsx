@@ -1,5 +1,5 @@
-import { Box, Button, Chip, IconButton, Input, Option, Select, Sheet, Stack, Table, Tooltip, Typography } from "@mui/joy";
-import { useEffect, useMemo, useState } from "react";
+import { Box, Button, Chip, Dropdown, IconButton, Input, Menu, MenuButton, MenuItem, Option, Select, Sheet, Stack, Table, Tooltip, Typography } from "@mui/joy";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../context/AuthContext";
 import {
@@ -8,7 +8,7 @@ import {
   showSuccessAlert,
 } from "../../services/alert.service";
 import { fetchProjectUsers } from "../../services/project.service";
-import { createTask, deleteTask, fetchTasks } from "../../services/task.service";
+import { createTask, deleteTask, exportTasksJson, fetchTasks, importTasksJson } from "../../services/task.service";
 import {
   buildTaskDetailsRoute,
 } from "../../router/authRoutes";
@@ -16,7 +16,9 @@ import CreateTaskModal from "./CreateTaskModal";
 import {
   DeleteIcon,
   EditIcon,
-  EyeIcon,
+  ExportIcon,
+  ImportIcon,
+  MenuIcon,
   PlusIcon,
   SearchIcon,
 } from "./WorkspaceIcons";
@@ -34,13 +36,6 @@ const priorityStyles = {
   Medium: { backgroundColor: "#eef2ff", color: "#3155ff" },
   High: { backgroundColor: "#fff4e8", color: "#d97706" },
   Critical: { backgroundColor: "#fff1f1", color: "#d14343" },
-};
-
-const typeStyles = {
-  Feature: { backgroundColor: "#eef2ff", color: "#3155ff" },
-  Bug: { backgroundColor: "#fff1f1", color: "#d14343" },
-  Improvement: { backgroundColor: "#eef6ff", color: "#2f6adf" },
-  Research: { backgroundColor: "#f8f4ff", color: "#7c3aed" },
 };
 
 const initialPagination = {
@@ -118,7 +113,7 @@ const toTitleCase = (value = "") =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
-const formatTaskCode = (taskId) => `TSK-${taskId}`;
+const formatTaskCode = (taskNumber) => `TSK-${taskNumber}`;
 
 const buildUserLabel = (user = {}) =>
   `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim() ||
@@ -129,25 +124,26 @@ const mapApiTaskToTableRow = (task) => ({
   rawId: Number(task.id),
   rawTask: task,
   slug: task.slug || "",
-  id: formatTaskCode(task.id),
   title: task.title,
-  description: task.description || "",
   status: toTitleCase(task.status),
   priority: toTitleCase(task.priority),
-  assignedBy: task.assignedByName || "-",
+  dueDate: task.dueDate || "",
   assignedTo: task.assignedToName || "-",
+  assignedBy: task.assignedByName || "-",
+  tags: Array.isArray(task.tags) ? task.tags : [],
+  updatedAt: task.updatedAt || "",
+  createdAt: task.createdAt || "",
+  id: formatTaskCode(task.projectTaskNumber || task.id),
+  description: task.description || "",
   createdBy: task.createdByName || "-",
   startDate: task.startDate || "",
   dueDate: task.dueDate || "",
   completedDate: task.completedAt || "",
   taskType: toTitleCase(task.taskType),
-  tags: Array.isArray(task.tags) ? task.tags : [],
   comments: Number(task.commentsCount || 0),
   activityLogs: Number(task.activityLogsCount || 0),
   projectId: String(task.projectId || "-"),
   workspaceId: String(task.workspaceId || "-"),
-  createdAt: task.createdAt || "",
-  updatedAt: task.updatedAt || "",
 });
 
 export default function ProjectTasksMain({
@@ -168,7 +164,10 @@ export default function ProjectTasksMain({
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [deletingTaskIds, setDeletingTaskIds] = useState([]);
+  const [isExportingTasks, setIsExportingTasks] = useState(false);
+  const [isImportingTasks, setIsImportingTasks] = useState(false);
   const [projectUsers, setProjectUsers] = useState([]);
+  const importFileInputRef = useRef(null);
 
   const currentUser = authSession?.user || null;
   const currentUserId = currentUser?.id ? Number(currentUser.id) : null;
@@ -416,6 +415,33 @@ export default function ProjectTasksMain({
     }
   };
 
+  const handleShowTask = (task) => {
+    if (!workspace?.slug || !project?.slug || !task?.rawId) {
+      return;
+    }
+
+    navigate(
+      buildTaskDetailsRoute(
+        workspace.slug,
+        project.slug,
+        task.rawTask?.slug || task.slug
+      ),
+      {
+        state: {
+          workspace,
+          project,
+          task: task.rawTask || {
+            id: task.rawId,
+            slug: task.slug,
+            title: task.title,
+            projectId: Number(task.projectId),
+            workspaceId: Number(task.workspaceId),
+          },
+        },
+      }
+    );
+  };
+
   const handleDeleteTask = async (task) => {
     if (!authSession?.token) {
       await showErrorAlert("Signin required", "Please sign in again to delete a task.");
@@ -462,31 +488,108 @@ export default function ProjectTasksMain({
     }
   };
 
-  const handleShowTask = (task) => {
-    if (!workspace?.slug || !project?.slug || !task?.rawId) {
+  const handleExportTasks = async () => {
+    if (!authSession?.token) {
+      await showErrorAlert("Signin required", "Please sign in again to export tasks.");
       return;
     }
 
-    navigate(
-      buildTaskDetailsRoute(
-        workspace.slug,
-        project.slug,
-        task.rawTask?.slug || task.slug
-      ),
+    if (!project?.id) {
+      await showErrorAlert("Project context missing", "We could not resolve the current project.");
+      return;
+    }
+
+    setIsExportingTasks(true);
+
+    try {
+      const result = await exportTasksJson(authSession.token, {
+        projectId: project.id,
+        workspaceId: workspace?.id,
+        search: debouncedSearchValue,
+      });
+
+      const downloadUrl = window.URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download = result.fileName || "tasks.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to export tasks",
+        error.message || "Something went wrong while exporting tasks."
+      );
+    } finally {
+      setIsExportingTasks(false);
+    }
+  };
+
+  const handleOpenImportPicker = () => {
+    if (isImportingTasks || !project?.id) {
+      return;
+    }
+
+    importFileInputRef.current?.click();
+  };
+
+  const handleImportTasks = async (event) => {
+    const selectedFile = event.target.files?.[0] || null;
+    event.target.value = "";
+
+    if (!selectedFile) {
+      return;
+    }
+
+    if (!authSession?.token) {
+      await showErrorAlert("Signin required", "Please sign in again to import tasks.");
+      return;
+    }
+
+    if (!project?.id) {
+      await showErrorAlert("Project context missing", "We could not resolve the current project.");
+      return;
+    }
+
+    const confirmation = await showConfirmAlert(
+      "Import tasks?",
+      `This will import tasks from ${selectedFile.name} into ${projectTitle}.`,
       {
-        state: {
-          workspace,
-          project,
-          task: task.rawTask || {
-            id: task.rawId,
-            slug: task.slug,
-            title: task.title,
-            projectId: Number(task.projectId),
-            workspaceId: Number(task.workspaceId),
-          },
-        },
+        confirmButtonText: "Import",
+        cancelButtonText: "Cancel",
       }
     );
+
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    setIsImportingTasks(true);
+
+    try {
+      const result = await importTasksJson(authSession.token, {
+        file: selectedFile,
+        projectId: project.id,
+        workspaceId: workspace?.id,
+      });
+
+      await showSuccessAlert(
+        "Tasks imported",
+        result?.message || "The tasks have been imported successfully."
+      );
+
+      setCurrentPage(1);
+      setReloadTasksKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to import tasks",
+        error.message || "Something went wrong while importing tasks."
+      );
+    } finally {
+      setIsImportingTasks(false);
+    }
   };
 
   return (
@@ -495,8 +598,8 @@ export default function ProjectTasksMain({
         width: "100%",
         minWidth: 0,
         maxWidth: "100%",
-        px: { xs: 1.5, md: 2 },
-        py: { xs: 1.5, md: 2 },
+        px: { xs: 1.25, md: 1.75 },
+        py: { xs: 1.25, md: 1.75 },
         overflowX: "hidden",
       }}
     >
@@ -519,16 +622,16 @@ export default function ProjectTasksMain({
             spacing={2}
             justifyContent="space-between"
             alignItems={{ xs: "stretch", lg: "center" }}
-            sx={{ px: 2, py: 2.25 }}
+            sx={{ px: 1.75, py: 1.9 }}
           >
             <Stack spacing={0.5}>
               <Typography
                 level="title-lg"
-                sx={{ fontWeight: 700, color: "var(--color-font-primary)", fontSize: "1.2rem" }}
+                sx={{ fontWeight: 700, color: "var(--color-font-primary)", fontSize: "1.08rem" }}
               >
                 Tasks
               </Typography>
-              <Typography level="body-sm" sx={{ color: "#5c6d90", maxWidth: 620 }}>
+              <Typography level="body-sm" sx={{ color: "#5c6d90", maxWidth: 620, fontSize: "0.82rem" }}>
                 Review task definitions, assignments, timelines, comments, and activity history for {projectTitle}.
               </Typography>
             </Stack>
@@ -544,6 +647,15 @@ export default function ProjectTasksMain({
                   borderRadius: "14px",
                 }}
               />
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) => {
+                  void handleImportTasks(event);
+                }}
+                style={{ display: "none" }}
+              />
               <Button
                 startDecorator={<PlusIcon />}
                 onClick={() => {
@@ -558,6 +670,56 @@ export default function ProjectTasksMain({
               >
                 Create Task
               </Button>
+              <Dropdown>
+                <Tooltip title="More task actions" variant="soft">
+                  <MenuButton
+                    slots={{ root: IconButton }}
+                    variant="soft"
+                    color="neutral"
+                    disabled={isLoadingTasks || !project?.id}
+                    sx={{
+                      minWidth: 42,
+                      minHeight: 42,
+                      borderRadius: "14px",
+                      color: "#3155ff",
+                      backgroundColor: "#eef2ff",
+                      "&:hover": {
+                        backgroundColor: "#e3e9ff",
+                      },
+                    }}
+                  >
+                    <MenuIcon />
+                  </MenuButton>
+                </Tooltip>
+                <Menu
+                  placement="bottom-end"
+                  sx={{
+                    minWidth: 190,
+                    borderRadius: "10px",
+                    p: 0.75,
+                    boxShadow: "0 18px 38px rgba(170, 180, 214, 0.16)",
+                  }}
+                >
+                  <MenuItem
+                    disabled={isImportingTasks}
+                    onClick={handleOpenImportPicker}
+                    sx={{ gap: 1, borderRadius: "8px" }}
+                  >
+                    <ImportIcon />
+                    {isImportingTasks ? "Importing..." : "Import Tasks"}
+                  </MenuItem>
+                  <MenuItem
+                    disabled={isExportingTasks}
+                    onClick={() => {
+                      void handleExportTasks();
+                    }}
+                    sx={{ gap: 1, borderRadius: "8px" }}
+                  >
+                    <ExportIcon />
+                    {isExportingTasks ? "Exporting..." : "Export Tasks"}
+                  </MenuItem>
+                </Menu>
+              </Dropdown>
             </Stack>
           </Stack>
 
@@ -586,7 +748,7 @@ export default function ProjectTasksMain({
               borderAxis="xBetween"
               stripe="even"
               sx={{
-                minWidth: 1500,
+                minWidth: 1100,
                 "--TableCell-headBackground": "transparent",
                 "--TableCell-selectedBackground": "transparent",
                 "& thead th:nth-of-type(1)": {
@@ -647,31 +809,23 @@ export default function ProjectTasksMain({
             >
               <thead>
                 <tr>
-                  <th style={{ width: "102px" }}>ID</th>
-                  <th style={{ width: "260px", minWidth: "260px" }}>Title</th>
+                  <th style={{ width: "102px", minWidth: "102px" }}>ID</th>
+                  <th style={{ width: "300px", minWidth: "300px" }}>Task Name</th>
                   <th style={{ width: "140px", minWidth: "140px" }}>Status</th>
                   <th style={{ width: "140px", minWidth: "140px" }}>Priority</th>
-                  <th style={{ width: "160px", minWidth: "160px" }}>Assigned By</th>
-                  <th style={{ width: "160px", minWidth: "160px" }}>Assigned To</th>
-                  <th style={{ width: "160px", minWidth: "160px" }}>Created By</th>
-                  <th style={{ width: "140px", minWidth: "140px" }}>Start Date</th>
                   <th style={{ width: "140px", minWidth: "140px" }}>Due Date</th>
-                  <th style={{ width: "170px", minWidth: "170px" }}>Completed Date</th>
-                  <th style={{ width: "150px", minWidth: "150px" }}>Task Type</th>
+                  <th style={{ width: "160px", minWidth: "160px" }}>Assignee</th>
+                  <th style={{ width: "160px", minWidth: "160px" }}>Assigned By</th>
                   <th style={{ width: "220px", minWidth: "220px" }}>Tags</th>
-                  <th style={{ width: "130px", minWidth: "130px" }}>Comments</th>
-                  <th style={{ width: "140px", minWidth: "140px" }}>Activity Logs</th>
-                  <th style={{ width: "120px", minWidth: "120px" }}>Project ID</th>
-                  <th style={{ width: "130px", minWidth: "130px" }}>Workspace ID</th>
-                  <th style={{ width: "170px", minWidth: "170px" }}>Created At</th>
                   <th style={{ width: "170px", minWidth: "170px" }}>Updated At</th>
-                  <th style={{ width: "120px", minWidth: "120px" }}>Action</th>
+                  <th style={{ width: "170px", minWidth: "170px" }}>Created At</th>
+                  <th style={{ width: "120px", minWidth: "120px" }}>Options</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoadingTasks ? (
                   <tr>
-                    <td colSpan={19}>
+                    <td colSpan={11}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           Loading tasks...
@@ -688,54 +842,29 @@ export default function ProjectTasksMain({
                       </Typography>
                     </td>
                     <td>
-                      <Stack
-                        direction="row"
-                        spacing={0.75}
-                        alignItems="center"
-                        justifyContent="space-between"
-                        sx={{ width: "100%" }}
-                      >
-                        <Typography sx={{ fontWeight: 700, color: "#4b5563" }}>
-                          <Box
-                            component="button"
-                            type="button"
-                            onClick={() => handleShowTask(task)}
-                            sx={{
-                              border: "none",
-                              background: "transparent",
-                              p: 0,
-                              m: 0,
-                              font: "inherit",
-                              color: "#4b5563",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              "&:hover": {
-                                color: "#3155ff",
-                              },
-                            }}
-                          >
-                            {task.title}
-                          </Box>
-                        </Typography>
-                        <Tooltip title="Show task" variant="soft">
-                          <IconButton
-                            variant="plain"
-                            sx={{
+                      <Typography sx={{ fontWeight: 700, color: "#4b5563" }}>
+                        <Box
+                          component="button"
+                          type="button"
+                          onClick={() => handleShowTask(task)}
+                          sx={{
+                            border: "none",
+                            background: "transparent",
+                            p: 0,
+                            m: 0,
+                            font: "inherit",
+                            color: "#4b5563",
+                            fontWeight: 700,
+                            textAlign: "left",
+                            cursor: "pointer",
+                            "&:hover": {
                               color: "#3155ff",
-                              opacity: 0,
-                              transition: "opacity 0.18s ease",
-                              "tr:hover &": {
-                                opacity: 1,
-                              },
-                            }}
-                            onClick={() => {
-                              handleShowTask(task);
-                            }}
-                          >
-                            <EyeIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </Stack>
+                            },
+                          }}
+                        >
+                          {task.title}
+                        </Box>
+                      </Typography>
                     </td>
                     <td>
                       <Chip
@@ -755,21 +884,9 @@ export default function ProjectTasksMain({
                         {task.priority}
                       </Chip>
                     </td>
-                    <td>{task.assignedBy}</td>
-                    <td>{task.assignedTo}</td>
-                    <td>{task.createdBy}</td>
-                    <td>{formatDateLabel(task.startDate)}</td>
                     <td>{formatDateLabel(task.dueDate)}</td>
-                    <td>{formatDateLabel(task.completedDate)}</td>
-                    <td>
-                      <Chip
-                        size="sm"
-                        variant="soft"
-                        sx={{ borderRadius: "999px", fontWeight: 700, ...typeStyles[task.taskType] }}
-                      >
-                        {task.taskType}
-                      </Chip>
-                    </td>
+                    <td>{task.assignedTo}</td>
+                    <td>{task.assignedBy}</td>
                     <td>
                       <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
                         {task.tags.map((tag) => (
@@ -789,12 +906,8 @@ export default function ProjectTasksMain({
                         ))}
                       </Stack>
                     </td>
-                    <td>{task.comments}</td>
-                    <td>{task.activityLogs}</td>
-                    <td>{task.projectId}</td>
-                    <td>{task.workspaceId}</td>
-                    <td>{formatDateLabel(task.createdAt, true)}</td>
                     <td>{formatDateLabel(task.updatedAt, true)}</td>
+                    <td>{formatDateLabel(task.createdAt, true)}</td>
                     <td>
                       <Stack direction="row" spacing={0.5} alignItems="center">
                         <Tooltip title="Edit task" variant="soft">
@@ -827,7 +940,7 @@ export default function ProjectTasksMain({
                 ))}
                 {!isLoadingTasks && tasks.length === 0 ? (
                   <tr>
-                    <td colSpan={19}>
+                    <td colSpan={11}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           No tasks found
