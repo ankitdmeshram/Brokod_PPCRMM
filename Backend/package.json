@@ -7,7 +7,7 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "dev": "node --watch index.js",
+    "dev": "nodemon --legacy-watch --watch . --ext js,json index.js",
     "migrate": "knex migrate:latest --knexfile knexfile.js",
     "migrate:rollback": "knex migrate:rollback --knexfile knexfile.js",
     "start": "node index.js",
@@ -28,5 +28,8 @@
     "nodemailer": "^8.0.5",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

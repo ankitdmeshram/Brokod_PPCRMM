@@ -84,6 +84,72 @@ const applyTaskFilters = (query, filters = {}) => {
     });
   }
 
+  if (filters.id) {
+    const rawFilterValue = String(filters.id).trim();
+    const normalizedTaskCode = rawFilterValue.toLowerCase().startsWith("tsk-")
+      ? rawFilterValue.slice(4).trim()
+      : rawFilterValue;
+    const likeId = `%${normalizedTaskCode}%`;
+
+    query.andWhere((builder) => {
+      builder
+        .whereRaw("CAST(tasks.id AS CHAR) like ?", [likeId])
+        .orWhereRaw("CAST(tasks.project_task_number AS CHAR) like ?", [likeId]);
+    });
+  }
+
+  if (filters.title) {
+    query.andWhere("tasks.title", "like", `%${filters.title}%`);
+  }
+
+  if (filters.status) {
+    query.andWhere("tasks.status", filters.status);
+  }
+
+  if (filters.priority) {
+    query.andWhere("tasks.priority", filters.priority);
+  }
+
+  if (filters.dueDate) {
+    query.andWhereRaw("DATE(tasks.due_date) = DATE(?)", [filters.dueDate]);
+  }
+
+  if (filters.assignedTo) {
+    const likeAssignedTo = `%${filters.assignedTo}%`;
+
+    query.andWhere((builder) => {
+      builder
+        .where("assigned_to_user.first_name", "like", likeAssignedTo)
+        .orWhere("assigned_to_user.last_name", "like", likeAssignedTo)
+        .orWhereRaw("TRIM(CONCAT(COALESCE(assigned_to_user.first_name, ''), ' ', COALESCE(assigned_to_user.last_name, ''))) like ?", [likeAssignedTo])
+        .orWhere("assigned_to_user.email", "like", likeAssignedTo);
+    });
+  }
+
+  if (filters.assignedBy) {
+    const likeAssignedBy = `%${filters.assignedBy}%`;
+
+    query.andWhere((builder) => {
+      builder
+        .where("assigned_by_user.first_name", "like", likeAssignedBy)
+        .orWhere("assigned_by_user.last_name", "like", likeAssignedBy)
+        .orWhereRaw("TRIM(CONCAT(COALESCE(assigned_by_user.first_name, ''), ' ', COALESCE(assigned_by_user.last_name, ''))) like ?", [likeAssignedBy])
+        .orWhere("assigned_by_user.email", "like", likeAssignedBy);
+    });
+  }
+
+  if (filters.tags) {
+    query.andWhere("tasks.tags", "like", `%${filters.tags}%`);
+  }
+
+  if (filters.updatedAt) {
+    query.andWhereRaw("DATE(tasks.updated_at) = DATE(?)", [filters.updatedAt]);
+  }
+
+  if (filters.createdAt) {
+    query.andWhereRaw("DATE(tasks.created_at) = DATE(?)", [filters.createdAt]);
+  }
+
   return query;
 };
 

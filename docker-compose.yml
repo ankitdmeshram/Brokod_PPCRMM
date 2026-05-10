@@ -25,6 +25,7 @@ services:
       target: dev
     container_name: BROKOD_BACKEND
     restart: unless-stopped
+    command: sh -c "npm ci && npm run dev"
     depends_on:
       db:
         condition: service_healthy
@@ -37,6 +38,7 @@ services:
       DB_USER: root
       DB_PASS: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       DB_DATABASE: ${MYSQL_DATABASE:-BROKOD}
+      CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ./Backend:/app
       - backend_node_modules:/app/node_modules

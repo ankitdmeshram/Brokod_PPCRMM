@@ -33,9 +33,28 @@ export default function HomePage() {
             <a className={styles.navLinkActive} href="#home">
               Home
             </a>
-            <a className={styles.navLink} href="#solutions">
-              Solutions
-            </a>
+            <div className={styles.navDropdown}>
+              <a
+                className={styles.navLink}
+                href="#solutions"
+                aria-haspopup="true"
+              >
+                Solutions
+              </a>
+              <div className={styles.dropdownMenu}>
+                <a className={styles.dropdownItem} href="/projects">
+                  Project Management
+                </a>
+                <a
+                  className={styles.dropdownItem}
+                  href="https://pcrm.brokod.com"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  PCRM
+                </a>
+              </div>
+            </div>
             <a className={styles.navLink} href="#benefits">
               Benefits
             </a>

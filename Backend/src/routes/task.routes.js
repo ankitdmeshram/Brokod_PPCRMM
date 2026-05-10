@@ -127,6 +127,43 @@ const upload = multer({
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *   post:
+ *     tags:
+ *       - Tasks
+ *     summary: Create a new task
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateTaskRequest'
+ *     responses:
+ *       201:
+ *         description: Task created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CreateTaskResponse'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Project, workspace, or assigned user not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  * /api/tasks/import/json:
  *   post:
  *     tags:
@@ -172,43 +209,6 @@ const upload = multer({
  *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Project not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *   post:
- *     tags:
- *       - Tasks
- *     summary: Create a new task
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateTaskRequest'
- *     responses:
- *       201:
- *         description: Task created successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/CreateTaskResponse'
- *       400:
- *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Missing or invalid token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Project, workspace, or assigned user not found
  *         content:
  *           application/json:
  *             schema:

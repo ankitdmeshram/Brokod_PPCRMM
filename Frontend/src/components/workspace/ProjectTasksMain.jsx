@@ -38,12 +38,43 @@ const priorityStyles = {
   Critical: { backgroundColor: "#fff1f1", color: "#d14343" },
 };
 
+const taskStatusFilterOptions = [
+  { value: "todo", label: "Todo" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "review", label: "Review" },
+  { value: "done", label: "Done" },
+  { value: "blocked", label: "Blocked" },
+];
+
+const taskPriorityFilterOptions = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "critical", label: "Critical" },
+];
+
 const initialPagination = {
   page: 1,
   limit: 10,
   total: 0,
   totalPages: 1,
 };
+
+const initialTaskColumnFilters = {
+  id: "",
+  title: "",
+  status: "",
+  priority: "",
+  dueDate: "",
+  assignedTo: "",
+  assignedBy: "",
+  tags: "",
+  updatedAt: "",
+  createdAt: "",
+};
+
+const hasActiveTaskColumnFilters = (filters = {}) =>
+  Object.values(filters).some((value) => String(value || "").trim() !== "");
 
 const formatDateLabel = (value, withTime = false) => {
   if (!value) {
@@ -155,6 +186,8 @@ export default function ProjectTasksMain({
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearchValue, setDebouncedSearchValue] = useState("");
+  const [columnFilters, setColumnFilters] = useState(initialTaskColumnFilters);
+  const [debouncedColumnFilters, setDebouncedColumnFilters] = useState(initialTaskColumnFilters);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState(initialPagination);
@@ -168,6 +201,7 @@ export default function ProjectTasksMain({
   const [isImportingTasks, setIsImportingTasks] = useState(false);
   const [projectUsers, setProjectUsers] = useState([]);
   const importFileInputRef = useRef(null);
+  const showClearFilters = hasActiveTaskColumnFilters(columnFilters);
 
   const currentUser = authSession?.user || null;
   const currentUserId = currentUser?.id ? Number(currentUser.id) : null;
@@ -237,8 +271,16 @@ export default function ProjectTasksMain({
   }, [searchValue]);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedColumnFilters(columnFilters);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [columnFilters]);
+
+  useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchValue, rowsPerPage]);
+  }, [debouncedSearchValue, debouncedColumnFilters, rowsPerPage]);
 
   useEffect(() => {
     const loadProjectUsers = async () => {
@@ -278,6 +320,7 @@ export default function ProjectTasksMain({
           projectId: project.id,
           workspaceId: workspace?.id,
           search: debouncedSearchValue,
+          ...debouncedColumnFilters,
           page: currentPage,
           limit: rowsPerPage,
         });
@@ -315,6 +358,7 @@ export default function ProjectTasksMain({
     authSession?.token,
     currentPage,
     debouncedSearchValue,
+    debouncedColumnFilters,
     project?.id,
     reloadTasksKey,
     rowsPerPage,
@@ -332,6 +376,17 @@ export default function ProjectTasksMain({
       ...currentValues,
       [field]: value,
     }));
+  };
+
+  const handleColumnFilterChange = (field, value) => {
+    setColumnFilters((currentFilters) => ({
+      ...currentFilters,
+      [field]: value,
+    }));
+  };
+
+  const handleClearColumnFilters = () => {
+    setColumnFilters(initialTaskColumnFilters);
   };
 
   const handleCloseCreateTaskModal = async (forceClose = false) => {
@@ -506,6 +561,7 @@ export default function ProjectTasksMain({
         projectId: project.id,
         workspaceId: workspace?.id,
         search: debouncedSearchValue,
+        ...debouncedColumnFilters,
       });
 
       const downloadUrl = window.URL.createObjectURL(result.blob);
@@ -643,10 +699,29 @@ export default function ProjectTasksMain({
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
                 sx={{
-                  minWidth: { xs: "100%", sm: 360 },
+                  minWidth: { xs: "100%", sm: 300 },
+                  maxWidth: { sm: 300 },
+                  "--Input-minHeight": "34px",
+                  fontSize: "0.89rem",
                   borderRadius: "14px",
                 }}
               />
+              {showClearFilters ? (
+                <Button
+                  variant="plain"
+                  color="neutral"
+                  onClick={handleClearColumnFilters}
+                  sx={{
+                    minHeight: "34px",
+                    px: 1.25,
+                    borderRadius: "10px",
+                    color: "#60708e",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              ) : null}
               <input
                 ref={importFileInputRef}
                 type="file"
@@ -663,7 +738,9 @@ export default function ProjectTasksMain({
                   setIsCreateTaskModalOpen(true);
                 }}
                 sx={{
-                  minHeight: "42px",
+                  minHeight: "34px",
+                  px: 1.35,
+                  fontSize: "0.89rem",
                   color: "var(--color-font-secondary)",
                   whiteSpace: "nowrap",
                 }}
@@ -773,6 +850,14 @@ export default function ProjectTasksMain({
                   textTransform: "uppercase",
                   borderBottom: "1px solid rgba(223, 228, 243, 0.9)",
                 },
+                "& thead tr:nth-of-type(2) th": {
+                  py: 1,
+                  px: 1.25,
+                  textTransform: "none",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  backgroundColor: "#fbfcff",
+                },
                 "& tbody td:nth-of-type(1)": {
                   position: "sticky",
                   left: 0,
@@ -820,6 +905,115 @@ export default function ProjectTasksMain({
                   <th style={{ width: "170px", minWidth: "170px" }}>Updated At</th>
                   <th style={{ width: "170px", minWidth: "170px" }}>Created At</th>
                   <th style={{ width: "120px", minWidth: "120px" }}>Options</th>
+                </tr>
+                <tr>
+                  <th>
+                    <Input
+                      size="sm"
+                      placeholder="ID"
+                      value={columnFilters.id}
+                      onChange={(event) => handleColumnFilterChange("id", event.target.value)}
+                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
+                    />
+                  </th>
+                  <th>
+                    <Input
+                      size="sm"
+                      placeholder="Task name"
+                      value={columnFilters.title}
+                      onChange={(event) => handleColumnFilterChange("title", event.target.value)}
+                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
+                    />
+                  </th>
+                  <th>
+                    <Select
+                      size="sm"
+                      placeholder="All"
+                      value={columnFilters.status || null}
+                      onChange={(_, value) => handleColumnFilterChange("status", value || "")}
+                      sx={{ minHeight: "30px", fontSize: "0.8rem" }}
+                    >
+                      {taskStatusFilterOptions.map((option) => (
+                        <Option key={option.value} value={option.value}>
+                          {option.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </th>
+                  <th>
+                    <Select
+                      size="sm"
+                      placeholder="All"
+                      value={columnFilters.priority || null}
+                      onChange={(_, value) => handleColumnFilterChange("priority", value || "")}
+                      sx={{ minHeight: "30px", fontSize: "0.8rem" }}
+                    >
+                      {taskPriorityFilterOptions.map((option) => (
+                        <Option key={option.value} value={option.value}>
+                          {option.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </th>
+                  <th>
+                    <Input
+                      size="sm"
+                      type="date"
+                      value={columnFilters.dueDate}
+                      onChange={(event) => handleColumnFilterChange("dueDate", event.target.value)}
+                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
+                    />
+                  </th>
+                  <th>
+                    <Input
+                      size="sm"
+                      placeholder="Assignee"
+                      value={columnFilters.assignedTo}
+                      onChange={(event) => handleColumnFilterChange("assignedTo", event.target.value)}
+                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
+                    />
+                  </th>
+                  <th>
+                    <Input
+                      size="sm"
+                      placeholder="Assigned by"
+                      value={columnFilters.assignedBy}
+                      onChange={(event) => handleColumnFilterChange("assignedBy", event.target.value)}
+                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
+                    />
+                  </th>
+                  <th>
+                    <Input
+                      size="sm"
+                      placeholder="Tags"
+                      value={columnFilters.tags}
+                      onChange={(event) => handleColumnFilterChange("tags", event.target.value)}
+                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
+                    />
+                  </th>
+                  <th>
+                    <Input
+                      size="sm"
+                      type="date"
+                      value={columnFilters.updatedAt}
+                      onChange={(event) => handleColumnFilterChange("updatedAt", event.target.value)}
+                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
+                    />
+                  </th>
+                  <th>
+                    <Input
+                      size="sm"
+                      type="date"
+                      value={columnFilters.createdAt}
+                      onChange={(event) => handleColumnFilterChange("createdAt", event.target.value)}
+                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
+                    />
+                  </th>
+                  <th>
+                    <Typography level="body-xs" sx={{ color: "#98a3bd" }}>
+                      Filter only
+                    </Typography>
+                  </th>
                 </tr>
               </thead>
               <tbody>

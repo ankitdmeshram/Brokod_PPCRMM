@@ -25,6 +25,19 @@ export async function createTask(payload, token) {
 
 export async function fetchTasks(token, filters = {}) {
   const query = new URLSearchParams();
+  const filterKeys = [
+    "search",
+    "id",
+    "title",
+    "status",
+    "priority",
+    "dueDate",
+    "assignedTo",
+    "assignedBy",
+    "tags",
+    "updatedAt",
+    "createdAt",
+  ];
 
   if (filters.projectId) {
     query.set("projectId", String(filters.projectId));
@@ -34,9 +47,11 @@ export async function fetchTasks(token, filters = {}) {
     query.set("workspaceId", String(filters.workspaceId));
   }
 
-  if (filters.search?.trim()) {
-    query.set("search", filters.search.trim());
-  }
+  filterKeys.forEach((key) => {
+    if (filters[key]?.trim()) {
+      query.set(key, filters[key].trim());
+    }
+  });
 
   if (filters.page) {
     query.set("page", String(filters.page));
@@ -120,6 +135,19 @@ function parseFileNameFromDisposition(contentDisposition = "") {
 
 export async function exportTasksJson(token, filters = {}) {
   const query = new URLSearchParams();
+  const filterKeys = [
+    "search",
+    "id",
+    "title",
+    "status",
+    "priority",
+    "dueDate",
+    "assignedTo",
+    "assignedBy",
+    "tags",
+    "updatedAt",
+    "createdAt",
+  ];
 
   if (filters.projectId) {
     query.set("projectId", String(filters.projectId));
@@ -129,9 +157,11 @@ export async function exportTasksJson(token, filters = {}) {
     query.set("workspaceId", String(filters.workspaceId));
   }
 
-  if (filters.search?.trim()) {
-    query.set("search", filters.search.trim());
-  }
+  filterKeys.forEach((key) => {
+    if (filters[key]?.trim()) {
+      query.set(key, filters[key].trim());
+    }
+  });
 
   const response = await fetch(`${TASK_API_BASE}/export/json${query.toString() ? `?${query}` : ""}`, {
     method: "GET",

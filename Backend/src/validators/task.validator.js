@@ -25,6 +25,22 @@ const validateDateValue = (label, value) => {
   }
 };
 
+const normalizeOptionalString = (value) => {
+  const normalizedValue = String(value || "").trim();
+  return normalizedValue || "";
+};
+
+const normalizeOptionalDateFilter = (value, label) => {
+  const normalizedValue = normalizeOptionalString(value);
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  validateDateValue(label, normalizedValue);
+  return normalizedValue;
+};
+
 const normalizeTaskPayload = (payload = {}) => {
   const title = String(payload?.title || "").trim();
   const description = String(payload?.description || "").trim();
@@ -206,6 +222,16 @@ const validateGetTasksFilters = (filters = {}) => {
   const page = Number(filters?.page ?? 1);
   const limit = Number(filters?.limit ?? 10);
   const search = String(filters?.search || "").trim();
+  const id = normalizeOptionalString(filters?.id);
+  const title = normalizeOptionalString(filters?.title);
+  const status = normalizeOptionalString(filters?.status).toLowerCase();
+  const priority = normalizeOptionalString(filters?.priority).toLowerCase();
+  const dueDate = normalizeOptionalDateFilter(filters?.dueDate, "dueDate");
+  const assignedTo = normalizeOptionalString(filters?.assignedTo);
+  const assignedBy = normalizeOptionalString(filters?.assignedBy);
+  const tags = normalizeOptionalString(filters?.tags);
+  const updatedAt = normalizeOptionalDateFilter(filters?.updatedAt, "updatedAt");
+  const createdAt = normalizeOptionalDateFilter(filters?.createdAt, "createdAt");
 
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new AppError("projectId is required and must be a valid integer.", 400);
@@ -223,10 +249,28 @@ const validateGetTasksFilters = (filters = {}) => {
     throw new AppError("Please provide a valid limit between 1 and 100.", 400);
   }
 
+  if (status && !allowedStatuses.has(status)) {
+    throw new AppError("status must be one of: todo, in_progress, review, done, blocked.", 400);
+  }
+
+  if (priority && !allowedPriorities.has(priority)) {
+    throw new AppError("priority must be one of: low, medium, high, critical.", 400);
+  }
+
   return {
     projectId,
     workspaceId,
     search,
+    id,
+    title,
+    status,
+    priority,
+    dueDate,
+    assignedTo,
+    assignedBy,
+    tags,
+    updatedAt,
+    createdAt,
     page,
     limit,
     offset: (page - 1) * limit,
@@ -240,6 +284,16 @@ const validateExportTasksFilters = (filters = {}) => {
       ? null
       : Number(filters.workspaceId);
   const search = String(filters?.search || "").trim();
+  const id = normalizeOptionalString(filters?.id);
+  const title = normalizeOptionalString(filters?.title);
+  const status = normalizeOptionalString(filters?.status).toLowerCase();
+  const priority = normalizeOptionalString(filters?.priority).toLowerCase();
+  const dueDate = normalizeOptionalDateFilter(filters?.dueDate, "dueDate");
+  const assignedTo = normalizeOptionalString(filters?.assignedTo);
+  const assignedBy = normalizeOptionalString(filters?.assignedBy);
+  const tags = normalizeOptionalString(filters?.tags);
+  const updatedAt = normalizeOptionalDateFilter(filters?.updatedAt, "updatedAt");
+  const createdAt = normalizeOptionalDateFilter(filters?.createdAt, "createdAt");
 
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new AppError("projectId is required and must be a valid integer.", 400);
@@ -249,10 +303,28 @@ const validateExportTasksFilters = (filters = {}) => {
     throw new AppError("workspaceId must be a valid integer when provided.", 400);
   }
 
+  if (status && !allowedStatuses.has(status)) {
+    throw new AppError("status must be one of: todo, in_progress, review, done, blocked.", 400);
+  }
+
+  if (priority && !allowedPriorities.has(priority)) {
+    throw new AppError("priority must be one of: low, medium, high, critical.", 400);
+  }
+
   return {
     projectId,
     workspaceId,
     search,
+    id,
+    title,
+    status,
+    priority,
+    dueDate,
+    assignedTo,
+    assignedBy,
+    tags,
+    updatedAt,
+    createdAt,
   };
 };
 
