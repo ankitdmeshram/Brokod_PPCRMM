@@ -44,7 +44,8 @@ const getProjectBySlug = asyncHandler(async (request, response) => {
   const project = await projectService.getProjectBySlug(
     request.params.projectSlug,
     request.user.sub,
-    request.user.role
+    request.user.role,
+    request.query.workspaceId
   );
 
   response.status(200).json({

@@ -41,6 +41,7 @@ const isSuperAdmin = (role = "") =>
 
 const buildUniqueProjectSlug = async (
   projectName,
+  workspaceId,
   excludeProjectId = null,
   trx = getDb()
 ) => {
@@ -49,7 +50,11 @@ const buildUniqueProjectSlug = async (
   let timestampSeed = Date.now();
 
   while (true) {
-    const existingProject = await projectRepository.findBySlug(candidateSlug, trx);
+    const existingProject = await projectRepository.findBySlug(
+      candidateSlug,
+      workspaceId,
+      trx
+    );
 
     if (!existingProject || Number(existingProject.id) === Number(excludeProjectId)) {
       return candidateSlug;
@@ -90,7 +95,7 @@ const createProject = async (payload, userId) => {
   }
 
   const project = await getDb().transaction(async (trx) => {
-    const slug = await buildUniqueProjectSlug(projectName, null, trx);
+    const slug = await buildUniqueProjectSlug(projectName, workspaceId, null, trx);
     const projectId = await projectRepository.create(
       {
         workspaceId,
@@ -193,16 +198,36 @@ const getProjectById = async (projectId, userId, userRole = "") => {
   return mapProject(project);
 };
 
-const getProjectBySlug = async (projectSlug, userId, userRole = "") => {
+const getProjectBySlug = async (
+  projectSlug,
+  userId,
+  userRole = "",
+  workspaceId = null
+) => {
   const normalizedProjectSlug = String(projectSlug || "").trim();
+  const normalizedWorkspaceId =
+    workspaceId === null || workspaceId === undefined || workspaceId === ""
+      ? null
+      : Number(workspaceId);
 
   if (!normalizedProjectSlug) {
     throw new AppError("Please provide a valid project slug.", 400);
   }
 
+  if (
+    normalizedWorkspaceId !== null &&
+    (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId <= 0)
+  ) {
+    throw new AppError("Please provide a valid workspace id.", 400);
+  }
+
   const project = isSuperAdmin(userRole)
-    ? await projectRepository.findBySlug(normalizedProjectSlug)
-    : await projectRepository.findBySlugForUser(normalizedProjectSlug, userId);
+    ? await projectRepository.findBySlug(normalizedProjectSlug, normalizedWorkspaceId)
+    : await projectRepository.findBySlugForUser(
+        normalizedProjectSlug,
+        userId,
+        normalizedWorkspaceId
+      );
 
   if (!project) {
     throw new AppError("Project not found.", 404);
@@ -256,10 +281,19 @@ const updateProject = async (projectId, payload, userId, userRole = "") => {
   const updates = validateUpdateProjectPayload(payload, existingProject);
   const currentProjectName =
     existingProject.project_name ?? existingProject.projectName;
+  const currentWorkspaceId = Number(
+    existingProject.workspace_id ?? existingProject.workspaceId
+  );
+  const nextWorkspaceId = updates.workspaceId ?? currentWorkspaceId;
   const nextSlug =
-    updates.projectName === undefined || updates.projectName === currentProjectName
+    updates.projectName === undefined &&
+    nextWorkspaceId === currentWorkspaceId
       ? existingProject.slug
-      : await buildUniqueProjectSlug(updates.projectName, normalizedProjectId);
+      : await buildUniqueProjectSlug(
+          updates.projectName ?? currentProjectName,
+          nextWorkspaceId,
+          normalizedProjectId
+        );
 
   if (updates.workspaceId !== undefined) {
     const workspace = isSuperAdmin(userRole)

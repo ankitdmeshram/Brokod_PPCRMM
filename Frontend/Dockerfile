@@ -8,7 +8,7 @@ ENV VITE_API_DOMAIN=$VITE_API_DOMAIN
 ENV VITE_BASE_PATH=$VITE_BASE_PATH
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 

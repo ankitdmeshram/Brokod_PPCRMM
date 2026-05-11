@@ -181,7 +181,7 @@ export default function CreateTaskModal({
             </Stack>
 
             <Stack spacing={1}>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
                 <FormControl sx={{ flex: 1 }}>
                   <FormLabel>Assigned by</FormLabel>
                   <Select

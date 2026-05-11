@@ -4,6 +4,7 @@ const taskSelectColumns = [
   "tasks.id",
   "tasks.project_id",
   "tasks.project_task_number",
+  "tasks.parent_task_id",
   "tasks.workspace_id",
   "tasks.title",
   "tasks.slug",
@@ -24,8 +25,31 @@ const taskSelectColumns = [
   "tasks.deleted_by",
 ];
 
+const advancedTaskFilterColumns = {
+  id: { column: "tasks.id", type: "number" },
+  projectId: { column: "tasks.project_id", type: "number" },
+  projectTaskNumber: { column: "tasks.project_task_number", type: "number" },
+  parentTaskId: { column: "tasks.parent_task_id", type: "number" },
+  workspaceId: { column: "tasks.workspace_id", type: "number" },
+  title: { column: "tasks.title", type: "string" },
+  slug: { column: "tasks.slug", type: "string" },
+  description: { column: "tasks.description", type: "string" },
+  status: { column: "tasks.status", type: "string" },
+  priority: { column: "tasks.priority", type: "string" },
+  taskType: { column: "tasks.task_type", type: "string" },
+  assignedBy: { column: "tasks.assigned_by", type: "number" },
+  assignedTo: { column: "tasks.assigned_to", type: "number" },
+  createdBy: { column: "tasks.created_by", type: "number" },
+  startDate: { column: "tasks.start_date", type: "date" },
+  dueDate: { column: "tasks.due_date", type: "date" },
+  completedAt: { column: "tasks.completed_at", type: "date" },
+  createdAt: { column: "tasks.created_at", type: "date" },
+  updatedAt: { column: "tasks.updated_at", type: "date" },
+};
+
 const buildTaskBaseQuery = (trx = getDb()) =>
   trx("tasks")
+    .leftJoin({ parent_task: "tasks" }, "parent_task.id", "tasks.parent_task_id")
     .leftJoin({ assigned_by_user: "users" }, "assigned_by_user.id", "tasks.assigned_by")
     .leftJoin({ assigned_to_user: "users" }, "assigned_to_user.id", "tasks.assigned_to")
     .leftJoin({ created_by_user: "users" }, "created_by_user.id", "tasks.created_by")
@@ -40,6 +64,9 @@ const buildTaskBaseQuery = (trx = getDb()) =>
       "created_by_user.first_name as created_by_first_name",
       "created_by_user.last_name as created_by_last_name",
       "created_by_user.email as created_by_email",
+      "parent_task.title as parent_task_title",
+      "parent_task.slug as parent_task_slug",
+      "parent_task.project_task_number as parent_task_project_task_number",
       trx("task_comments")
         .count("*")
         .whereRaw("task_comments.task_id = tasks.id")
@@ -47,7 +74,12 @@ const buildTaskBaseQuery = (trx = getDb()) =>
       trx("task_activity_logs")
         .count("*")
         .whereRaw("task_activity_logs.task_id = tasks.id")
-        .as("activity_logs_count")
+        .as("activity_logs_count"),
+      trx("tasks as child_tasks")
+        .count("*")
+        .whereRaw("child_tasks.parent_task_id = tasks.id")
+        .whereNull("child_tasks.deleted_at")
+        .as("subtasks_count")
     )
     .whereNull("tasks.deleted_at");
 
@@ -153,11 +185,69 @@ const applyTaskFilters = (query, filters = {}) => {
   return query;
 };
 
+const applyAdvancedTaskFilters = (query, advancedFilters = []) => {
+  const operatorMap = {
+    eq: "=",
+    neq: "!=",
+    gt: ">",
+    lt: "<",
+    gte: ">=",
+    lte: "<=",
+  };
+
+  advancedFilters.forEach((filter) => {
+    const filterConfig = advancedTaskFilterColumns[filter.field];
+
+    if (!filterConfig) {
+      return;
+    }
+
+    if (filterConfig.type === "string") {
+      if (filter.operator === "starts_with") {
+        query.andWhere(filterConfig.column, "like", `${filter.value}%`);
+        return;
+      }
+
+      if (filter.operator === "ends_with") {
+        query.andWhere(filterConfig.column, "like", `%${filter.value}`);
+        return;
+      }
+
+      if (filter.operator === "contains") {
+        query.andWhere(filterConfig.column, "like", `%${filter.value}%`);
+        return;
+      }
+
+      query.andWhere(filterConfig.column, operatorMap[filter.operator], filter.value);
+      return;
+    }
+
+    if (filterConfig.type === "number") {
+      query.andWhere(filterConfig.column, operatorMap[filter.operator], filter.value);
+      return;
+    }
+
+    if (filterConfig.type === "date") {
+      query.andWhereRaw(`DATE(${filterConfig.column}) ${operatorMap[filter.operator]} DATE(?)`, [
+        filter.value,
+      ]);
+      return;
+    }
+
+    if (filterConfig.type === "boolean") {
+      query.andWhere(filterConfig.column, operatorMap[filter.operator], filter.value);
+    }
+  });
+
+  return query;
+};
+
 const create = async (
   {
     projectId,
     workspaceId,
     projectTaskNumber,
+    parentTaskId,
     title,
     slug,
     description,
@@ -177,6 +267,7 @@ const create = async (
   const result = await trx("tasks").insert({
     project_id: projectId,
     project_task_number: projectTaskNumber,
+    parent_task_id: parentTaskId,
     workspace_id: workspaceId,
     title,
     slug,
@@ -199,8 +290,15 @@ const create = async (
 const findById = async (id, trx = getDb()) =>
   buildTaskBaseQuery(trx).where("tasks.id", id).first();
 
-const findBySlug = async (slug, trx = getDb()) =>
-  buildTaskBaseQuery(trx).where("tasks.slug", slug).first();
+const findBySlug = async (slug, projectId = null, trx = getDb()) => {
+  const query = buildTaskBaseQuery(trx).where("tasks.slug", slug);
+
+  if (projectId !== null && projectId !== undefined) {
+    query.andWhere("tasks.project_id", projectId);
+  }
+
+  return query.first();
+};
 
 const getNextProjectTaskNumber = async (projectId, trx = getDb()) => {
   const latestTask = await trx("tasks")
@@ -218,6 +316,7 @@ const findAll = async (filters = {}, trx = getDb()) => {
   const query = buildTaskBaseQuery(trx);
 
   applyTaskFilters(query, filters);
+  applyAdvancedTaskFilters(query, filters.advancedFilters);
 
   if (filters.limit) {
     query.limit(filters.limit);
@@ -240,6 +339,7 @@ const countAll = async (filters = {}, trx = getDb()) => {
     .first();
 
   applyTaskFilters(query, filters);
+  applyAdvancedTaskFilters(query, filters.advancedFilters);
 
   const result = await query;
   return Number(result?.count || 0);
@@ -255,6 +355,7 @@ const updateById = async (id, updates, trx = getDb()) =>
   trx("tasks").where({ id }).whereNull("deleted_at").update({
     title: updates.title,
     slug: updates.slug,
+    parent_task_id: updates.parentTaskId,
     description: updates.description,
     status: updates.status,
     priority: updates.priority,

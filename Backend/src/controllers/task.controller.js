@@ -30,6 +30,7 @@ const getTasks = asyncHandler(async (request, response) => {
       tags: request.query.tags,
       updatedAt: request.query.updatedAt,
       createdAt: request.query.createdAt,
+      advancedFilters: request.query.advancedFilters,
       page: request.query.page,
       limit: request.query.limit,
     },
@@ -56,6 +57,7 @@ const exportTasks = asyncHandler(async (request, response) => {
       tags: request.query.tags,
       updatedAt: request.query.updatedAt,
       createdAt: request.query.createdAt,
+      advancedFilters: request.query.advancedFilters,
     },
     request.user.sub,
     request.user.role
@@ -118,7 +120,8 @@ const getTaskBySlug = asyncHandler(async (request, response) => {
   const task = await taskService.getTaskBySlug(
     request.params.taskSlug,
     request.user.sub,
-    request.user.role
+    request.user.role,
+    request.query.projectId
   );
 
   response.status(200).json({

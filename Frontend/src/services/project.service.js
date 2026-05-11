@@ -63,13 +63,22 @@ export async function fetchProjectById(projectId, token) {
   return parseApiResponse(response);
 }
 
-export async function fetchProjectBySlug(projectSlug, token) {
-  const response = await fetch(`${PROJECT_API_BASE}/slug/${projectSlug}`, {
+export async function fetchProjectBySlug(projectSlug, token, options = {}) {
+  const query = new URLSearchParams();
+
+  if (options.workspaceId) {
+    query.set("workspaceId", String(options.workspaceId));
+  }
+
+  const response = await fetch(
+    `${PROJECT_API_BASE}/slug/${projectSlug}${query.toString() ? `?${query}` : ""}`,
+    {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
     },
-  });
+    }
+  );
 
   return parseApiResponse(response);
 }

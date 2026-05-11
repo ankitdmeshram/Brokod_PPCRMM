@@ -10,21 +10,7 @@ async function parseApiResponse(response) {
   return data;
 }
 
-export async function createTask(payload, token) {
-  const response = await fetch(TASK_API_BASE, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  return parseApiResponse(response);
-}
-
-export async function fetchTasks(token, filters = {}) {
-  const query = new URLSearchParams();
+function appendTaskQueryParams(query, filters = {}) {
   const filterKeys = [
     "search",
     "id",
@@ -53,6 +39,28 @@ export async function fetchTasks(token, filters = {}) {
     }
   });
 
+  if (Array.isArray(filters.advancedFilters) && filters.advancedFilters.length > 0) {
+    query.set("advancedFilters", JSON.stringify(filters.advancedFilters));
+  }
+}
+
+export async function createTask(payload, token) {
+  const response = await fetch(TASK_API_BASE, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function fetchTasks(token, filters = {}) {
+  const query = new URLSearchParams();
+  appendTaskQueryParams(query, filters);
+
   if (filters.page) {
     query.set("page", String(filters.page));
   }
@@ -71,6 +79,28 @@ export async function fetchTasks(token, filters = {}) {
   return parseApiResponse(response);
 }
 
+export async function fetchAllTasks(token, filters = {}) {
+  const aggregatedTasks = [];
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const result = await fetchTasks(token, {
+      ...filters,
+      page,
+      limit: 100,
+    });
+
+    const pageTasks = Array.isArray(result?.tasks) ? result.tasks : [];
+    aggregatedTasks.push(...pageTasks);
+
+    totalPages = Math.max(1, Number(result?.pagination?.totalPages || 1));
+    page += 1;
+  }
+
+  return aggregatedTasks;
+}
+
 export async function fetchTaskById(taskId, token) {
   const response = await fetch(`${TASK_API_BASE}/${taskId}`, {
     method: "GET",
@@ -82,8 +112,14 @@ export async function fetchTaskById(taskId, token) {
   return parseApiResponse(response);
 }
 
-export async function fetchTaskBySlug(taskSlug, token) {
-  const response = await fetch(`${TASK_API_BASE}/slug/${taskSlug}`, {
+export async function fetchTaskBySlug(taskSlug, token, options = {}) {
+  const query = new URLSearchParams();
+
+  if (options.projectId) {
+    query.set("projectId", String(options.projectId));
+  }
+
+  const response = await fetch(`${TASK_API_BASE}/slug/${taskSlug}${query.toString() ? `?${query}` : ""}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -124,7 +160,7 @@ function parseFileNameFromDisposition(contentDisposition = "") {
     return decodeURIComponent(utf8Match[1]);
   }
 
-  const standardMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+  const standardMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
 
   if (standardMatch?.[1]) {
     return standardMatch[1];
@@ -135,33 +171,7 @@ function parseFileNameFromDisposition(contentDisposition = "") {
 
 export async function exportTasksJson(token, filters = {}) {
   const query = new URLSearchParams();
-  const filterKeys = [
-    "search",
-    "id",
-    "title",
-    "status",
-    "priority",
-    "dueDate",
-    "assignedTo",
-    "assignedBy",
-    "tags",
-    "updatedAt",
-    "createdAt",
-  ];
-
-  if (filters.projectId) {
-    query.set("projectId", String(filters.projectId));
-  }
-
-  if (filters.workspaceId) {
-    query.set("workspaceId", String(filters.workspaceId));
-  }
-
-  filterKeys.forEach((key) => {
-    if (filters[key]?.trim()) {
-      query.set(key, filters[key].trim());
-    }
-  });
+  appendTaskQueryParams(query, filters);
 
   const response = await fetch(`${TASK_API_BASE}/export/json${query.toString() ? `?${query}` : ""}`, {
     method: "GET",

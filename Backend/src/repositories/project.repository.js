@@ -57,17 +57,22 @@ const findById = async (id, trx = getDb()) => {
     .first();
 };
 
-const findBySlug = async (slug, trx = getDb()) => {
-  return trx("projects")
+const findBySlug = async (slug, workspaceId = null, trx = getDb()) => {
+  const query = trx("projects")
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(projectSelectColumns)
     .where("projects.slug", slug)
-    .whereNull("projects.deleted_at")
-    .first();
+    .whereNull("projects.deleted_at");
+
+  if (workspaceId !== null && workspaceId !== undefined) {
+    query.andWhere("projects.workspace_id", workspaceId);
+  }
+
+  return query.first();
 };
 
-const findBySlugForUser = async (slug, userId, trx = getDb()) => {
-  return trx("projects")
+const findBySlugForUser = async (slug, userId, workspaceId = null, trx = getDb()) => {
+  const query = trx("projects")
     .join("project_users", "project_users.project_id", "projects.id")
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(
@@ -77,8 +82,13 @@ const findBySlugForUser = async (slug, userId, trx = getDb()) => {
     )
     .where("projects.slug", slug)
     .andWhere("project_users.user_id", userId)
-    .whereNull("projects.deleted_at")
-    .first();
+    .whereNull("projects.deleted_at");
+
+  if (workspaceId !== null && workspaceId !== undefined) {
+    query.andWhere("projects.workspace_id", workspaceId);
+  }
+
+  return query.first();
 };
 
 const applyProjectFilters = (query, filters = {}) => {

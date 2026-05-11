@@ -15,10 +15,13 @@
     "@mui/icons-material": "^7.3.2",
     "@mui/joy": "^5.0.0-beta.52",
     "@mui/material": "^7.3.2",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.0",
-    "sweetalert2": "^11.22.4"
+    "sweetalert2": "^11.22.4",
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

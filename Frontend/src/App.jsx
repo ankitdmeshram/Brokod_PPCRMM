@@ -44,10 +44,18 @@ export default function App() {
             }
           />
           <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/overview`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="overview" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={`${APP_ROUTES.workspace}/:workspaceSlug/projects`}
             element={
               <ProtectedRoute>
-                <WorkspaceProjectsPage />
+                <WorkspaceProjectsPage section="projects" />
               </ProtectedRoute>
             }
           />

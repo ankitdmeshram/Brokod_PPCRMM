@@ -32,6 +32,7 @@ const mapTask = (task) => ({
   id: task.id,
   projectId: task.project_id ?? task.projectId,
   projectTaskNumber: task.project_task_number ?? task.projectTaskNumber ?? null,
+  parentTaskId: task.parent_task_id ?? task.parentTaskId ?? null,
   workspaceId: task.workspace_id ?? task.workspaceId,
   title: task.title,
   slug: task.slug ?? null,
@@ -45,6 +46,10 @@ const mapTask = (task) => ({
   dueDate: task.due_date ?? task.dueDate ?? null,
   completedAt: task.completed_at ?? task.completedAt ?? null,
   taskType: task.task_type ?? task.taskType,
+  parentTaskTitle: task.parent_task_title ?? task.parentTaskTitle ?? null,
+  parentTaskSlug: task.parent_task_slug ?? task.parentTaskSlug ?? null,
+  parentTaskProjectTaskNumber:
+    task.parent_task_project_task_number ?? task.parentTaskProjectTaskNumber ?? null,
   tags:
     typeof task.tags === "string"
       ? JSON.parse(task.tags || "[]")
@@ -65,6 +70,7 @@ const mapTask = (task) => ({
     null,
   commentsCount: Number(task.comments_count || task.commentsCount || 0),
   activityLogsCount: Number(task.activity_logs_count || task.activityLogsCount || 0),
+  subtasksCount: Number(task.subtasks_count || task.subtasksCount || 0),
   createdAt: task.created_at ?? task.createdAt ?? null,
   updatedAt: task.updated_at ?? task.updatedAt ?? null,
   deletedAt: task.deleted_at ?? task.deletedAt ?? null,
@@ -90,11 +96,11 @@ const buildRandomTaskSlug = () => {
   return `${timestamp}-${randomNumber}`;
 };
 
-const buildUniqueTaskSlug = async (trx = getDb()) => {
+const buildUniqueTaskSlug = async (projectId, trx = getDb()) => {
   let candidateSlug = buildRandomTaskSlug();
 
   while (true) {
-    const existingTask = await taskRepository.findBySlug(candidateSlug, trx);
+    const existingTask = await taskRepository.findBySlug(candidateSlug, projectId, trx);
 
     if (!existingTask) {
       return candidateSlug;
@@ -104,10 +110,66 @@ const buildUniqueTaskSlug = async (trx = getDb()) => {
   }
 };
 
+const assertParentTaskValid = async (
+  parentTaskId,
+  { projectId, workspaceId, currentTaskId = null },
+  trx = getDb()
+) => {
+  if (parentTaskId === null || parentTaskId === undefined) {
+    return null;
+  }
+
+  const normalizedParentTaskId = Number(parentTaskId);
+
+  if (currentTaskId !== null && normalizedParentTaskId === Number(currentTaskId)) {
+    throw new AppError("A task cannot be its own parent task.", 400);
+  }
+
+  const parentTask = await taskRepository.findById(normalizedParentTaskId, trx);
+
+  if (!parentTask) {
+    throw new AppError("Parent task not found.", 404);
+  }
+
+  if (
+    Number(parentTask.project_id ?? parentTask.projectId) !== Number(projectId) ||
+    Number(parentTask.workspace_id ?? parentTask.workspaceId) !== Number(workspaceId)
+  ) {
+    throw new AppError("parentTaskId must belong to the same project and workspace.", 400);
+  }
+
+  if (currentTaskId !== null) {
+    const visitedTaskIds = new Set([normalizedParentTaskId]);
+    let ancestorTask = parentTask;
+
+    while (ancestorTask) {
+      const ancestorParentTaskId = ancestorTask.parent_task_id ?? ancestorTask.parentTaskId;
+
+      if (ancestorParentTaskId === null || ancestorParentTaskId === undefined) {
+        break;
+      }
+
+      if (Number(ancestorParentTaskId) === Number(currentTaskId)) {
+        throw new AppError("A task cannot be nested under one of its subtasks.", 400);
+      }
+
+      if (visitedTaskIds.has(Number(ancestorParentTaskId))) {
+        break;
+      }
+
+      visitedTaskIds.add(Number(ancestorParentTaskId));
+      ancestorTask = await taskRepository.findById(Number(ancestorParentTaskId), trx);
+    }
+  }
+
+  return normalizedParentTaskId;
+};
+
 const createTaskRecord = async (
   {
     projectId,
     workspaceId,
+    parentTaskId,
     title,
     description,
     status,
@@ -125,13 +187,14 @@ const createTaskRecord = async (
   userId,
   trx
 ) => {
-  const slug = await buildUniqueTaskSlug(trx);
+  const slug = await buildUniqueTaskSlug(projectId, trx);
   const projectTaskNumber = await taskRepository.getNextProjectTaskNumber(projectId, trx);
   const taskId = await taskRepository.create(
     {
       projectId,
-      projectTaskNumber,
-      workspaceId,
+    projectTaskNumber,
+    parentTaskId,
+    workspaceId,
       title,
       slug,
       description,
@@ -178,6 +241,7 @@ const createTask = async (payload, userId, userRole = "") => {
   const {
     projectId,
     workspaceId,
+    parentTaskId,
     title,
     description,
     status,
@@ -221,11 +285,17 @@ const createTask = async (payload, userId, userRole = "") => {
     assertUserExists(assignedTo, "assignedTo"),
   ]);
 
+  const resolvedParentTaskId = await assertParentTaskValid(
+    parentTaskId,
+    { projectId, workspaceId }
+  );
+
   const task = await getDb().transaction(async (trx) => {
     return createTaskRecord(
       {
         projectId,
         workspaceId,
+        parentTaskId: resolvedParentTaskId,
         title,
         description,
         status,
@@ -263,6 +333,7 @@ const getTasks = async (filters = {}, userId, userRole = "") => {
     tags,
     updatedAt,
     createdAt,
+    advancedFilters,
     page,
     limit,
     offset,
@@ -297,6 +368,7 @@ const getTasks = async (filters = {}, userId, userRole = "") => {
       tags,
       updatedAt,
       createdAt,
+      advancedFilters,
       limit,
       offset,
     }),
@@ -314,6 +386,7 @@ const getTasks = async (filters = {}, userId, userRole = "") => {
       tags,
       updatedAt,
       createdAt,
+      advancedFilters,
     }),
   ]);
 
@@ -343,6 +416,7 @@ const exportTasks = async (filters = {}, userId, userRole = "") => {
     tags,
     updatedAt,
     createdAt,
+    advancedFilters,
   } = validateExportTasksFilters(filters);
 
   const project = isSuperAdmin(userRole)
@@ -373,6 +447,7 @@ const exportTasks = async (filters = {}, userId, userRole = "") => {
     tags,
     updatedAt,
     createdAt,
+    advancedFilters,
   });
 
   return {
@@ -399,6 +474,7 @@ const exportTasks = async (filters = {}, userId, userRole = "") => {
         tags,
         updatedAt,
         createdAt,
+        advancedFilters,
       },
       exportedAt: new Date().toISOString(),
       total: tasks.length,
@@ -450,6 +526,7 @@ const importTasks = async (payload = {}, userId, userRole = "") => {
           dueDate: sourceTask.dueDate,
           completedDate: sourceTask.completedAt || sourceTask.completedDate,
           tags: sourceTask.tags,
+          parentTaskId: null,
           comments: sourceTask.initialComment || "",
           activityLogs: sourceTask.initialActivityLog || "",
         });
@@ -514,14 +591,25 @@ const getTaskById = async (taskId, userId, userRole = "") => {
   return mapTask(task);
 };
 
-const getTaskBySlug = async (taskSlug, userId, userRole = "") => {
+const getTaskBySlug = async (taskSlug, userId, userRole = "", projectId = null) => {
   const normalizedTaskSlug = String(taskSlug || "").trim();
+  const normalizedProjectId =
+    projectId === null || projectId === undefined || projectId === ""
+      ? null
+      : Number(projectId);
 
   if (!normalizedTaskSlug) {
     throw new AppError("Please provide a valid task slug.", 400);
   }
 
-  const task = await taskRepository.findBySlug(normalizedTaskSlug);
+  if (
+    normalizedProjectId !== null &&
+    (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0)
+  ) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  const task = await taskRepository.findBySlug(normalizedTaskSlug, normalizedProjectId);
 
   if (!task) {
     throw new AppError("Task not found.", 404);
@@ -576,8 +664,18 @@ const updateTask = async (taskId, payload, userId, userRole = "") => {
     assertUserExists(updates.assignedTo, "assignedTo"),
   ]);
 
+  const resolvedParentTaskId = await assertParentTaskValid(
+    updates.parentTaskId,
+    {
+      projectId: Number(task.project_id ?? task.projectId),
+      workspaceId: Number(task.workspace_id ?? task.workspaceId),
+      currentTaskId: normalizedTaskId,
+    }
+  );
+
   await taskRepository.updateById(normalizedTaskId, {
     ...updates,
+    parentTaskId: resolvedParentTaskId,
     slug: task.slug,
   });
 

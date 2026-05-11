@@ -54,6 +54,18 @@ export default function WorkspaceMain() {
     workspaceDescription: "",
   });
 
+  const handleEnterWorkspace = (workspace) => {
+    if (!workspace?.slug) {
+      return;
+    }
+
+    navigate(buildWorkspaceProjectsRoute(workspace.slug), {
+      state: {
+        workspace,
+      },
+    });
+  };
+
   useEffect(() => {
     const loadWorkspaces = async () => {
       if (!authSession?.token) {
@@ -371,7 +383,16 @@ export default function WorkspaceMain() {
                         </Box>
                         <Typography
                           level="title-lg"
-                          sx={{ fontWeight: 700, color: "#1e293b", fontSize: "0.96rem" }}
+                          onClick={() => handleEnterWorkspace(workspace)}
+                          sx={{
+                            fontWeight: 700,
+                            color: "#1e293b",
+                            fontSize: "0.96rem",
+                            cursor: "pointer",
+                            "&:hover": {
+                              color: "var(--color-primary)",
+                            },
+                          }}
                         >
                           {workspace.workspaceName}
                         </Typography>
@@ -425,16 +446,7 @@ export default function WorkspaceMain() {
                       <Tooltip title="Enter workspace" variant="soft">
                         <IconButton
                           variant="soft"
-                          onClick={() =>
-                            navigate(
-                              buildWorkspaceProjectsRoute(workspace.slug),
-                              {
-                                state: {
-                                  workspace,
-                                },
-                              }
-                            )
-                          }
+                          onClick={() => handleEnterWorkspace(workspace)}
                           sx={{
                             backgroundColor: "#eef2ff",
                             color: "var(--color-primary)",

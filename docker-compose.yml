@@ -51,6 +51,7 @@ services:
       target: dev
     container_name: BROKOD_FRONTEND
     restart: unless-stopped
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
     depends_on:
       - backend
     environment:

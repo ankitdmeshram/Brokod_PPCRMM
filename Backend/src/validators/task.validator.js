@@ -3,6 +3,31 @@ const AppError = require("../utils/app-error");
 const allowedStatuses = new Set(["todo", "in_progress", "review", "done", "blocked"]);
 const allowedPriorities = new Set(["low", "medium", "high", "critical"]);
 const allowedTaskTypes = new Set(["feature", "bug", "improvement", "research"]);
+const stringFilterOperators = new Set(["starts_with", "ends_with", "contains", "eq", "neq"]);
+const comparableFilterOperators = new Set(["eq", "neq", "gt", "lt", "gte", "lte"]);
+const booleanFilterOperators = new Set(["eq", "neq"]);
+
+const advancedTaskFilterFields = {
+  id: { type: "number" },
+  projectId: { type: "number" },
+  projectTaskNumber: { type: "number" },
+  parentTaskId: { type: "number" },
+  workspaceId: { type: "number" },
+  title: { type: "string" },
+  slug: { type: "string" },
+  description: { type: "string" },
+  status: { type: "string", normalize: (value) => value.toLowerCase() },
+  priority: { type: "string", normalize: (value) => value.toLowerCase() },
+  taskType: { type: "string", normalize: (value) => value.toLowerCase() },
+  assignedBy: { type: "number" },
+  assignedTo: { type: "number" },
+  createdBy: { type: "number" },
+  startDate: { type: "date" },
+  dueDate: { type: "date" },
+  completedAt: { type: "date" },
+  createdAt: { type: "date" },
+  updatedAt: { type: "date" },
+};
 
 const normalizeTags = (tags) => {
   if (Array.isArray(tags)) {
@@ -25,9 +50,45 @@ const validateDateValue = (label, value) => {
   }
 };
 
+const normalizeOptionalDateValue = (value, label) => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  validateDateValue(label, normalizedValue);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  const parsedDate = new Date(normalizedValue);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new AppError(`Please provide a valid ${label}.`, 400);
+  }
+
+  return parsedDate.toISOString().slice(0, 10);
+};
+
 const normalizeOptionalString = (value) => {
   const normalizedValue = String(value || "").trim();
   return normalizedValue || "";
+};
+
+const normalizeOptionalInteger = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const normalizedValue = Number(value);
+
+  if (!Number.isInteger(normalizedValue)) {
+    return Number.NaN;
+  }
+
+  return normalizedValue;
 };
 
 const normalizeOptionalDateFilter = (value, label) => {
@@ -41,12 +102,161 @@ const normalizeOptionalDateFilter = (value, label) => {
   return normalizedValue;
 };
 
+const normalizeAdvancedFilterOperator = (operator) => {
+  const normalizedOperator = String(operator || "").trim().toLowerCase();
+
+  const operatorAliases = {
+    "=": "eq",
+    "==": "eq",
+    "!=": "neq",
+    ">": "gt",
+    "<": "lt",
+    ">=": "gte",
+    "<=": "lte",
+    startswith: "starts_with",
+    "starts with": "starts_with",
+    endswith: "ends_with",
+    "ends with": "ends_with",
+  };
+
+  return operatorAliases[normalizedOperator] || normalizedOperator;
+};
+
+const normalizeBooleanValue = (value, label) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const normalizedValue = String(value || "").trim().toLowerCase();
+
+  if (normalizedValue === "true") {
+    return true;
+  }
+
+  if (normalizedValue === "false") {
+    return false;
+  }
+
+  throw new AppError(`Please provide a valid boolean value for ${label}.`, 400);
+};
+
+const normalizeAdvancedFilterValue = (field, fieldConfig, value, operator) => {
+  const label = `advancedFilters.${field}`;
+
+  if (fieldConfig.type === "string") {
+    if (!stringFilterOperators.has(operator)) {
+      throw new AppError(
+        `${field} supports starts_with, ends_with, contains, eq, and neq operators.`,
+        400
+      );
+    }
+
+    const normalizedValue = String(value ?? "").trim();
+
+    if (!normalizedValue) {
+      throw new AppError(`Please provide a value for ${field}.`, 400);
+    }
+
+    return fieldConfig.normalize ? fieldConfig.normalize(normalizedValue) : normalizedValue;
+  }
+
+  if (fieldConfig.type === "number") {
+    if (!comparableFilterOperators.has(operator)) {
+      throw new AppError(
+        `${field} supports eq, neq, gt, lt, gte, and lte operators.`,
+        400
+      );
+    }
+
+    const normalizedValue = Number(value);
+
+    if (!Number.isInteger(normalizedValue)) {
+      throw new AppError(`Please provide a valid numeric value for ${field}.`, 400);
+    }
+
+    return normalizedValue;
+  }
+
+  if (fieldConfig.type === "date") {
+    if (!comparableFilterOperators.has(operator)) {
+      throw new AppError(
+        `${field} supports eq, neq, gt, lt, gte, and lte operators.`,
+        400
+      );
+    }
+
+    const normalizedValue = normalizeOptionalDateValue(value, label);
+
+    if (!normalizedValue) {
+      throw new AppError(`Please provide a valid date value for ${field}.`, 400);
+    }
+
+    return normalizedValue;
+  }
+
+  if (fieldConfig.type === "boolean") {
+    if (!booleanFilterOperators.has(operator)) {
+      throw new AppError(`${field} supports eq and neq operators.`, 400);
+    }
+
+    return normalizeBooleanValue(value, label);
+  }
+
+  throw new AppError(`Unsupported advanced filter field: ${field}.`, 400);
+};
+
+const normalizeAdvancedFilters = (advancedFilters) => {
+  if (advancedFilters === undefined || advancedFilters === null || advancedFilters === "") {
+    return [];
+  }
+
+  let parsedFilters = advancedFilters;
+
+  if (typeof parsedFilters === "string") {
+    try {
+      parsedFilters = JSON.parse(parsedFilters);
+    } catch {
+      throw new AppError("advancedFilters must be a valid JSON array.", 400);
+    }
+  }
+
+  if (!Array.isArray(parsedFilters)) {
+    throw new AppError("advancedFilters must be an array.", 400);
+  }
+
+  return parsedFilters.map((filter, index) => {
+    const field = String(filter?.field || "").trim();
+    const operator = normalizeAdvancedFilterOperator(filter?.operator);
+
+    if (!field) {
+      throw new AppError(`advancedFilters[${index}].field is required.`, 400);
+    }
+
+    if (!operator) {
+      throw new AppError(`advancedFilters[${index}].operator is required.`, 400);
+    }
+
+    const fieldConfig = advancedTaskFilterFields[field];
+
+    if (!fieldConfig) {
+      throw new AppError(`advancedFilters[${index}].field is not supported.`, 400);
+    }
+
+    return {
+      field,
+      operator,
+      value: normalizeAdvancedFilterValue(field, fieldConfig, filter?.value, operator),
+    };
+  });
+};
+
 const normalizeTaskPayload = (payload = {}) => {
   const title = String(payload?.title || "").trim();
   const description = String(payload?.description || "").trim();
   const status = String(payload?.status || "todo").trim().toLowerCase();
   const priority = String(payload?.priority || "medium").trim().toLowerCase();
   const taskType = String(payload?.taskType || "feature").trim().toLowerCase();
+  const parentTaskId = normalizeOptionalInteger(payload?.parentTaskId);
   const assignedBy =
     payload?.assignedBy === undefined || payload?.assignedBy === null || payload?.assignedBy === ""
       ? null
@@ -55,9 +265,12 @@ const normalizeTaskPayload = (payload = {}) => {
     payload?.assignedTo === undefined || payload?.assignedTo === null || payload?.assignedTo === ""
       ? null
       : Number(payload.assignedTo);
-  const startDate = payload?.startDate?.trim() || null;
-  const dueDate = payload?.dueDate?.trim() || null;
-  const completedAt = payload?.completedAt?.trim() || payload?.completedDate?.trim() || null;
+  const startDate = normalizeOptionalDateValue(payload?.startDate, "startDate");
+  const dueDate = normalizeOptionalDateValue(payload?.dueDate, "dueDate");
+  const completedAt = normalizeOptionalDateValue(
+    payload?.completedAt ?? payload?.completedDate,
+    "completedAt"
+  );
   const tags = normalizeTags(payload?.tags);
 
   return {
@@ -66,6 +279,7 @@ const normalizeTaskPayload = (payload = {}) => {
     status,
     priority,
     taskType,
+    parentTaskId,
     assignedBy,
     assignedTo,
     startDate,
@@ -84,6 +298,7 @@ const validateCreateTaskPayload = (payload) => {
     status,
     priority,
     taskType,
+    parentTaskId,
     assignedBy,
     assignedTo,
     startDate,
@@ -118,6 +333,10 @@ const validateCreateTaskPayload = (payload) => {
     throw new AppError("taskType must be one of: feature, bug, improvement, research.", 400);
   }
 
+  if (parentTaskId !== null && (!Number.isInteger(parentTaskId) || parentTaskId <= 0)) {
+    throw new AppError("parentTaskId must be a valid integer when provided.", 400);
+  }
+
   if (assignedBy !== null && (!Number.isInteger(assignedBy) || assignedBy <= 0)) {
     throw new AppError("assignedBy must be a valid integer when provided.", 400);
   }
@@ -125,10 +344,6 @@ const validateCreateTaskPayload = (payload) => {
   if (assignedTo !== null && (!Number.isInteger(assignedTo) || assignedTo <= 0)) {
     throw new AppError("assignedTo must be a valid integer when provided.", 400);
   }
-
-  validateDateValue("startDate", startDate);
-  validateDateValue("dueDate", dueDate);
-  validateDateValue("completedAt", completedAt);
 
   if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) {
     throw new AppError("dueDate cannot be earlier than startDate.", 400);
@@ -145,6 +360,7 @@ const validateCreateTaskPayload = (payload) => {
     description,
     status,
     priority,
+    parentTaskId,
     assignedBy,
     assignedTo,
     startDate,
@@ -177,6 +393,13 @@ const validateUpdateTaskPayload = (payload) => {
   }
 
   if (
+    normalizedPayload.parentTaskId !== null &&
+    (!Number.isInteger(normalizedPayload.parentTaskId) || normalizedPayload.parentTaskId <= 0)
+  ) {
+    throw new AppError("parentTaskId must be a valid integer when provided.", 400);
+  }
+
+  if (
     normalizedPayload.assignedBy !== null &&
     (!Number.isInteger(normalizedPayload.assignedBy) || normalizedPayload.assignedBy <= 0)
   ) {
@@ -189,10 +412,6 @@ const validateUpdateTaskPayload = (payload) => {
   ) {
     throw new AppError("assignedTo must be a valid integer when provided.", 400);
   }
-
-  validateDateValue("startDate", normalizedPayload.startDate);
-  validateDateValue("dueDate", normalizedPayload.dueDate);
-  validateDateValue("completedAt", normalizedPayload.completedAt);
 
   if (
     normalizedPayload.startDate &&
@@ -232,6 +451,7 @@ const validateGetTasksFilters = (filters = {}) => {
   const tags = normalizeOptionalString(filters?.tags);
   const updatedAt = normalizeOptionalDateFilter(filters?.updatedAt, "updatedAt");
   const createdAt = normalizeOptionalDateFilter(filters?.createdAt, "createdAt");
+  const advancedFilters = normalizeAdvancedFilters(filters?.advancedFilters);
 
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new AppError("projectId is required and must be a valid integer.", 400);
@@ -271,6 +491,7 @@ const validateGetTasksFilters = (filters = {}) => {
     tags,
     updatedAt,
     createdAt,
+    advancedFilters,
     page,
     limit,
     offset: (page - 1) * limit,
@@ -294,6 +515,7 @@ const validateExportTasksFilters = (filters = {}) => {
   const tags = normalizeOptionalString(filters?.tags);
   const updatedAt = normalizeOptionalDateFilter(filters?.updatedAt, "updatedAt");
   const createdAt = normalizeOptionalDateFilter(filters?.createdAt, "createdAt");
+  const advancedFilters = normalizeAdvancedFilters(filters?.advancedFilters);
 
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new AppError("projectId is required and must be a valid integer.", 400);
@@ -325,6 +547,7 @@ const validateExportTasksFilters = (filters = {}) => {
     tags,
     updatedAt,
     createdAt,
+    advancedFilters,
   };
 };
 

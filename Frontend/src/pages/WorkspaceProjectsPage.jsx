@@ -2,9 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
 import ProjectsMain from "../components/workspace/ProjectsMain";
+import {
+  FolderIcon,
+  GridIcon,
+  NotificationIcon,
+  SettingsIcon,
+  UsersIcon,
+} from "../components/workspace/WorkspaceIcons";
+import WorkspaceOverviewMain from "../components/workspace/WorkspaceOverviewMain";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import { useAuthContext } from "../context/AuthContext";
-import { APP_ROUTES } from "../router/authRoutes";
+import {
+  APP_ROUTES,
+  buildWorkspaceOverviewRoute,
+  buildWorkspaceProjectsRoute,
+} from "../router/authRoutes";
 import { fetchWorkspaces } from "../services/workspace.service";
 import { showErrorAlert } from "../services/alert.service";
 
@@ -15,7 +27,7 @@ const formatWorkspaceTitle = (workspaceName = "") =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
-export default function WorkspaceProjectsPage() {
+export default function WorkspaceProjectsPage({ section = "projects" }) {
   const { authSession } = useAuthContext();
   const location = useLocation();
   const navigate = useNavigate();
@@ -31,6 +43,28 @@ export default function WorkspaceProjectsPage() {
   const workspaceTitle = useMemo(
     () => workspace?.workspaceName || formatWorkspaceTitle(workspaceSlug) || "Workspace",
     [workspace?.workspaceName, workspaceSlug]
+  );
+  const sidebarItems = useMemo(
+    () => [
+      {
+        key: "overview",
+        icon: <GridIcon />,
+        label: "Overview",
+        to: buildWorkspaceOverviewRoute(workspaceSlug),
+        active: section === "overview",
+      },
+      {
+        key: "projects",
+        icon: <FolderIcon />,
+        label: "Projects",
+        to: buildWorkspaceProjectsRoute(workspaceSlug),
+        active: section === "projects",
+      },
+      { key: "users", icon: <UsersIcon />, label: "Users" },
+      { key: "notifications", icon: <NotificationIcon />, label: "Notifications" },
+      { key: "settings", icon: <SettingsIcon />, label: "Settings" },
+    ],
+    [section, workspaceSlug]
   );
 
   useEffect(() => {
@@ -77,14 +111,24 @@ export default function WorkspaceProjectsPage() {
 
   return (
     <AppLayout
-      sidebar={<ProjectsSidebar workspaceName={workspaceSlug} />}
+      sidebar={
+        <ProjectsSidebar
+          sectionLabel={workspaceTitle}
+          items={sidebarItems}
+          showBackToWorkspace
+        />
+      }
       title="Project Management"
       fullName={fullName}
       initial={initial}
       userRole={userRole}
       currentYear={currentYear}
     >
-      <ProjectsMain workspace={workspace} workspaceTitle={workspaceTitle} />
+      {section === "overview" ? (
+        <WorkspaceOverviewMain workspace={workspace} workspaceTitle={workspaceTitle} />
+      ) : (
+        <ProjectsMain workspace={workspace} workspaceTitle={workspaceTitle} />
+      )}
     </AppLayout>
   );
 }

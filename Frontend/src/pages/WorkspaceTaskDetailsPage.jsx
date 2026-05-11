@@ -2,8 +2,10 @@ import {
   Autocomplete,
   Box,
   Button,
+  Checkbox,
   FormControl,
   FormLabel,
+  IconButton,
   Input,
   Option,
   Select,
@@ -12,19 +14,23 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import {
+  DeleteIcon,
+  EyeIcon,
   GridIcon,
   NotificationIcon,
+  PlusIcon,
   SettingsIcon,
   TasksIcon,
 } from "../components/workspace/WorkspaceIcons";
 import { useAuthContext } from "../context/AuthContext";
 import {
   APP_ROUTES,
+  buildTaskDetailsRoute,
   buildProjectSectionRoute,
   buildWorkspaceProjectsRoute,
 } from "../router/authRoutes";
@@ -34,7 +40,7 @@ import {
   showSuccessAlert,
 } from "../services/alert.service";
 import { fetchProjectUsers, fetchProjectBySlug } from "../services/project.service";
-import { fetchTaskBySlug, updateTask } from "../services/task.service";
+import { createTask, deleteTask, fetchAllTasks, fetchTaskBySlug, updateTask } from "../services/task.service";
 import { fetchWorkspaces } from "../services/workspace.service";
 
 const statusOptions = [
@@ -92,6 +98,7 @@ const buildTaskFormValues = (task) => ({
   status: task?.status || "todo",
   priority: task?.priority || "medium",
   taskType: task?.taskType || "feature",
+  parentTaskId: task?.parentTaskId ? String(task.parentTaskId) : "",
   assignedBy: task?.assignedBy ? String(task.assignedBy) : "",
   assignedTo: task?.assignedTo ? String(task.assignedTo) : "",
   startDate: normalizeDateInputValue(task?.startDate),
@@ -106,6 +113,7 @@ const buildUpdatePayload = (values) => ({
   status: values.status,
   priority: values.priority,
   taskType: values.taskType,
+  parentTaskId: values.parentTaskId || null,
   assignedBy: values.assignedBy || null,
   assignedTo: values.assignedTo || null,
   startDate: values.startDate || null,
@@ -113,6 +121,18 @@ const buildUpdatePayload = (values) => ({
   completedAt: values.completedDate || null,
   tags: Array.isArray(values.tags) ? values.tags : [],
 });
+
+const buildSubtaskDraftValues = () => ({
+  localId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  title: "",
+  assignedTo: "",
+  status: "todo",
+  dueDate: "",
+});
+
+const isCompletedStatus = (value) => String(value || "").trim().toLowerCase() === "done";
+const getTodayDateOnly = () => new Date().toISOString().slice(0, 10);
+const SUBTASK_AUTOSAVE_DELAY_MS = 400;
 
 export default function WorkspaceTaskDetailsPage() {
   const { authSession } = useAuthContext();
@@ -125,16 +145,24 @@ export default function WorkspaceTaskDetailsPage() {
   const [project, setProject] = useState(() => routedProject);
   const [task, setTask] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
+  const [projectTasks, setProjectTasks] = useState([]);
+  const [subtaskDrafts, setSubtaskDrafts] = useState([]);
+  const [creatingSubtaskIds, setCreatingSubtaskIds] = useState([]);
+  const [deletingSubtaskIds, setDeletingSubtaskIds] = useState([]);
+  const [updatingSubtaskIds, setUpdatingSubtaskIds] = useState([]);
   const [taskValues, setTaskValues] = useState(() => buildTaskFormValues(null));
   const [lastSavedValues, setLastSavedValues] = useState(() => buildTaskFormValues(null));
   const [saveState, setSaveState] = useState("idle");
   const [saveMessage, setSaveMessage] = useState("");
   const [isResolving, setIsResolving] = useState(true);
+  const subtaskAutosaveTimeoutsRef = useRef({});
+  const pendingSubtaskOverridesRef = useRef({});
 
   const currentYear = new Date().getFullYear();
   const firstName = authSession?.user?.firstName || "Ankit";
   const lastName = authSession?.user?.lastName || "Meshram";
   const userRole = authSession?.user?.role || "";
+  const currentUserId = authSession?.user?.id ? Number(authSession.user.id) : null;
   const fullName = `${firstName} ${lastName}`.trim();
   const initial = firstName.charAt(0).toUpperCase() || "A";
 
@@ -178,6 +206,18 @@ export default function WorkspaceTaskDetailsPage() {
     [projectUsers]
   );
 
+  const subtasks = useMemo(
+    () =>
+      projectTasks
+        .filter((projectTask) => Number(projectTask.parentTaskId) === Number(task?.id))
+        .sort(
+          (leftTask, rightTask) =>
+            Number(leftTask.projectTaskNumber || leftTask.id) -
+            Number(rightTask.projectTaskNumber || rightTask.id)
+        ),
+    [projectTasks, task?.id]
+  );
+
   const hasUnsavedChanges = useMemo(
     () =>
       JSON.stringify(buildUpdatePayload(taskValues)) !==
@@ -185,6 +225,24 @@ export default function WorkspaceTaskDetailsPage() {
     [lastSavedValues, taskValues]
   );
   const shouldBlockUnsavedChanges = hasUnsavedChanges && saveState !== "saving";
+
+  const loadProjectTasks = async (projectId, workspaceId, token) => {
+    if (!token || !projectId) {
+      setProjectTasks([]);
+      return;
+    }
+
+    try {
+      const allTasks = await fetchAllTasks(token, {
+        projectId,
+        workspaceId,
+      });
+
+      setProjectTasks(allTasks);
+    } catch {
+      setProjectTasks([]);
+    }
+  };
 
   useEffect(() => {
     const resolveContext = async () => {
@@ -220,7 +278,9 @@ export default function WorkspaceTaskDetailsPage() {
           routedProject?.slug === projectSlug ? routedProject : project?.slug === projectSlug ? project : null;
 
         if (!resolvedProject && projectSlug) {
-          const projectResult = await fetchProjectBySlug(projectSlug, authSession.token);
+          const projectResult = await fetchProjectBySlug(projectSlug, authSession.token, {
+            workspaceId: resolvedWorkspace.id,
+          });
           resolvedProject = projectResult?.project || null;
         }
 
@@ -246,7 +306,9 @@ export default function WorkspaceTaskDetailsPage() {
         setSaveState("idle");
         setSaveMessage("");
 
-        const taskResult = await fetchTaskBySlug(taskSlug, authSession.token);
+        const taskResult = await fetchTaskBySlug(taskSlug, authSession.token, {
+          projectId: resolvedProject.id,
+        });
         const resolvedTask = taskResult?.task || null;
 
         if (
@@ -274,12 +336,14 @@ export default function WorkspaceTaskDetailsPage() {
     void resolveContext();
   }, [
     authSession?.token,
+    project,
     project?.id,
     project?.slug,
     projectSlug,
     routedProject,
     routedWorkspace,
     taskSlug,
+    workspace,
     workspace?.id,
     workspace?.slug,
     workspaceSlug,
@@ -304,14 +368,28 @@ export default function WorkspaceTaskDetailsPage() {
   }, [authSession?.token, project?.id]);
 
   useEffect(() => {
+    void loadProjectTasks(project?.id, workspace?.id, authSession?.token);
+  }, [authSession?.token, project?.id, workspace?.id]);
+
+  useEffect(() => {
     if (task) {
       const nextValues = buildTaskFormValues(task);
       setTaskValues(nextValues);
       setLastSavedValues(nextValues);
+      setSubtaskDrafts([]);
       setSaveState("idle");
       setSaveMessage("");
     }
   }, [task]);
+
+  useEffect(
+    () => () => {
+      Object.values(subtaskAutosaveTimeoutsRef.current).forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     if (!shouldBlockUnsavedChanges) {
@@ -382,6 +460,11 @@ export default function WorkspaceTaskDetailsPage() {
 
       if (updatedTask) {
         setTask(updatedTask);
+        setProjectTasks((currentTasks) =>
+          currentTasks.map((projectTask) =>
+            Number(projectTask.id) === Number(updatedTask.id) ? updatedTask : projectTask
+          )
+        );
         const normalizedValues = buildTaskFormValues(updatedTask);
         setTaskValues(normalizedValues);
         setLastSavedValues(normalizedValues);
@@ -416,6 +499,309 @@ export default function WorkspaceTaskDetailsPage() {
 
   const handleSaveChanges = () => {
     void saveTaskValues(taskValues);
+  };
+
+  const handleAddSubtaskDraft = () => {
+    setSubtaskDrafts((currentDrafts) => [...currentDrafts, buildSubtaskDraftValues()]);
+  };
+
+  const handleSubtaskDraftChange = (localId, field, value) => {
+    setSubtaskDrafts((currentDrafts) =>
+      currentDrafts.map((draft) =>
+        draft.localId === localId
+          ? {
+              ...draft,
+              [field]: value,
+            }
+          : draft
+      )
+    );
+  };
+
+  const handleSubtaskDraftCompletionToggle = (localId, checked) => {
+    handleSubtaskDraftChange(localId, "status", checked ? "done" : "todo");
+  };
+
+  const handleRemoveSubtaskDraft = (localId) => {
+    setSubtaskDrafts((currentDrafts) => currentDrafts.filter((draft) => draft.localId !== localId));
+  };
+
+  const handleCreateSubtask = async (draft) => {
+    if (!authSession?.token || !project?.id || !workspace?.id || !task?.id) {
+      await showErrorAlert(
+        "Task context missing",
+        "We could not resolve the current task, project, or workspace."
+      );
+      return;
+    }
+
+    setCreatingSubtaskIds((currentIds) => [...currentIds, draft.localId]);
+
+    try {
+      const result = await createTask(
+        {
+          title: String(draft.title || "").trim(),
+          assignedBy: currentUserId || undefined,
+          assignedTo: draft.assignedTo || undefined,
+          status: draft.status || "todo",
+          projectId: Number(project.id),
+          workspaceId: Number(workspace.id),
+          parentTaskId: Number(task.id),
+          dueDate: draft.dueDate || undefined,
+        },
+        authSession.token
+      );
+
+      setSubtaskDrafts((currentDrafts) =>
+        currentDrafts.filter((currentDraft) => currentDraft.localId !== draft.localId)
+      );
+      await loadProjectTasks(project.id, workspace.id, authSession.token);
+      await showSuccessAlert(
+        "Subtask created",
+        result?.message || "The subtask has been created successfully."
+      );
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to create subtask",
+        error.message || "Something went wrong while creating the subtask."
+      );
+    } finally {
+      setCreatingSubtaskIds((currentIds) => currentIds.filter((id) => id !== draft.localId));
+    }
+  };
+
+  const updateSubtaskInState = (subtaskId, updates) => {
+    setProjectTasks((currentTasks) =>
+      currentTasks.map((projectTask) =>
+        Number(projectTask.id) === Number(subtaskId)
+          ? {
+              ...projectTask,
+              ...updates,
+            }
+          : projectTask
+      )
+    );
+  };
+
+  const buildSubtaskUpdatePayload = (subtask, overrides = {}) => ({
+    title: String(overrides.title ?? subtask.title ?? "").trim(),
+    description: String(overrides.description ?? subtask.description ?? "").trim(),
+    status: overrides.status ?? subtask.status ?? "todo",
+    priority: overrides.priority ?? subtask.priority ?? "medium",
+    taskType: overrides.taskType ?? subtask.taskType ?? "feature",
+    parentTaskId:
+      overrides.parentTaskId ??
+      (subtask.parentTaskId === null || subtask.parentTaskId === undefined
+        ? null
+        : Number(subtask.parentTaskId)),
+    assignedBy:
+      overrides.assignedBy ??
+      (subtask.assignedBy === null || subtask.assignedBy === undefined
+        ? null
+        : String(subtask.assignedBy)),
+    assignedTo:
+      overrides.assignedTo ??
+      (subtask.assignedTo === null || subtask.assignedTo === undefined
+        ? null
+        : String(subtask.assignedTo)),
+    startDate: overrides.startDate ?? normalizeDateInputValue(subtask.startDate),
+    dueDate: overrides.dueDate ?? normalizeDateInputValue(subtask.dueDate),
+    completedAt: overrides.completedAt ?? normalizeDateInputValue(subtask.completedAt),
+    tags: Array.isArray(overrides.tags) ? overrides.tags : Array.isArray(subtask.tags) ? subtask.tags : [],
+  });
+
+  const persistSubtaskUpdate = async (subtaskId, overrides = {}) => {
+    const normalizedSubtaskId = Number(subtaskId);
+    const subtask = projectTasks.find(
+      (projectTask) => Number(projectTask.id) === normalizedSubtaskId
+    );
+
+    if (!authSession?.token || !subtask) {
+      return;
+    }
+
+    if (updatingSubtaskIds.includes(normalizedSubtaskId)) {
+      scheduleSubtaskAutosave(normalizedSubtaskId, overrides);
+      return;
+    }
+
+    delete pendingSubtaskOverridesRef.current[normalizedSubtaskId];
+
+    setUpdatingSubtaskIds((currentIds) => [...currentIds, normalizedSubtaskId]);
+
+    try {
+      const result = await updateTask(
+        normalizedSubtaskId,
+        buildSubtaskUpdatePayload(subtask, overrides),
+        authSession.token
+      );
+
+      if (result?.task) {
+        updateSubtaskInState(normalizedSubtaskId, result.task);
+      }
+
+      await showSuccessAlert(
+        "Subtask updated",
+        result?.message || "The subtask has been updated successfully."
+      );
+    } catch (error) {
+      await loadProjectTasks(project?.id, workspace?.id, authSession.token);
+      await showErrorAlert(
+        "Unable to update subtask",
+        error.message || "Something went wrong while saving the subtask."
+      );
+    } finally {
+      setUpdatingSubtaskIds((currentIds) =>
+        currentIds.filter((id) => id !== normalizedSubtaskId)
+      );
+    }
+  };
+
+  const scheduleSubtaskAutosave = (subtaskId, overrides = {}) => {
+    const normalizedSubtaskId = Number(subtaskId);
+    const existingOverrides = pendingSubtaskOverridesRef.current[normalizedSubtaskId] || {};
+
+    pendingSubtaskOverridesRef.current[normalizedSubtaskId] = {
+      ...existingOverrides,
+      ...overrides,
+    };
+
+    if (subtaskAutosaveTimeoutsRef.current[normalizedSubtaskId]) {
+      window.clearTimeout(subtaskAutosaveTimeoutsRef.current[normalizedSubtaskId]);
+    }
+
+    subtaskAutosaveTimeoutsRef.current[normalizedSubtaskId] = window.setTimeout(() => {
+      delete subtaskAutosaveTimeoutsRef.current[normalizedSubtaskId];
+      void persistSubtaskUpdate(
+        normalizedSubtaskId,
+        pendingSubtaskOverridesRef.current[normalizedSubtaskId] || {}
+      );
+    }, SUBTASK_AUTOSAVE_DELAY_MS);
+  };
+
+  const flushSubtaskAutosave = async (subtaskId) => {
+    const normalizedSubtaskId = Number(subtaskId);
+    const pendingOverrides = pendingSubtaskOverridesRef.current[normalizedSubtaskId];
+
+    if (!pendingOverrides) {
+      return;
+    }
+
+    if (subtaskAutosaveTimeoutsRef.current[normalizedSubtaskId]) {
+      window.clearTimeout(subtaskAutosaveTimeoutsRef.current[normalizedSubtaskId]);
+      delete subtaskAutosaveTimeoutsRef.current[normalizedSubtaskId];
+    }
+
+    await persistSubtaskUpdate(normalizedSubtaskId, pendingOverrides);
+  };
+
+  const handleExistingSubtaskFieldChange = (subtaskId, field, value) => {
+    updateSubtaskInState(subtaskId, { [field]: value });
+  };
+
+  const handleExistingSubtaskCompletionToggle = (subtask, checked) => {
+    const nextStatus = checked ? "done" : "todo";
+    const nextCompletedAt = checked
+      ? normalizeDateInputValue(subtask.completedAt) || getTodayDateOnly()
+      : null;
+
+    updateSubtaskInState(subtask.id, {
+      status: nextStatus,
+      completedAt: nextCompletedAt,
+    });
+
+    scheduleSubtaskAutosave(subtask.id, {
+      status: nextStatus,
+      completedAt: nextCompletedAt,
+    });
+  };
+
+  const handleOpenSubtask = (subtask) => {
+    if (!workspace?.slug || !project?.slug || !subtask?.slug) {
+      return;
+    }
+    const nextRoute = buildTaskDetailsRoute(workspace.slug, project.slug, subtask.slug);
+
+    if (!shouldBlockUnsavedChanges) {
+      navigate(nextRoute, {
+        state: {
+          workspace,
+          project,
+          task: subtask,
+        },
+      });
+      return;
+    }
+
+    void (async () => {
+      const confirmation = await showConfirmAlert(
+        "Save changes before leaving?",
+        "You have unsaved task changes.",
+        {
+          confirmButtonText: "Save",
+          cancelButtonText: "Discard",
+          allowOutsideClick: false,
+        }
+      );
+
+      if (confirmation.isConfirmed) {
+        const didSave = await saveTaskValues(taskValues);
+
+        if (!didSave) {
+          return;
+        }
+      } else if (confirmation.dismiss !== "cancel") {
+        return;
+      }
+
+      navigate(nextRoute, {
+        state: {
+          workspace,
+          project,
+          task: subtask,
+        },
+      });
+    })();
+  };
+
+  const handleDeleteSubtask = async (subtask) => {
+    if (!authSession?.token || !subtask?.id) {
+      await showErrorAlert("Signin required", "Please sign in again to delete the subtask.");
+      return;
+    }
+
+    const confirmation = await showConfirmAlert(
+      "Delete subtask?",
+      `This will remove ${subtask.title} from the task hierarchy.`,
+      {
+        confirmButtonText: "Delete",
+        cancelButtonText: "Cancel",
+      }
+    );
+
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    setDeletingSubtaskIds((currentIds) => [...currentIds, Number(subtask.id)]);
+
+    try {
+      const result = await deleteTask(subtask.id, authSession.token);
+      await loadProjectTasks(project?.id, workspace?.id, authSession.token);
+      await showSuccessAlert(
+        "Subtask deleted",
+        result?.message || "The subtask has been deleted successfully."
+      );
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to delete subtask",
+        error.message || "Something went wrong while deleting the subtask."
+      );
+    } finally {
+      setDeletingSubtaskIds((currentIds) =>
+        currentIds.filter((id) => id !== Number(subtask.id))
+      );
+    }
   };
 
   const handleAttemptNavigation = async (to) => {
@@ -510,6 +896,45 @@ export default function WorkspaceTaskDetailsPage() {
               <Box sx={{ px: 2.1, py: 2.1 }}>
                 <Stack spacing={2.1}>
                 <Stack spacing={1}>
+                  {task?.parentTaskTitle ? (
+                    <Button
+                      variant="plain"
+                      color="neutral"
+                      onClick={() => {
+                        if (!task.parentTaskSlug || !workspace?.slug || !project?.slug) {
+                          return;
+                        }
+
+                        navigate(
+                          buildTaskDetailsRoute(
+                            workspace.slug,
+                            project.slug,
+                            task.parentTaskSlug
+                          ),
+                          {
+                            state: {
+                              workspace,
+                              project,
+                            },
+                          }
+                        );
+                      }}
+                      sx={{
+                        alignSelf: "flex-start",
+                        px: 0,
+                        py: 0,
+                        minHeight: "auto",
+                        color: "#60708e",
+                        fontWeight: 600,
+                        "&:hover": {
+                          backgroundColor: "transparent",
+                          color: "#3155ff",
+                        },
+                      }}
+                    >
+                      {`Parent Service - ${task.parentTaskTitle}`}
+                    </Button>
+                  ) : null}
                   <Input
                     value={taskValues.title}
                     onChange={(event) => handleFieldChange("title", event.target.value)}
@@ -552,6 +977,329 @@ export default function WorkspaceTaskDetailsPage() {
                       onChange={(event) => handleFieldChange("description", event.target.value)}
                     />
                   </FormControl>
+                  <Stack alignItems="flex-start" spacing={1}>
+                    <Button
+                      variant="soft"
+                      color="primary"
+                      startDecorator={<PlusIcon />}
+                      onClick={handleAddSubtaskDraft}
+                      sx={{ borderRadius: "10px", fontWeight: 600 }}
+                    >
+                      Add sub task
+                    </Button>
+                  </Stack>
+                  <Sheet
+                    variant="soft"
+                    sx={{
+                      borderRadius: "12px",
+                      border: "1px solid rgba(220, 226, 244, 0.95)",
+                      backgroundColor: "#fbfcff",
+                      p: 1.25,
+                    }}
+                  >
+                    <Stack spacing={1.1}>
+                      <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
+                        Subtasks
+                      </Typography>
+
+                      {subtaskDrafts.map((draft) => (
+                        <Sheet
+                          key={draft.localId}
+                          variant="outlined"
+                          sx={{
+                            borderRadius: "12px",
+                            borderColor: "rgba(220, 226, 244, 0.95)",
+                            backgroundColor: "#fff",
+                            p: 1.15,
+                          }}
+                        >
+                          <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={1}
+                            alignItems={{ xs: "stretch", md: "center" }}
+                          >
+                            <FormControl
+                              sx={{
+                                display: "flex",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Checkbox
+                                checked={isCompletedStatus(draft.status)}
+                                onChange={(event) =>
+                                  handleSubtaskDraftCompletionToggle(
+                                    draft.localId,
+                                    event.target.checked
+                                  )
+                                }
+                              />
+                            </FormControl>
+                            <FormControl sx={{ flex: 1.8 }}>
+                              <Input
+                                value={draft.title}
+                                onChange={(event) =>
+                                  handleSubtaskDraftChange(
+                                    draft.localId,
+                                    "title",
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="Title"
+                              />
+                            </FormControl>
+                            <FormControl sx={{ flex: 1.2 }}>
+                              <Select
+                                value={draft.assignedTo || null}
+                                onChange={(_, value) =>
+                                  handleSubtaskDraftChange(
+                                    draft.localId,
+                                    "assignedTo",
+                                    value || ""
+                                  )
+                                }
+                                placeholder="Select assignee"
+                              >
+                                {projectUserOptions.map((option) => (
+                                  <Option key={option.id} value={String(option.id)}>
+                                    {option.label}
+                                  </Option>
+                                ))}
+                                placeholder="Assigned to"
+                              </Select>
+                            </FormControl>
+                            <FormControl sx={{ flex: 1 }}>
+                              <Input
+                                type="date"
+                                value={draft.dueDate}
+                                onChange={(event) =>
+                                  handleSubtaskDraftChange(
+                                    draft.localId,
+                                    "dueDate",
+                                    event.target.value
+                                  )
+                                }
+                                slotProps={{ input: { "aria-label": "Due date" } }}
+                              />
+                            </FormControl>
+                            <FormControl sx={{ flex: 1 }}>
+                              <Select
+                                value={draft.status}
+                                onChange={(_, value) =>
+                                  handleSubtaskDraftChange(
+                                    draft.localId,
+                                    "status",
+                                    value || "todo"
+                                  )
+                                }
+                              >
+                                {statusOptions.map((option) => (
+                                  <Option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </Option>
+                                ))}
+                                placeholder="Status"
+                              </Select>
+                            </FormControl>
+                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                              <Button
+                                loading={creatingSubtaskIds.includes(draft.localId)}
+                                onClick={() => {
+                                  void handleCreateSubtask(draft);
+                                }}
+                                sx={{ color: "var(--color-font-secondary)" }}
+                              >
+                                Create
+                              </Button>
+                              <IconButton
+                                variant="plain"
+                                color="danger"
+                                onClick={() => handleRemoveSubtaskDraft(draft.localId)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Stack>
+                          </Stack>
+                        </Sheet>
+                      ))}
+
+                      {subtasks.map((subtask) => (
+                        <Sheet
+                          key={subtask.id}
+                          variant="outlined"
+                          sx={{
+                            borderRadius: "12px",
+                            borderColor: "rgba(220, 226, 244, 0.95)",
+                            backgroundColor: "#fff",
+                            p: 1.15,
+                          }}
+                        >
+                          <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={1}
+                            alignItems={{ xs: "stretch", md: "center" }}
+                          >
+                            <FormControl
+                              sx={{
+                                display: "flex",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Checkbox
+                                checked={isCompletedStatus(subtask.status)}
+                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                                onChange={(event) =>
+                                  handleExistingSubtaskCompletionToggle(
+                                    subtask,
+                                    event.target.checked
+                                  )
+                                }
+                              />
+                            </FormControl>
+                            <FormControl sx={{ flex: 1.8 }}>
+                              <Input
+                                value={subtask.title || ""}
+                                placeholder="Title"
+                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                                onChange={(event) =>
+                                  {
+                                    const nextTitle = event.target.value;
+
+                                    handleExistingSubtaskFieldChange(
+                                      subtask.id,
+                                      "title",
+                                      nextTitle
+                                    );
+                                    scheduleSubtaskAutosave(subtask.id, {
+                                      title: nextTitle,
+                                    });
+                                  }
+                                }
+                                onBlur={() => {
+                                  void flushSubtaskAutosave(subtask.id);
+                                }}
+                              />
+                            </FormControl>
+                            <FormControl sx={{ flex: 1.2 }}>
+                              <Select
+                                value={subtask.assignedTo ? String(subtask.assignedTo) : null}
+                                placeholder="Assigned to"
+                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                                onChange={(_, value) => {
+                                  handleExistingSubtaskFieldChange(
+                                    subtask.id,
+                                    "assignedTo",
+                                    value || null
+                                  );
+
+                                  const selectedOption = projectUserOptions.find(
+                                    (option) => String(option.id) === String(value || "")
+                                  );
+
+                                  handleExistingSubtaskFieldChange(
+                                    subtask.id,
+                                    "assignedToName",
+                                    selectedOption?.label || null
+                                  );
+
+                                  scheduleSubtaskAutosave(subtask.id, {
+                                    assignedTo: value || null,
+                                  });
+                                }}
+                              >
+                                {projectUserOptions.map((option) => (
+                                  <Option key={option.id} value={String(option.id)}>
+                                    {option.label}
+                                  </Option>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <FormControl sx={{ flex: 1 }}>
+                              <Input
+                                value={normalizeDateInputValue(subtask.dueDate)}
+                                placeholder="Due date"
+                                type="date"
+                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                                onChange={(event) =>
+                                  {
+                                    const nextDueDate = event.target.value;
+
+                                    handleExistingSubtaskFieldChange(
+                                      subtask.id,
+                                      "dueDate",
+                                      nextDueDate
+                                    );
+                                    scheduleSubtaskAutosave(subtask.id, {
+                                      dueDate: nextDueDate,
+                                    });
+                                  }
+                                }
+                                onBlur={() => {
+                                  void flushSubtaskAutosave(subtask.id);
+                                }}
+                              />
+                            </FormControl>
+                            <FormControl sx={{ flex: 1 }}>
+                              <Select
+                                value={subtask.status || null}
+                                placeholder="Status"
+                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                                onChange={(_, value) => {
+                                  const nextStatus = value || "todo";
+                                  const nextCompletedAt = isCompletedStatus(nextStatus)
+                                    ? normalizeDateInputValue(subtask.completedAt) || getTodayDateOnly()
+                                    : null;
+
+                                  handleExistingSubtaskFieldChange(subtask.id, "status", nextStatus);
+                                  handleExistingSubtaskFieldChange(
+                                    subtask.id,
+                                    "completedAt",
+                                    nextCompletedAt
+                                  );
+
+                                  scheduleSubtaskAutosave(subtask.id, {
+                                    status: nextStatus,
+                                    completedAt: nextCompletedAt,
+                                  });
+                                }}
+                              >
+                                {statusOptions.map((option) => (
+                                  <Option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </Option>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                              <IconButton
+                                variant="plain"
+                                color="neutral"
+                                onClick={() => handleOpenSubtask(subtask)}
+                              >
+                                <EyeIcon />
+                              </IconButton>
+                              <IconButton
+                                variant="plain"
+                                color="danger"
+                                loading={deletingSubtaskIds.includes(Number(subtask.id))}
+                                disabled={deletingSubtaskIds.includes(Number(subtask.id))}
+                                onClick={() => {
+                                  void handleDeleteSubtask(subtask);
+                                }}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Stack>
+                          </Stack>
+                        </Sheet>
+                      ))}
+
+                      {subtaskDrafts.length === 0 && subtasks.length === 0 ? (
+                        <Typography level="body-sm" sx={{ color: "#60708e" }}>
+                          No subtasks added yet.
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </Sheet>
                 </Stack>
 
                 <Stack spacing={1}>

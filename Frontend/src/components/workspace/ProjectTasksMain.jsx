@@ -8,7 +8,13 @@ import {
   showSuccessAlert,
 } from "../../services/alert.service";
 import { fetchProjectUsers } from "../../services/project.service";
-import { createTask, deleteTask, exportTasksJson, fetchTasks, importTasksJson } from "../../services/task.service";
+import {
+  createTask,
+  deleteTask,
+  exportTasksJson,
+  fetchTasks,
+  importTasksJson,
+} from "../../services/task.service";
 import {
   buildTaskDetailsRoute,
 } from "../../router/authRoutes";
@@ -161,6 +167,10 @@ const mapApiTaskToTableRow = (task) => ({
   dueDate: task.dueDate || "",
   assignedTo: task.assignedToName || "-",
   assignedBy: task.assignedByName || "-",
+  parentTaskId: task.parentTaskId || null,
+  parentTaskTitle: task.parentTaskTitle || "",
+  parentTaskProjectTaskNumber: task.parentTaskProjectTaskNumber || null,
+  subtasksCount: Number(task.subtasksCount || 0),
   tags: Array.isArray(task.tags) ? task.tags : [],
   updatedAt: task.updatedAt || "",
   createdAt: task.createdAt || "",
@@ -168,7 +178,6 @@ const mapApiTaskToTableRow = (task) => ({
   description: task.description || "",
   createdBy: task.createdByName || "-",
   startDate: task.startDate || "",
-  dueDate: task.dueDate || "",
   completedDate: task.completedAt || "",
   taskType: toTitleCase(task.taskType),
   comments: Number(task.commentsCount || 0),
@@ -1059,6 +1068,20 @@ export default function ProjectTasksMain({
                           {task.title}
                         </Box>
                       </Typography>
+                      {task.parentTaskProjectTaskNumber || task.subtasksCount > 0 ? (
+                        <Stack direction="row" spacing={0.75} sx={{ mt: 0.45 }} flexWrap="wrap" useFlexGap>
+                          {task.parentTaskProjectTaskNumber ? (
+                            <Typography level="body-xs" sx={{ color: "#7b8596", fontWeight: 600 }}>
+                              Subtask of {formatTaskCode(task.parentTaskProjectTaskNumber)}
+                            </Typography>
+                          ) : null}
+                          {task.subtasksCount > 0 ? (
+                            <Typography level="body-xs" sx={{ color: "#3155ff", fontWeight: 600 }}>
+                              {task.subtasksCount} subtask{task.subtasksCount === 1 ? "" : "s"}
+                            </Typography>
+                          ) : null}
+                        </Stack>
+                      ) : null}
                     </td>
                     <td>
                       <Chip
