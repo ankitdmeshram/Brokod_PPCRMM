@@ -1,0 +1,83 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: BROKOD_DB
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-BROKOD}
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    expose:
+      - "3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./Backend
+      target: prod
+    container_name: BROKOD_BACKEND
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-http://localhost}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-.env}
+      DB_HOST: db
+      DB_USER: root
+      DB_PASS: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      DB_DATABASE: ${MYSQL_DATABASE:-BROKOD}
+    expose:
+      - "5000"
+
+  frontend:
+    build:
+      context: ./Frontend
+      target: build
+      args:
+        VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
+        VITE_BASE_PATH: ${VITE_BASE_PATH:-/projects/}
+    container_name: BROKOD_FRONTEND
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "80"
+
+  web:
+    build:
+      context: ./web
+      target: runner
+    container_name: BROKOD_WEB
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: BROKOD_NGINX
+    restart: unless-stopped
+    depends_on:
+      - web
+      - frontend
+      - backend
+    ports:
+      - "${APP_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx/default.prod.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  mysql_data:
