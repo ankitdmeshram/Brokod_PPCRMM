@@ -23,6 +23,11 @@ const statusOptions = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const accessOptions = [
+  { value: "private", label: "Private" },
+  { value: "public", label: "Public" },
+];
+
 const tagSuggestions = ["Design", "Frontend", "Backend", "Mobile", "UI", "Data"];
 
 export default function CreateProjectModal({
@@ -84,6 +89,21 @@ export default function CreateProjectModal({
                   {statusOptions.map((status) => (
                     <Option key={status.value} value={status.value}>
                       {status.label}
+                    </Option>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl sx={{ flex: 1 }}>
+                <FormLabel>Project access</FormLabel>
+                <Select
+                  value={values.access}
+                  onChange={(_, value) => onChange("access", value || "")}
+                  placeholder="Select project access"
+                >
+                  {accessOptions.map((access) => (
+                    <Option key={access.value} value={access.value}>
+                      {access.label}
                     </Option>
                   ))}
                 </Select>

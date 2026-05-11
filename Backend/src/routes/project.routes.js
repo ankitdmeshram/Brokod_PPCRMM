@@ -2,6 +2,12 @@ const { Router } = require("express");
 
 const projectController = require("../controllers/project.controller");
 const { requireAuth } = require("../middlewares/auth.middleware");
+const {
+  requireActiveWorkspaceUserByProjectId,
+  requireActiveWorkspaceUserByProjectSlug,
+  requireActiveWorkspaceUserFromBody,
+  requireActiveWorkspaceUserFromQueryWhenPresent,
+} = require("../middlewares/workspace-access.middleware");
 
 const router = Router();
 
@@ -122,6 +128,21 @@ const router = Router();
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *   post:
+ *     tags:
+ *       - Projects
+ *     summary: Add a user to a project
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       201:
+ *         description: Project user added successfully
  * /api/projects/{projectId}:
  *   get:
  *     tags:
@@ -253,12 +274,55 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/", requireAuth, projectController.getProjects);
-router.post("/", requireAuth, projectController.createProject);
-router.get("/slug/:projectSlug", requireAuth, projectController.getProjectBySlug);
-router.get("/:projectId/users", requireAuth, projectController.getProjectUsers);
-router.get("/:projectId", requireAuth, projectController.getProjectById);
-router.put("/:projectId", requireAuth, projectController.updateProject);
-router.delete("/:projectId", requireAuth, projectController.deleteProject);
+router.get("/", requireAuth, requireActiveWorkspaceUserFromQueryWhenPresent, projectController.getProjects);
+router.post("/", requireAuth, requireActiveWorkspaceUserFromBody, projectController.createProject);
+router.get(
+  "/slug/:projectSlug",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectSlug,
+  projectController.getProjectBySlug
+);
+router.get(
+  "/:projectId/users",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.getProjectUsers
+);
+router.post(
+  "/:projectId/users",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.addProjectUser
+);
+router.patch(
+  "/:projectId/users/:userId",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.updateProjectUser
+);
+router.delete(
+  "/:projectId/users/:userId",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.deleteProjectUser
+);
+router.get(
+  "/:projectId",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.getProjectById
+);
+router.put(
+  "/:projectId",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.updateProject
+);
+router.delete(
+  "/:projectId",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.deleteProject
+);
 
 module.exports = router;

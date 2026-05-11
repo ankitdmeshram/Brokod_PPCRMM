@@ -2,6 +2,10 @@ const { Router } = require("express");
 
 const workspaceController = require("../controllers/workspace.controller");
 const { requireAuth } = require("../middlewares/auth.middleware");
+const {
+  requireActiveWorkspaceUser,
+  requireWorkspaceOwner,
+} = require("../middlewares/workspace-access.middleware");
 
 const router = Router();
 
@@ -67,6 +71,78 @@ const router = Router();
  *       401:
  *         description: Missing or invalid token
  * /api/workspaces/{workspaceId}:
+ *   get:
+ *     tags:
+ *       - Workspaces
+ *     summary: Fetch users for a workspace
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Workspace users fetched successfully
+ *       401:
+ *         description: Missing or invalid token
+ *       404:
+ *         description: Workspace not found
+ *   post:
+ *     tags:
+ *       - Workspaces
+ *     summary: Invite a user to a workspace
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - role
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [owner, admin, member]
+ *     responses:
+ *       201:
+ *         description: Workspace user invited successfully
+ *       401:
+ *         description: Missing or invalid token
+ *       403:
+ *         description: Only the workspace owner can invite users
+ *       404:
+ *         description: Workspace not found
  *   put:
  *     tags:
  *       - Workspaces
@@ -127,7 +203,53 @@ const router = Router();
  */
 router.get("/", requireAuth, workspaceController.getWorkspaces);
 router.post("/", requireAuth, workspaceController.createWorkspace);
-router.put("/:workspaceId", requireAuth, workspaceController.updateWorkspace);
-router.delete("/:workspaceId", requireAuth, workspaceController.deleteWorkspace);
+router.get(
+  "/:workspaceId/users",
+  requireAuth,
+  requireActiveWorkspaceUser,
+  workspaceController.getWorkspaceUsers
+);
+router.post(
+  "/:workspaceId/users",
+  requireAuth,
+  requireActiveWorkspaceUser,
+  requireWorkspaceOwner,
+  workspaceController.inviteWorkspaceUser
+);
+router.patch(
+  "/:workspaceId/users/:userId",
+  requireAuth,
+  requireActiveWorkspaceUser,
+  requireWorkspaceOwner,
+  workspaceController.updateWorkspaceUser
+);
+router.patch(
+  "/:workspaceId/users/:userId/status",
+  requireAuth,
+  requireActiveWorkspaceUser,
+  requireWorkspaceOwner,
+  workspaceController.updateWorkspaceUserStatus
+);
+router.delete(
+  "/:workspaceId/users/:userId",
+  requireAuth,
+  requireActiveWorkspaceUser,
+  requireWorkspaceOwner,
+  workspaceController.deleteWorkspaceUser
+);
+router.put(
+  "/:workspaceId",
+  requireAuth,
+  requireActiveWorkspaceUser,
+  requireWorkspaceOwner,
+  workspaceController.updateWorkspace
+);
+router.delete(
+  "/:workspaceId",
+  requireAuth,
+  requireActiveWorkspaceUser,
+  requireWorkspaceOwner,
+  workspaceController.deleteWorkspace
+);
 
 module.exports = router;

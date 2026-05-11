@@ -4,7 +4,10 @@ async function parseApiResponse(response) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(data?.message || "Something went wrong. Please try again.");
+    const error = new Error(data?.message || "Something went wrong. Please try again.");
+    error.status = response.status;
+    error.response = data;
+    throw error;
   }
 
   return data;

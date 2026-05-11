@@ -183,6 +183,10 @@ const swaggerSpec = swaggerJsdoc({
               type: "string",
               example: "in_progress",
             },
+            access: {
+              type: "string",
+              example: "private",
+            },
             startDate: {
               type: "string",
               format: "date",
@@ -315,6 +319,10 @@ const swaggerSpec = swaggerJsdoc({
               type: "string",
               example: "in_progress",
             },
+            access: {
+              type: "string",
+              example: "private",
+            },
             startDate: {
               type: "string",
               format: "date",
@@ -359,6 +367,10 @@ const swaggerSpec = swaggerJsdoc({
             status: {
               type: "string",
               example: "on_hold",
+            },
+            access: {
+              type: "string",
+              example: "public",
             },
             startDate: {
               type: "string",

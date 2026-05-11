@@ -4,7 +4,10 @@ async function parseApiResponse(response) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(data?.message || "Something went wrong. Please try again.");
+    const error = new Error(data?.message || "Something went wrong. Please try again.");
+    error.status = response.status;
+    error.response = data;
+    throw error;
   }
 
   return data;
@@ -86,6 +89,43 @@ export async function fetchProjectBySlug(projectSlug, token, options = {}) {
 export async function fetchProjectUsers(projectId, token) {
   const response = await fetch(`${PROJECT_API_BASE}/${projectId}/users`, {
     method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function addProjectUser(projectId, payload, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function updateProjectUser(projectId, userId, payload, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/users/${userId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function deleteProjectUser(projectId, userId, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/users/${userId}`, {
+    method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
     },

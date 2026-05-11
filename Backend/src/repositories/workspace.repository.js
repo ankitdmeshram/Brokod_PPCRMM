@@ -40,6 +40,7 @@ const findAllByUserId = async (userId, trx = getDb()) => {
       "workspace_users.status as membership_status"
     )
     .where("workspace_users.user_id", userId)
+    .andWhere("workspace_users.status", "active")
     .whereNull("workspaces.deleted_at")
     .orderBy("workspaces.created_at", "desc");
 };
@@ -54,6 +55,7 @@ const findByIdForUser = async (id, userId, trx = getDb()) => {
     )
     .where("workspaces.id", id)
     .andWhere("workspace_users.user_id", userId)
+    .andWhere("workspace_users.status", "active")
     .whereNull("workspaces.deleted_at")
     .first();
 };

@@ -84,8 +84,8 @@ const countAll = async (filters = {}, trx = getDb()) => {
   return Number(result?.count || 0);
 };
 
-const create = async ({ firstName, lastName, email, phone, password }) => {
-  const result = await getDb()("users").insert({
+const create = async ({ firstName, lastName, email, phone, password }, trx = getDb()) => {
+  const result = await trx("users").insert({
     first_name: firstName,
     last_name: lastName,
     email,
@@ -106,7 +106,7 @@ const updateLastLogin = async (userId) => {
     });
 };
 
-const updateById = async (userId, updates) => {
+const updateById = async (userId, updates, trx = getDb()) => {
   const mappedUpdates = {};
 
   if (updates.firstName !== undefined) {
@@ -133,7 +133,7 @@ const updateById = async (userId, updates) => {
     mappedUpdates.role = updates.role;
   }
 
-  return getDb()("users").where({ id: userId }).update(mappedUpdates);
+  return trx("users").where({ id: userId }).update(mappedUpdates);
 };
 
 const deleteById = async (userId) => {

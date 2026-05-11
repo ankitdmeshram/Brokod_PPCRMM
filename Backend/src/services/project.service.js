@@ -1,11 +1,16 @@
 const { getDb } = require("../config/database");
 const projectUserRepository = require("../repositories/project-user.repository");
 const projectRepository = require("../repositories/project.repository");
+const workspaceUserRepository = require("../repositories/workspace-user.repository");
+const userRepository = require("../repositories/user.repository");
 const workspaceRepository = require("../repositories/workspace.repository");
 const AppError = require("../utils/app-error");
+const { hashPassword } = require("../utils/password");
 const { buildTimestampedSlug, slugify } = require("../utils/slug");
 const {
+  validateAddProjectUserPayload,
   validateCreateProjectPayload,
+  validateUpdateProjectUserPayload,
   validateUpdateProjectPayload,
 } = require("../validators/project.validator");
 
@@ -19,6 +24,7 @@ const mapProject = (project) => ({
   projectOwner: project.project_owner ?? project.projectOwner,
   description: project.description,
   status: project.status,
+  access: project.access ?? "private",
   startDate: project.start_date ?? project.startDate,
   endDate: project.end_date ?? project.endDate,
   tags:
@@ -38,6 +44,21 @@ const mapProject = (project) => ({
 
 const isSuperAdmin = (role = "") =>
   String(role).trim().toLowerCase() === "super-admin";
+
+const splitInviteeName = (name = "") => {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" ") || "User",
+  };
+};
+
+const generateTemporaryPassword = () =>
+  `Brokod@${Math.random().toString(36).slice(-8)}${Date.now().toString().slice(-4)}`;
 
 const buildUniqueProjectSlug = async (
   projectName,
@@ -85,7 +106,7 @@ const mapProjectUser = (projectUser) => ({
 });
 
 const createProject = async (payload, userId) => {
-  const { workspaceId, projectName, description, status, startDate, endDate, tags } =
+  const { workspaceId, projectName, description, status, access, startDate, endDate, tags } =
     validateCreateProjectPayload(payload);
 
   const workspace = await workspaceRepository.findByIdForUser(workspaceId, userId);
@@ -104,6 +125,7 @@ const createProject = async (payload, userId) => {
         projectOwner: userId,
         description,
         status,
+        access,
         startDate,
         endDate,
         tags,
@@ -259,6 +281,252 @@ const getProjectUsers = async (projectId, userId, userRole = "") => {
   };
 };
 
+const addProjectUser = async (projectId, payload, userId, userRole = "") => {
+  const normalizedProjectId = Number(projectId);
+
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  if (!existingProject) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
+    throw new AppError("Only the project owner can manage project users.", 403);
+  }
+
+  const validatedPayload = validateAddProjectUserPayload(payload);
+  const workspaceId = Number(existingProject.workspace_id ?? existingProject.workspaceId);
+
+  return getDb().transaction(async (trx) => {
+    let targetUser = null;
+    let temporaryPassword = null;
+
+    if (validatedPayload.mode === "existing_workspace_user") {
+      const workspaceMembership = await workspaceUserRepository.findByWorkspaceIdAndUserId(
+        workspaceId,
+        validatedPayload.userId,
+        trx
+      );
+
+      if (!workspaceMembership) {
+        throw new AppError("Selected user is not part of the workspace.", 404);
+      }
+
+      if (String(workspaceMembership.status || "").toLowerCase() !== "active") {
+        throw new AppError("Selected workspace user is inactive.", 400);
+      }
+
+      targetUser = await userRepository.findById(validatedPayload.userId);
+
+      if (!targetUser) {
+        throw new AppError("Selected workspace user was not found.", 404);
+      }
+    } else {
+      const { firstName, lastName } = splitInviteeName(validatedPayload.name);
+      targetUser = await userRepository.findByEmail(validatedPayload.email);
+
+      if (!targetUser) {
+        temporaryPassword = generateTemporaryPassword();
+        const hashedPassword = await hashPassword(temporaryPassword);
+        const targetUserId = await userRepository.create(
+          {
+            firstName,
+            lastName,
+            email: validatedPayload.email,
+            phone: validatedPayload.phone,
+            password: hashedPassword,
+          },
+          trx
+        );
+
+        targetUser = await userRepository.findById(targetUserId);
+      }
+
+      const existingWorkspaceMembership =
+        await workspaceUserRepository.findByWorkspaceIdAndUserId(
+          workspaceId,
+          targetUser.id,
+          trx
+        );
+
+      if (existingWorkspaceMembership) {
+        if (String(existingWorkspaceMembership.status || "").toLowerCase() !== "active") {
+          throw new AppError("This workspace user is inactive and cannot be added.", 400);
+        }
+      } else {
+        await workspaceUserRepository.create(
+          {
+            workspaceId,
+            userId: targetUser.id,
+            role: "member",
+            status: "active",
+            createdBy: userId,
+          },
+          trx
+        );
+      }
+    }
+
+    const existingProjectMembership = await projectUserRepository.findByProjectIdAndUserId(
+      normalizedProjectId,
+      targetUser.id,
+      trx
+    );
+
+    if (existingProjectMembership) {
+      throw new AppError("This user is already part of the project.", 409);
+    }
+
+    await projectUserRepository.create(
+      {
+        projectId: normalizedProjectId,
+        userId: targetUser.id,
+        role: validatedPayload.role,
+        status: "active",
+        createdBy: userId,
+      },
+      trx
+    );
+
+    const refreshedUsers = await projectUserRepository.findAllByProjectId(normalizedProjectId, trx);
+    const createdProjectUser = refreshedUsers.find(
+      (projectUser) => Number(projectUser.user_id) === Number(targetUser.id)
+    );
+
+    if (!createdProjectUser) {
+      throw new AppError("Project user could not be created.", 500);
+    }
+
+    return {
+      project: mapProject(existingProject),
+      user: mapProjectUser(createdProjectUser),
+      temporaryPassword,
+      createdNewUser: Boolean(temporaryPassword),
+    };
+  });
+};
+
+const updateProjectUser = async (projectId, projectUserId, payload, userId, userRole = "") => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedProjectUserId = Number(projectUserId);
+
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  if (!Number.isInteger(normalizedProjectUserId) || normalizedProjectUserId <= 0) {
+    throw new AppError("Please provide a valid user id.", 400);
+  }
+
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  if (!existingProject) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
+    throw new AppError("Only the project owner can manage project users.", 403);
+  }
+
+  const existingProjectUser = await projectUserRepository.findByProjectIdAndUserId(
+    normalizedProjectId,
+    normalizedProjectUserId
+  );
+
+  if (!existingProjectUser) {
+    throw new AppError("Project user not found.", 404);
+  }
+
+  const updates = validateUpdateProjectUserPayload(payload);
+
+  if (
+    normalizedProjectUserId === Number(userId) &&
+    updates.role !== undefined &&
+    updates.role !== "owner"
+  ) {
+    throw new AppError("You cannot change your own project owner role.", 400);
+  }
+
+  if (
+    String(existingProjectUser.role || "").toLowerCase() === "owner" &&
+    updates.role !== undefined &&
+    updates.role !== "owner"
+  ) {
+    throw new AppError("Project owner role cannot be changed from this screen.", 400);
+  }
+
+  await projectUserRepository.updateByProjectIdAndUserId(normalizedProjectId, normalizedProjectUserId, {
+    role: updates.role ?? existingProjectUser.role,
+    status: updates.status ?? existingProjectUser.status,
+  });
+
+  const refreshedUsers = await projectUserRepository.findAllByProjectId(normalizedProjectId);
+  const refreshedProjectUser = refreshedUsers.find(
+    (projectUser) => Number(projectUser.user_id) === normalizedProjectUserId
+  );
+
+  if (!refreshedProjectUser) {
+    throw new AppError("Project user not found.", 404);
+  }
+
+  return mapProjectUser(refreshedProjectUser);
+};
+
+const deleteProjectUser = async (projectId, projectUserId, userId, userRole = "") => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedProjectUserId = Number(projectUserId);
+
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  if (!Number.isInteger(normalizedProjectUserId) || normalizedProjectUserId <= 0) {
+    throw new AppError("Please provide a valid user id.", 400);
+  }
+
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  if (!existingProject) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
+    throw new AppError("Only the project owner can manage project users.", 403);
+  }
+
+  const existingProjectUser = await projectUserRepository.findByProjectIdAndUserId(
+    normalizedProjectId,
+    normalizedProjectUserId
+  );
+
+  if (!existingProjectUser) {
+    throw new AppError("Project user not found.", 404);
+  }
+
+  if (normalizedProjectUserId === Number(userId)) {
+    throw new AppError("You cannot remove yourself from the project.", 400);
+  }
+
+  if (String(existingProjectUser.role || "").toLowerCase() === "owner") {
+    throw new AppError("Project owner cannot be removed.", 400);
+  }
+
+  await projectUserRepository.deleteByProjectIdAndUserId(
+    normalizedProjectId,
+    normalizedProjectUserId
+  );
+};
+
 const updateProject = async (projectId, payload, userId, userRole = "") => {
   const normalizedProjectId = Number(projectId);
 
@@ -340,11 +608,14 @@ const deleteProject = async (projectId, userId, userRole = "") => {
 };
 
 module.exports = {
+  addProjectUser,
   createProject,
+  deleteProjectUser,
   deleteProject,
   getProjectById,
   getProjectBySlug,
   getProjects,
   getProjectUsers,
+  updateProjectUser,
   updateProject,
 };

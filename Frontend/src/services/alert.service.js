@@ -25,6 +25,15 @@ export function showErrorAlert(title, text) {
   });
 }
 
+export function showAccessDeniedAlert() {
+  return Swal.fire({
+    ...baseOptions,
+    icon: "error",
+    title: "Access denied",
+    text: "You don't have access to this workspace.",
+  });
+}
+
 export function showInfoAlert(title, text) {
   return Swal.fire({
     ...baseOptions,

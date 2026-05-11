@@ -16,9 +16,12 @@ import {
   APP_ROUTES,
   buildWorkspaceOverviewRoute,
   buildWorkspaceProjectsRoute,
+  buildWorkspaceUsersRoute,
 } from "../router/authRoutes";
 import { fetchWorkspaces } from "../services/workspace.service";
-import { showErrorAlert } from "../services/alert.service";
+import { showAccessDeniedAlert, showErrorAlert } from "../services/alert.service";
+import WorkspaceUsersMain from "../components/workspace/WorkspaceUsersMain";
+import { Box } from "@mui/joy";
 
 const formatWorkspaceTitle = (workspaceName = "") =>
   workspaceName
@@ -26,6 +29,9 @@ const formatWorkspaceTitle = (workspaceName = "") =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const shouldRedirectToWorkspace = (error) =>
+  Number(error?.status) === 403 || Number(error?.status) === 404;
 
 export default function WorkspaceProjectsPage({ section = "projects" }) {
   const { authSession } = useAuthContext();
@@ -60,7 +66,13 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
         to: buildWorkspaceProjectsRoute(workspaceSlug),
         active: section === "projects",
       },
-      { key: "users", icon: <UsersIcon />, label: "Users" },
+      {
+        key: "users",
+        icon: <UsersIcon />,
+        label: "Users",
+        to: buildWorkspaceUsersRoute(workspaceSlug),
+        active: section === "users",
+      },
       { key: "notifications", icon: <NotificationIcon />, label: "Notifications" },
       { key: "settings", icon: <SettingsIcon />, label: "Settings" },
     ],
@@ -89,6 +101,12 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
 
         setWorkspace(matchedWorkspace || null);
       } catch (error) {
+        if (shouldRedirectToWorkspace(error)) {
+          await showAccessDeniedAlert();
+          setWorkspace(null);
+          return;
+        }
+
         await showErrorAlert(
           "Unable to load workspace",
           error.message || "Something went wrong while loading the workspace."
@@ -118,7 +136,6 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
           showBackToWorkspace
         />
       }
-      title="Project Management"
       fullName={fullName}
       initial={initial}
       userRole={userRole}
@@ -126,6 +143,18 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
     >
       {section === "overview" ? (
         <WorkspaceOverviewMain workspace={workspace} workspaceTitle={workspaceTitle} />
+      ) : section === "users" ? (
+        <Box
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            maxWidth: "100%",
+            px: { xs: 1.25, md: 1.75 },
+            py: { xs: 1.25, md: 1.75 },
+          }}
+        >
+          <WorkspaceUsersMain workspace={workspace} workspaceTitle={workspaceTitle} />
+        </Box>
       ) : (
         <ProjectsMain workspace={workspace} workspaceTitle={workspaceTitle} />
       )}

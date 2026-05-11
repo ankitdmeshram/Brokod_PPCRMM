@@ -1,10 +1,12 @@
 import { Box, LinearProgress, Sheet, Stack, Typography } from "@mui/joy";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import OverviewSectionCard from "./OverviewSectionCard";
 import OverviewMetricGrid from "./OverviewMetricGrid";
 import { useAuthContext } from "../../context/AuthContext";
 import { fetchProjects } from "../../services/project.service";
-import { showErrorAlert } from "../../services/alert.service";
+import { showAccessDeniedAlert, showErrorAlert } from "../../services/alert.service";
+import { APP_ROUTES } from "../../router/authRoutes";
 import {
   buildCumulativeSeries,
   buildRecentDateRange,
@@ -12,8 +14,12 @@ import {
   normalizeDateOnly,
 } from "../../utils/overviewMetrics";
 
+const shouldRedirectToWorkspace = (error) =>
+  Number(error?.status) === 403 || Number(error?.status) === 404;
+
 export default function WorkspaceOverviewMain({ workspace = null, workspaceTitle = "Workspace" }) {
   const { authSession } = useAuthContext();
+  const navigate = useNavigate();
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [projects, setProjects] = useState([]);
 
@@ -63,6 +69,13 @@ export default function WorkspaceOverviewMain({ workspace = null, workspaceTitle
         setProjects(allProjects);
       } catch (error) {
         setProjects([]);
+
+        if (shouldRedirectToWorkspace(error)) {
+          await showAccessDeniedAlert();
+          navigate(APP_ROUTES.workspace, { replace: true });
+          return;
+        }
+
         await showErrorAlert(
           "Unable to load workspace summary",
           error.message || "Something went wrong while loading workspace overview."
@@ -73,7 +86,7 @@ export default function WorkspaceOverviewMain({ workspace = null, workspaceTitle
     };
 
     void loadWorkspaceProjects();
-  }, [authSession?.token, workspace?.id]);
+  }, [authSession?.token, navigate, workspace?.id]);
 
   const summaryCards = useMemo(() => {
     const today = getLocalDateOnly();

@@ -12,6 +12,24 @@ const create = async ({ projectId, userId, role, status, createdBy }, trx = getD
   return result[0];
 };
 
+const findByProjectIdAndUserId = async (projectId, userId, trx = getDb()) =>
+  trx("project_users")
+    .select(
+      "id",
+      "project_id",
+      "user_id",
+      "role",
+      "status",
+      "created_at",
+      "created_by",
+      "updated_at"
+    )
+    .where({
+      project_id: projectId,
+      user_id: userId,
+    })
+    .first();
+
 const findAllByProjectId = async (projectId, trx = getDb()) => {
   return trx("project_users")
     .join("users", "users.id", "project_users.user_id")
@@ -34,7 +52,29 @@ const findAllByProjectId = async (projectId, trx = getDb()) => {
     .orderBy("project_users.created_at", "asc");
 };
 
+const updateByProjectIdAndUserId = async (projectId, userId, updates, trx = getDb()) =>
+  trx("project_users")
+    .where({
+      project_id: projectId,
+      user_id: userId,
+    })
+    .update({
+      role: updates.role,
+      status: updates.status,
+    });
+
+const deleteByProjectIdAndUserId = async (projectId, userId, trx = getDb()) =>
+  trx("project_users")
+    .where({
+      project_id: projectId,
+      user_id: userId,
+    })
+    .delete();
+
 module.exports = {
   create,
+  deleteByProjectIdAndUserId,
   findAllByProjectId,
+  findByProjectIdAndUserId,
+  updateByProjectIdAndUserId,
 };

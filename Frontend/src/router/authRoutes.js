@@ -27,6 +27,9 @@ export const buildWorkspaceProjectsRoute = (workspaceSlug) =>
 export const buildWorkspaceOverviewRoute = (workspaceSlug) =>
   `/workspace/${workspaceSlug}/overview`;
 
+export const buildWorkspaceUsersRoute = (workspaceSlug) =>
+  `/workspace/${workspaceSlug}/users`;
+
 export const buildProjectSectionRoute = (workspaceSlug, projectRouteSegment, section) =>
   `/workspace/${workspaceSlug}/projects/${projectRouteSegment}/${section}`;
 

@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
 import OverviewMetricGrid from "../components/workspace/OverviewMetricGrid";
 import OverviewTaskSection from "../components/workspace/OverviewTaskSection";
+import ProjectUsersMain from "../components/workspace/ProjectUsersMain";
 import ProjectTasksMain from "../components/workspace/ProjectTasksMain";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import {
@@ -11,6 +12,7 @@ import {
   NotificationIcon,
   SettingsIcon,
   TasksIcon,
+  UsersIcon,
 } from "../components/workspace/WorkspaceIcons";
 import { useAuthContext } from "../context/AuthContext";
 import {
@@ -19,7 +21,7 @@ import {
   buildProjectSectionRoute,
   buildWorkspaceProjectsRoute,
 } from "../router/authRoutes";
-import { showErrorAlert } from "../services/alert.service";
+import { showAccessDeniedAlert, showErrorAlert } from "../services/alert.service";
 import { fetchProjectBySlug } from "../services/project.service";
 import { fetchTasks } from "../services/task.service";
 import {
@@ -47,6 +49,10 @@ const sectionContent = {
     label: "Tasks",
     description: "Project tasks are coming soon. This space will hold task planning, status, ownership, and delivery flow.",
   },
+  users: {
+    label: "Users",
+    description: "Project users are coming soon. This space will show assigned members and their project roles.",
+  },
   notifications: {
     label: "Notifications",
     description: "Project notifications are coming soon. This space will collect alerts, updates, and activity for the team.",
@@ -64,6 +70,9 @@ const statusChipStyles = {
   Done: { backgroundColor: "#e9f8ef", color: "#1d8f5a" },
   Blocked: { backgroundColor: "#fff1f1", color: "#d14343" },
 };
+
+const shouldRedirectToWorkspace = (error) =>
+  Number(error?.status) === 403 || Number(error?.status) === 404;
 
 export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
   const { authSession } = useAuthContext();
@@ -253,6 +262,13 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
         active: section === "tasks",
       },
       {
+        key: "users",
+        icon: <UsersIcon />,
+        label: "Users",
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "users"),
+        active: section === "users",
+      },
+      {
         key: "notifications",
         icon: <NotificationIcon />,
         label: "Notifications",
@@ -318,6 +334,13 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
           setProject(null);
         }
       } catch (error) {
+        if (shouldRedirectToWorkspace(error)) {
+          await showAccessDeniedAlert();
+          setWorkspace(null);
+          setProject(null);
+          return;
+        }
+
         await showErrorAlert(
           "Unable to load project tasks",
           error.message || "Something went wrong while loading the project."
@@ -507,6 +530,12 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
         setOverdueWorkItems(sortedOpenDueTasks);
         setUpcomingWorkItems(sortedUpcomingTasks);
       } catch (error) {
+        if (shouldRedirectToWorkspace(error)) {
+          await showAccessDeniedAlert();
+          navigate(APP_ROUTES.workspace, { replace: true });
+          return;
+        }
+
         setOverviewMetrics({
           totalTasks: 0,
           notStartedTasks: 0,
@@ -530,7 +559,7 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
     };
 
     void loadOverviewMetrics();
-  }, [authSession?.token, project?.id, section, workspace?.id]);
+  }, [authSession?.token, navigate, project?.id, section, workspace?.id]);
 
   return (
     <AppLayout
@@ -558,6 +587,22 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
           project={project}
           workspace={workspace}
         />
+      ) : section === "users" ? (
+        <Box
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            maxWidth: "100%",
+            px: { xs: 1.25, md: 1.75 },
+            py: { xs: 1.25, md: 1.75 },
+          }}
+        >
+          <ProjectUsersMain
+            project={project}
+            projectTitle={projectTitle}
+            workspace={workspace}
+          />
+        </Box>
       ) : section === "overview" ? (
         <Box
           sx={{

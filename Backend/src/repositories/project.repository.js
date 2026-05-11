@@ -8,6 +8,7 @@ const projectSelectColumns = [
   "projects.project_owner",
   "projects.description",
   "projects.status",
+  "projects.access",
   "projects.start_date",
   "projects.end_date",
   "projects.tags",
@@ -27,6 +28,7 @@ const create = async ({
   projectOwner,
   description,
   status,
+  access,
   startDate,
   endDate,
   tags,
@@ -39,6 +41,7 @@ const create = async ({
     project_owner: projectOwner,
     description,
     status,
+    access,
     start_date: startDate,
     end_date: endDate,
     tags: JSON.stringify(tags),
@@ -73,15 +76,25 @@ const findBySlug = async (slug, workspaceId = null, trx = getDb()) => {
 
 const findBySlugForUser = async (slug, userId, workspaceId = null, trx = getDb()) => {
   const query = trx("projects")
-    .join("project_users", "project_users.project_id", "projects.id")
+    .joinRaw(
+      "left join project_users as project_membership on project_membership.project_id = projects.id and project_membership.user_id = ? and project_membership.status = 'active'",
+      [userId]
+    )
+    .join("workspace_users", "workspace_users.workspace_id", "projects.workspace_id")
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(
       ...projectSelectColumns,
-      "project_users.role as membership_role",
-      "project_users.status as membership_status"
+      "project_membership.role as membership_role",
+      "project_membership.status as membership_status"
     )
     .where("projects.slug", slug)
-    .andWhere("project_users.user_id", userId)
+    .andWhere("workspace_users.user_id", userId)
+    .andWhere("workspace_users.status", "active")
+    .andWhere((builder) => {
+      builder
+        .where("projects.access", "public")
+        .orWhereNotNull("project_membership.user_id");
+    })
     .whereNull("projects.deleted_at");
 
   if (workspaceId !== null && workspaceId !== undefined) {
@@ -135,14 +148,24 @@ const findAll = async (filters = {}, trx = getDb()) => {
 
 const findAllByUserId = async (userId, filters = {}, trx = getDb()) => {
   const query = trx("projects")
-    .join("project_users", "project_users.project_id", "projects.id")
+    .joinRaw(
+      "left join project_users as project_membership on project_membership.project_id = projects.id and project_membership.user_id = ? and project_membership.status = 'active'",
+      [userId]
+    )
+    .join("workspace_users", "workspace_users.workspace_id", "projects.workspace_id")
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(
       ...projectSelectColumns,
-      "project_users.role as membership_role",
-      "project_users.status as membership_status"
+      "project_membership.role as membership_role",
+      "project_membership.status as membership_status"
     )
-    .where("project_users.user_id", userId)
+    .where((builder) => {
+      builder
+        .where("projects.access", "public")
+        .orWhereNotNull("project_membership.user_id");
+    })
+    .andWhere("workspace_users.user_id", userId)
+    .andWhere("workspace_users.status", "active")
     .whereNull("projects.deleted_at");
 
   applyProjectFilters(query, filters);
@@ -173,9 +196,19 @@ const countAll = async (filters = {}, trx = getDb()) => {
 
 const countAllByUserId = async (userId, filters = {}, trx = getDb()) => {
   const query = trx("projects")
-    .join("project_users", "project_users.project_id", "projects.id")
+    .joinRaw(
+      "left join project_users as project_membership on project_membership.project_id = projects.id and project_membership.user_id = ? and project_membership.status = 'active'",
+      [userId]
+    )
+    .join("workspace_users", "workspace_users.workspace_id", "projects.workspace_id")
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
-    .where("project_users.user_id", userId)
+    .where((builder) => {
+      builder
+        .where("projects.access", "public")
+        .orWhereNotNull("project_membership.user_id");
+    })
+    .andWhere("workspace_users.user_id", userId)
+    .andWhere("workspace_users.status", "active")
     .whereNull("projects.deleted_at")
     .countDistinct({ count: "projects.id" })
     .first();
@@ -188,15 +221,25 @@ const countAllByUserId = async (userId, filters = {}, trx = getDb()) => {
 
 const findByIdForUser = async (projectId, userId, trx = getDb()) => {
   return trx("projects")
-    .join("project_users", "project_users.project_id", "projects.id")
+    .joinRaw(
+      "left join project_users as project_membership on project_membership.project_id = projects.id and project_membership.user_id = ? and project_membership.status = 'active'",
+      [userId]
+    )
+    .join("workspace_users", "workspace_users.workspace_id", "projects.workspace_id")
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(
       ...projectSelectColumns,
-      "project_users.role as membership_role",
-      "project_users.status as membership_status"
+      "project_membership.role as membership_role",
+      "project_membership.status as membership_status"
     )
     .where("projects.id", projectId)
-    .andWhere("project_users.user_id", userId)
+    .andWhere("workspace_users.user_id", userId)
+    .andWhere("workspace_users.status", "active")
+    .andWhere((builder) => {
+      builder
+        .where("projects.access", "public")
+        .orWhereNotNull("project_membership.user_id");
+    })
     .whereNull("projects.deleted_at")
     .first();
 };
@@ -222,6 +265,10 @@ const updateById = async (id, updates, trx = getDb()) => {
 
   if (updates.status !== undefined) {
     mappedUpdates.status = updates.status;
+  }
+
+  if (updates.access !== undefined) {
+    mappedUpdates.access = updates.access;
   }
 
   if (updates.startDate !== undefined) {

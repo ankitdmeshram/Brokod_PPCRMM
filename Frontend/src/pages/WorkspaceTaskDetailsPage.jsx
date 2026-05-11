@@ -35,13 +35,14 @@ import {
   buildWorkspaceProjectsRoute,
 } from "../router/authRoutes";
 import {
+  showAccessDeniedAlert,
   showConfirmAlert,
   showErrorAlert,
   showSuccessAlert,
 } from "../services/alert.service";
 import { fetchProjectUsers, fetchProjectBySlug } from "../services/project.service";
 import { createTask, deleteTask, fetchAllTasks, fetchTaskBySlug, updateTask } from "../services/task.service";
-import { fetchWorkspaces } from "../services/workspace.service";
+import { fetchAllWorkspaceUsers, fetchWorkspaces } from "../services/workspace.service";
 
 const statusOptions = [
   { value: "todo", label: "Todo" },
@@ -71,6 +72,16 @@ const buildUserLabel = (user = {}) =>
   `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim() ||
   user.email ||
   `User ${user.id}`;
+
+const mapWorkspaceUserToOption = (workspaceUser) => ({
+  id: Number(workspaceUser.id || workspaceUser.userId),
+  label: buildUserLabel(workspaceUser),
+});
+
+const mapProjectUserToOption = (projectUser) => ({
+  id: Number(projectUser.user?.id || projectUser.userId),
+  label: buildUserLabel(projectUser.user || {}),
+});
 
 const normalizeDateInputValue = (value) => {
   if (!value) {
@@ -133,6 +144,8 @@ const buildSubtaskDraftValues = () => ({
 const isCompletedStatus = (value) => String(value || "").trim().toLowerCase() === "done";
 const getTodayDateOnly = () => new Date().toISOString().slice(0, 10);
 const SUBTASK_AUTOSAVE_DELAY_MS = 400;
+const shouldRedirectToWorkspace = (error) =>
+  Number(error?.status) === 403 || Number(error?.status) === 404;
 
 export default function WorkspaceTaskDetailsPage() {
   const { authSession } = useAuthContext();
@@ -145,6 +158,7 @@ export default function WorkspaceTaskDetailsPage() {
   const [project, setProject] = useState(() => routedProject);
   const [task, setTask] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
+  const [workspaceUsers, setWorkspaceUsers] = useState([]);
   const [projectTasks, setProjectTasks] = useState([]);
   const [subtaskDrafts, setSubtaskDrafts] = useState([]);
   const [creatingSubtaskIds, setCreatingSubtaskIds] = useState([]);
@@ -198,12 +212,14 @@ export default function WorkspaceTaskDetailsPage() {
   );
 
   const projectUserOptions = useMemo(
-    () =>
-      projectUsers.map((projectUser) => ({
-        id: Number(projectUser.user?.id || projectUser.userId),
-        label: buildUserLabel(projectUser.user || {}),
-      })),
-    [projectUsers]
+    () => {
+      const projectAccess = String(project?.access || "").trim().toLowerCase();
+
+      return projectAccess === "public"
+        ? workspaceUsers.map(mapWorkspaceUserToOption)
+        : projectUsers.map(mapProjectUserToOption);
+    },
+    [project?.access, projectUsers, workspaceUsers]
   );
 
   const subtasks = useMemo(
@@ -321,6 +337,14 @@ export default function WorkspaceTaskDetailsPage() {
           setTask(null);
         }
       } catch (error) {
+        if (shouldRedirectToWorkspace(error)) {
+          await showAccessDeniedAlert();
+          setWorkspace(null);
+          setProject(null);
+          setTask(null);
+          return;
+        }
+
         await showErrorAlert(
           "Unable to load task",
           error.message || "Something went wrong while loading the task."
@@ -350,22 +374,38 @@ export default function WorkspaceTaskDetailsPage() {
   ]);
 
   useEffect(() => {
-    const loadProjectUsers = async () => {
+    const loadAssignableUsers = async () => {
       if (!authSession?.token || !project?.id) {
         setProjectUsers([]);
+        setWorkspaceUsers([]);
         return;
       }
 
       try {
+        if (String(project?.access || "").trim().toLowerCase() === "public") {
+          if (!workspace?.id) {
+            setWorkspaceUsers([]);
+            setProjectUsers([]);
+            return;
+          }
+
+          const users = await fetchAllWorkspaceUsers(workspace.id, authSession.token);
+          setWorkspaceUsers(Array.isArray(users) ? users : []);
+          setProjectUsers([]);
+          return;
+        }
+
         const result = await fetchProjectUsers(project.id, authSession.token);
         setProjectUsers(Array.isArray(result?.users) ? result.users : []);
+        setWorkspaceUsers([]);
       } catch {
         setProjectUsers([]);
+        setWorkspaceUsers([]);
       }
     };
 
-    void loadProjectUsers();
-  }, [authSession?.token, project?.id]);
+    void loadAssignableUsers();
+  }, [authSession?.token, project?.access, project?.id, workspace?.id]);
 
   useEffect(() => {
     void loadProjectTasks(project?.id, workspace?.id, authSession?.token);

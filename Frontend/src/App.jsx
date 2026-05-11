@@ -60,6 +60,14 @@ export default function App() {
             }
           />
           <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/users`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="users" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/overview`}
             element={
               <ProtectedRoute>
@@ -72,6 +80,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <WorkspaceProjectTasksPage section="tasks" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/users`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectTasksPage section="users" />
               </ProtectedRoute>
             }
           />

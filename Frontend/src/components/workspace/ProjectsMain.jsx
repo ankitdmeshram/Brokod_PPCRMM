@@ -17,11 +17,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../context/AuthContext";
 import {
+  showAccessDeniedAlert,
   showConfirmAlert,
   showErrorAlert,
   showSuccessAlert,
 } from "../../services/alert.service";
 import {
+  APP_ROUTES,
   buildProjectTasksRoute,
 } from "../../router/authRoutes";
 import {
@@ -48,12 +50,20 @@ const statusStyles = {
   Cancelled: { backgroundColor: "#eef2ff", color: "#3155ff" },
 };
 
+const accessStyles = {
+  private: { backgroundColor: "#fff3e8", color: "#c56a1d" },
+  public: { backgroundColor: "#e9fbef", color: "#1b8f4d" },
+};
+
 const formatStatusLabel = (status = "") =>
   String(status)
     .split("_")
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const formatAccessLabel = (access = "") =>
+  String(access || "").trim().toLowerCase() === "public" ? "Public" : "Private";
 
 const formatDateLabel = (value) => {
   if (!value) {
@@ -94,11 +104,15 @@ const formatDateInputValue = (value) => {
 const initialProjectFormValues = {
   projectName: "",
   status: "planned",
+  access: "private",
   startDate: "",
   endDate: "",
   tags: [],
   description: "",
 };
+
+const shouldRedirectToWorkspace = (error) =>
+  Number(error?.status) === 403 || Number(error?.status) === 404;
 
 export default function ProjectsMain({ workspace, workspaceTitle, mode = "workspace" }) {
   const navigate = useNavigate();
@@ -169,6 +183,13 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
           setProjects([]);
           setTotalProjects(0);
           setTotalPages(1);
+
+          if (shouldRedirectToWorkspace(error)) {
+            await showAccessDeniedAlert();
+            navigate(APP_ROUTES.workspace, { replace: true });
+            return;
+          }
+
           await showErrorAlert(
             "Unable to load projects",
             error.message || "Something went wrong while loading projects."
@@ -193,6 +214,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
     currentPage,
     debouncedSearchValue,
     isSuperAdminView,
+    navigate,
     projectRefreshKey,
     rowsPerPage,
     workspace?.id,
@@ -214,10 +236,12 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
             ? currentUserName
             : `User #${project.projectOwner}`,
         status: formatStatusLabel(project.status),
+        accessLabel: formatAccessLabel(project.access),
         startDate: formatDateLabel(project.startDate),
         endDate: formatDateLabel(project.endDate),
         tags: Array.isArray(project.tags) ? project.tags : [],
         description: project.description || "",
+        access: project.access || "private",
         workspaceSlug: project.workspaceSlug || "",
         workspaceName:
           project.workspaceName ||
@@ -285,6 +309,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
     setEditValues({
       projectName: project.projectName || "",
       status: project.status || "planned",
+      access: project.access || "private",
       startDate: formatDateInputValue(project.startDate),
       endDate: formatDateInputValue(project.endDate),
       tags: Array.isArray(project.tags) ? project.tags : [],
@@ -357,6 +382,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
           projectName: createValues.projectName.trim(),
           description: createValues.description.trim(),
           status: createValues.status,
+          access: createValues.access,
           startDate: createValues.startDate || null,
           endDate: createValues.endDate || null,
           tags: createValues.tags,
@@ -455,6 +481,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
           projectName: editValues.projectName.trim(),
           description: editValues.description.trim(),
           status: editValues.status,
+          access: editValues.access,
           startDate: editValues.startDate || null,
           endDate: editValues.endDate || null,
           tags: editValues.tags,
@@ -659,6 +686,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
                       <th style={{ width: "180px", minWidth: "180px" }}>Workspace</th>
                     ) : null}
                     <th style={{ width: "150px", minWidth: "150px" }}>Status</th>
+                    <th style={{ width: "140px", minWidth: "140px" }}>Access</th>
                     <th style={{ width: "150px", minWidth: "150px" }}>Start Date</th>
                     <th style={{ width: "150px", minWidth: "150px" }}>End Date</th>
                     <th style={{ width: "220px", minWidth: "220px" }}>Tags</th>
@@ -731,6 +759,19 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
                           }}
                         >
                           {project.status}
+                        </Chip>
+                      </td>
+                      <td>
+                        <Chip
+                          size="sm"
+                          variant="soft"
+                          sx={{
+                            borderRadius: "999px",
+                            fontWeight: 600,
+                            ...accessStyles[String(project.access || "").toLowerCase()],
+                          }}
+                        >
+                          {project.accessLabel}
                         </Chip>
                       </td>
                       <td>{project.startDate}</td>

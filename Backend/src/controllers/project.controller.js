@@ -63,6 +63,48 @@ const getProjectUsers = asyncHandler(async (request, response) => {
   response.status(200).json(result);
 });
 
+const addProjectUser = asyncHandler(async (request, response) => {
+  const result = await projectService.addProjectUser(
+    request.params.projectId,
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(201).json({
+    message: "Project user added successfully.",
+    ...result,
+  });
+});
+
+const updateProjectUser = asyncHandler(async (request, response) => {
+  const user = await projectService.updateProjectUser(
+    request.params.projectId,
+    request.params.userId,
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    message: "Project user updated successfully.",
+    user,
+  });
+});
+
+const deleteProjectUser = asyncHandler(async (request, response) => {
+  await projectService.deleteProjectUser(
+    request.params.projectId,
+    request.params.userId,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    message: "Project user removed successfully.",
+  });
+});
+
 const updateProject = asyncHandler(async (request, response) => {
   const project = await projectService.updateProject(
     request.params.projectId,
@@ -90,11 +132,14 @@ const deleteProject = asyncHandler(async (request, response) => {
 });
 
 module.exports = {
+  addProjectUser,
   createProject,
+  deleteProjectUser,
   deleteProject,
   getProjectById,
   getProjectBySlug,
   getProjects,
   getProjectUsers,
+  updateProjectUser,
   updateProject,
 };

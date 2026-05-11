@@ -1,6 +1,13 @@
 const AppError = require("../utils/app-error");
 
 const allowedStatuses = new Set(["planned", "in_progress", "on_hold", "completed", "cancelled"]);
+const allowedAccessValues = new Set(["private", "public"]);
+const allowedProjectUserRoles = new Set(["owner", "admin", "member"]);
+const allowedProjectUserInviteModes = new Set([
+  "existing_workspace_user",
+  "invite_user",
+]);
+const allowedProjectUserStatuses = new Set(["active", "inactive"]);
 
 const normalizeTags = (tags) => {
   if (Array.isArray(tags)) {
@@ -32,6 +39,7 @@ const validateCreateProjectPayload = (payload) => {
   const projectName = payload?.projectName?.trim();
   const description = payload?.description?.trim() || "";
   const status = payload?.status?.trim().toLowerCase() || "planned";
+  const access = payload?.access?.trim().toLowerCase() || "private";
   const startDate = payload?.startDate?.trim() || null;
   const endDate = payload?.endDate?.trim() || null;
   const tags = normalizeTags(payload?.tags);
@@ -51,6 +59,10 @@ const validateCreateProjectPayload = (payload) => {
     );
   }
 
+  if (!allowedAccessValues.has(access)) {
+    throw new AppError("access must be either private or public.", 400);
+  }
+
   if (startDate && endDate) {
     validateProjectDates(startDate, endDate);
   }
@@ -60,6 +72,7 @@ const validateCreateProjectPayload = (payload) => {
     projectName,
     description,
     status,
+    access,
     startDate,
     endDate,
     tags,
@@ -100,6 +113,14 @@ const validateUpdateProjectPayload = (payload, currentProject) => {
     updates.status = status;
   }
 
+  if (payload?.access !== undefined) {
+    const access = payload.access?.trim().toLowerCase();
+    if (!allowedAccessValues.has(access)) {
+      throw new AppError("access must be either private or public.", 400);
+    }
+    updates.access = access;
+  }
+
   if (payload?.startDate !== undefined) {
     updates.startDate = payload.startDate?.trim() || null;
   }
@@ -126,7 +147,91 @@ const validateUpdateProjectPayload = (payload, currentProject) => {
   return updates;
 };
 
+const validateAddProjectUserPayload = (payload) => {
+  const mode = String(payload?.mode || "").trim().toLowerCase();
+  const role = String(payload?.role || "").trim().toLowerCase();
+
+  if (!allowedProjectUserInviteModes.has(mode)) {
+    throw new AppError(
+      "mode must be either existing_workspace_user or invite_user.",
+      400
+    );
+  }
+
+  if (!allowedProjectUserRoles.has(role)) {
+    throw new AppError("role must be one of: owner, admin, member.", 400);
+  }
+
+  if (mode === "existing_workspace_user") {
+    const userId = Number(payload?.userId);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new AppError("userId is required for existing workspace users.", 400);
+    }
+
+    return {
+      mode,
+      role,
+      userId,
+    };
+  }
+
+  const name = String(payload?.name || "").trim();
+  const email = String(payload?.email || "").trim().toLowerCase();
+  const phone = String(payload?.phone || "").trim();
+
+  if (!name || !email) {
+    throw new AppError("name and email are required for invited users.", 400);
+  }
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailPattern.test(email)) {
+    throw new AppError("Please provide a valid email address.", 400);
+  }
+
+  return {
+    mode,
+    role,
+    name,
+    email,
+    phone,
+  };
+};
+
+const validateUpdateProjectUserPayload = (payload) => {
+  const updates = {};
+
+  if (payload?.role !== undefined) {
+    const role = String(payload.role || "").trim().toLowerCase();
+
+    if (!allowedProjectUserRoles.has(role)) {
+      throw new AppError("role must be one of: owner, admin, member.", 400);
+    }
+
+    updates.role = role;
+  }
+
+  if (payload?.status !== undefined) {
+    const status = String(payload.status || "").trim().toLowerCase();
+
+    if (!allowedProjectUserStatuses.has(status)) {
+      throw new AppError("status must be either active or inactive.", 400);
+    }
+
+    updates.status = status;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new AppError("Provide at least one field to update.", 400);
+  }
+
+  return updates;
+};
+
 module.exports = {
+  validateAddProjectUserPayload,
   validateCreateProjectPayload,
+  validateUpdateProjectUserPayload,
   validateUpdateProjectPayload,
 };

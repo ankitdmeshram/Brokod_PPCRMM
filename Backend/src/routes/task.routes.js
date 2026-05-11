@@ -3,6 +3,11 @@ const multer = require("multer");
 
 const taskController = require("../controllers/task.controller");
 const { requireAuth } = require("../middlewares/auth.middleware");
+const {
+  requireActiveWorkspaceUserByProjectId,
+  requireActiveWorkspaceUserByTaskId,
+  requireActiveWorkspaceUserByTaskSlug,
+} = require("../middlewares/workspace-access.middleware");
 
 const router = Router();
 const upload = multer({
@@ -344,13 +349,39 @@ const upload = multer({
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/", requireAuth, taskController.getTasks);
-router.get("/export/json", requireAuth, taskController.exportTasks);
-router.post("/import/json", requireAuth, upload.single("file"), taskController.importTasks);
-router.post("/", requireAuth, taskController.createTask);
-router.get("/slug/:taskSlug", requireAuth, taskController.getTaskBySlug);
-router.get("/:taskId", requireAuth, taskController.getTaskById);
-router.patch("/:taskId", requireAuth, taskController.updateTask);
-router.delete("/:taskId", requireAuth, taskController.deleteTask);
+router.get("/", requireAuth, requireActiveWorkspaceUserByProjectId, taskController.getTasks);
+router.get(
+  "/export/json",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  taskController.exportTasks
+);
+router.post(
+  "/import/json",
+  requireAuth,
+  upload.single("file"),
+  requireActiveWorkspaceUserByProjectId,
+  taskController.importTasks
+);
+router.post("/", requireAuth, requireActiveWorkspaceUserByProjectId, taskController.createTask);
+router.get(
+  "/slug/:taskSlug",
+  requireAuth,
+  requireActiveWorkspaceUserByTaskSlug,
+  taskController.getTaskBySlug
+);
+router.get("/:taskId", requireAuth, requireActiveWorkspaceUserByTaskId, taskController.getTaskById);
+router.patch(
+  "/:taskId",
+  requireAuth,
+  requireActiveWorkspaceUserByTaskId,
+  taskController.updateTask
+);
+router.delete(
+  "/:taskId",
+  requireAuth,
+  requireActiveWorkspaceUserByTaskId,
+  taskController.deleteTask
+);
 
 module.exports = router;

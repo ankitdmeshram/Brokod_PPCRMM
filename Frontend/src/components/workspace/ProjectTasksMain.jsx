@@ -8,6 +8,7 @@ import {
   showSuccessAlert,
 } from "../../services/alert.service";
 import { fetchProjectUsers } from "../../services/project.service";
+import { fetchAllWorkspaceUsers } from "../../services/workspace.service";
 import {
   createTask,
   deleteTask,
@@ -157,6 +158,16 @@ const buildUserLabel = (user = {}) =>
   user.email ||
   `User ${user.id}`;
 
+const mapWorkspaceUserToOption = (workspaceUser) => ({
+  id: Number(workspaceUser.id || workspaceUser.userId),
+  label: buildUserLabel(workspaceUser),
+});
+
+const mapProjectUserToOption = (projectUser) => ({
+  id: Number(projectUser.user?.id || projectUser.userId),
+  label: buildUserLabel(projectUser.user || {}),
+});
+
 const mapApiTaskToTableRow = (task) => ({
   rawId: Number(task.id),
   rawTask: task,
@@ -209,6 +220,7 @@ export default function ProjectTasksMain({
   const [isExportingTasks, setIsExportingTasks] = useState(false);
   const [isImportingTasks, setIsImportingTasks] = useState(false);
   const [projectUsers, setProjectUsers] = useState([]);
+  const [workspaceUsers, setWorkspaceUsers] = useState([]);
   const importFileInputRef = useRef(null);
   const showClearFilters = hasActiveTaskColumnFilters(columnFilters);
 
@@ -231,11 +243,13 @@ export default function ProjectTasksMain({
 
   const [createTaskValues, setCreateTaskValues] = useState(initialTaskFormValues);
 
-  const projectUserOptions = useMemo(() => {
-    const options = projectUsers.map((projectUser) => ({
-      id: Number(projectUser.user?.id || projectUser.userId),
-      label: buildUserLabel(projectUser.user || {}),
-    }));
+  const assigneeOptions = useMemo(() => {
+    const projectAccess = String(project?.access || "").trim().toLowerCase();
+    const baseOptions =
+      projectAccess === "public"
+        ? workspaceUsers.map(mapWorkspaceUserToOption)
+        : projectUsers.map(mapProjectUserToOption);
+    const options = [...baseOptions];
 
     if (currentUserId && !options.some((option) => option.id === currentUserId)) {
       options.unshift({
@@ -245,7 +259,7 @@ export default function ProjectTasksMain({
     }
 
     return options;
-  }, [currentUserId, currentUserLabel, projectUsers]);
+  }, [currentUserId, currentUserLabel, project?.access, projectUsers, workspaceUsers]);
 
   const totalTasks = pagination.total;
   const totalPages = Math.max(1, pagination.totalPages || 1);
@@ -292,22 +306,38 @@ export default function ProjectTasksMain({
   }, [debouncedSearchValue, debouncedColumnFilters, rowsPerPage]);
 
   useEffect(() => {
-    const loadProjectUsers = async () => {
+    const loadAssignableUsers = async () => {
       if (!authSession?.token || !project?.id) {
         setProjectUsers([]);
+        setWorkspaceUsers([]);
         return;
       }
 
       try {
+        if (String(project?.access || "").trim().toLowerCase() === "public") {
+          if (!workspace?.id) {
+            setWorkspaceUsers([]);
+            setProjectUsers([]);
+            return;
+          }
+
+          const users = await fetchAllWorkspaceUsers(workspace.id, authSession.token);
+          setWorkspaceUsers(Array.isArray(users) ? users : []);
+          setProjectUsers([]);
+          return;
+        }
+
         const result = await fetchProjectUsers(project.id, authSession.token);
         setProjectUsers(Array.isArray(result?.users) ? result.users : []);
+        setWorkspaceUsers([]);
       } catch {
         setProjectUsers([]);
+        setWorkspaceUsers([]);
       }
     };
 
-    void loadProjectUsers();
-  }, [authSession?.token, project?.id]);
+    void loadAssignableUsers();
+  }, [authSession?.token, project?.access, project?.id, workspace?.id]);
 
   useEffect(() => {
     const loadTasks = async () => {
@@ -974,22 +1004,38 @@ export default function ProjectTasksMain({
                     />
                   </th>
                   <th>
-                    <Input
+                    <Select
                       size="sm"
                       placeholder="Assignee"
-                      value={columnFilters.assignedTo}
-                      onChange={(event) => handleColumnFilterChange("assignedTo", event.target.value)}
-                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
-                    />
+                      value={columnFilters.assignedTo || null}
+                      onChange={(_, value) =>
+                        handleColumnFilterChange("assignedTo", value || "")
+                      }
+                      sx={{ minHeight: "30px", fontSize: "0.8rem" }}
+                    >
+                      {assigneeOptions.map((option) => (
+                        <Option key={`assigned-to-${option.id}`} value={option.label}>
+                          {option.label}
+                        </Option>
+                      ))}
+                    </Select>
                   </th>
                   <th>
-                    <Input
+                    <Select
                       size="sm"
                       placeholder="Assigned by"
-                      value={columnFilters.assignedBy}
-                      onChange={(event) => handleColumnFilterChange("assignedBy", event.target.value)}
-                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
-                    />
+                      value={columnFilters.assignedBy || null}
+                      onChange={(_, value) =>
+                        handleColumnFilterChange("assignedBy", value || "")
+                      }
+                      sx={{ minHeight: "30px", fontSize: "0.8rem" }}
+                    >
+                      {assigneeOptions.map((option) => (
+                        <Option key={`assigned-by-${option.id}`} value={option.label}>
+                          {option.label}
+                        </Option>
+                      ))}
+                    </Select>
                   </th>
                   <th>
                     <Input
@@ -1294,7 +1340,7 @@ export default function ProjectTasksMain({
       <CreateTaskModal
         open={isCreateTaskModalOpen}
         values={createTaskValues}
-        projectUserOptions={projectUserOptions}
+        projectUserOptions={assigneeOptions}
         projectTitle={projectTitle}
         loading={isCreatingTask}
         onClose={handleCloseCreateTaskModal}
