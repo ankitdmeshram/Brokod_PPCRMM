@@ -43,7 +43,7 @@ services:
   frontend:
     build:
       context: ./Frontend
-      target: build
+      target: runner
       args:
         VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
         VITE_BASE_PATH: ${VITE_BASE_PATH:-/projects/}
