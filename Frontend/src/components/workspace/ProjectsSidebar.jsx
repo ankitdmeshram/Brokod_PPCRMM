@@ -6,7 +6,6 @@ import {
   FolderIcon,
   GridIcon,
   NotificationIcon,
-  SettingsIcon,
   SidebarBackIcon,
   UsersIcon,
 } from "./WorkspaceIcons";
@@ -16,7 +15,6 @@ const navItems = [
   { key: "projects", icon: <FolderIcon />, label: "Projects", active: true },
   { key: "users", icon: <UsersIcon />, label: "Users" },
   { key: "notifications", icon: <NotificationIcon />, label: "Notifications" },
-  { key: "settings", icon: <SettingsIcon />, label: "Settings" },
 ];
 
 export default function ProjectsSidebar({

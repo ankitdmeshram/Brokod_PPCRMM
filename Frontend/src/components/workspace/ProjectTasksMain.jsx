@@ -15,6 +15,7 @@ import {
   exportTasksJson,
   fetchTasks,
   importTasksJson,
+  updateTask,
 } from "../../services/task.service";
 import {
   buildTaskDetailsRoute,
@@ -22,6 +23,7 @@ import {
 import CreateTaskModal from "./CreateTaskModal";
 import {
   DeleteIcon,
+  EyeIcon,
   EditIcon,
   ExportIcon,
   ImportIcon,
@@ -29,21 +31,6 @@ import {
   PlusIcon,
   SearchIcon,
 } from "./WorkspaceIcons";
-
-const statusStyles = {
-  Todo: { backgroundColor: "#eef2ff", color: "#3155ff" },
-  "In Progress": { backgroundColor: "#e8edff", color: "#3155ff" },
-  Review: { backgroundColor: "#eef6ff", color: "#2f6adf" },
-  Done: { backgroundColor: "#e9f8ef", color: "#1d8f5a" },
-  Blocked: { backgroundColor: "#fff1f1", color: "#d14343" },
-};
-
-const priorityStyles = {
-  Low: { backgroundColor: "#f3f4f6", color: "#5b6473" },
-  Medium: { backgroundColor: "#eef2ff", color: "#3155ff" },
-  High: { backgroundColor: "#fff4e8", color: "#d97706" },
-  Critical: { backgroundColor: "#fff1f1", color: "#d14343" },
-};
 
 const taskStatusFilterOptions = [
   { value: "todo", label: "Todo" },
@@ -100,9 +87,9 @@ const formatDateLabel = (value, withTime = false) => {
     year: "numeric",
     ...(withTime
       ? {
-          hour: "numeric",
-          minute: "2-digit",
-        }
+        hour: "numeric",
+        minute: "2-digit",
+      }
       : {}),
   });
 };
@@ -153,6 +140,23 @@ const toTitleCase = (value = "") =>
 
 const formatTaskCode = (taskNumber) => `TSK-${taskNumber}`;
 
+const statusStyles = {
+  Todo: { backgroundColor: "#eef2ff", color: "#3155ff" },
+  "In Progress": { backgroundColor: "#e8edff", color: "#3155ff" },
+  Review: { backgroundColor: "#eef6ff", color: "#2f6adf" },
+  Done: { backgroundColor: "#e9f8ef", color: "#1d8f5a" },
+  Blocked: { backgroundColor: "#fff1f1", color: "#d14343" },
+};
+
+const priorityStyles = {
+  Low: { backgroundColor: "#f3f4f6", color: "#5b6473" },
+  Medium: { backgroundColor: "#eef2ff", color: "#3155ff" },
+  High: { backgroundColor: "#fff4e8", color: "#d97706" },
+  Critical: { backgroundColor: "#fff1f1", color: "#d14343" },
+};
+
+const buildHoveredCellKey = (taskId, field) => `${taskId}:${field}`;
+
 const buildUserLabel = (user = {}) =>
   `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim() ||
   user.email ||
@@ -197,6 +201,61 @@ const mapApiTaskToTableRow = (task) => ({
   workspaceId: String(task.workspaceId || "-"),
 });
 
+const buildEditableTaskValues = (task) => ({
+  title: String(task?.title || ""),
+  status: String(task?.rawTask?.status || "todo"),
+  priority: String(task?.rawTask?.priority || "medium"),
+  dueDate: String(task?.rawTask?.dueDate || ""),
+  assignedTo: task?.rawTask?.assignedTo ? String(task.rawTask.assignedTo) : "",
+  assignedBy: task?.rawTask?.assignedBy ? String(task.rawTask.assignedBy) : "",
+  tags: Array.isArray(task?.rawTask?.tags)
+    ? task.rawTask.tags.join(", ")
+    : "",
+});
+
+function OverflowTooltip({ title, children }) {
+  const contentRef = useRef(null);
+  const [isOverflowed, setIsOverflowed] = useState(false);
+
+  useEffect(() => {
+    const measureOverflow = () => {
+      const element = contentRef.current;
+
+      if (!element) {
+        setIsOverflowed(false);
+        return;
+      }
+
+      setIsOverflowed(element.scrollWidth > element.clientWidth);
+    };
+
+    measureOverflow();
+    window.addEventListener("resize", measureOverflow);
+
+    return () => {
+      window.removeEventListener("resize", measureOverflow);
+    };
+  }, [title]);
+
+  return (
+    <Tooltip title={isOverflowed ? title : ""} placement="top" disableHoverListener={!isOverflowed}>
+      <Box
+        ref={contentRef}
+        component="span"
+        sx={{
+          display: "block",
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {children}
+      </Box>
+    </Tooltip>
+  );
+}
+
 export default function ProjectTasksMain({
   projectTitle = "Project",
   project = null,
@@ -221,6 +280,10 @@ export default function ProjectTasksMain({
   const [isImportingTasks, setIsImportingTasks] = useState(false);
   const [projectUsers, setProjectUsers] = useState([]);
   const [workspaceUsers, setWorkspaceUsers] = useState([]);
+  const [taskDrafts, setTaskDrafts] = useState({});
+  const [savingTaskIds, setSavingTaskIds] = useState([]);
+  const [hoveredCellKey, setHoveredCellKey] = useState("");
+  const [editingTitleTaskId, setEditingTitleTaskId] = useState(null);
   const importFileInputRef = useRef(null);
   const showClearFilters = hasActiveTaskColumnFilters(columnFilters);
 
@@ -405,6 +468,18 @@ export default function ProjectTasksMain({
   ]);
 
   useEffect(() => {
+    setTaskDrafts((currentDrafts) => {
+      const nextDrafts = {};
+
+      tasks.forEach((task) => {
+        nextDrafts[task.rawId] = currentDrafts[task.rawId] || buildEditableTaskValues(task);
+      });
+
+      return nextDrafts;
+    });
+  }, [tasks]);
+
+  useEffect(() => {
     if (currentPage !== safeCurrentPage) {
       setCurrentPage(safeCurrentPage);
     }
@@ -426,6 +501,125 @@ export default function ProjectTasksMain({
 
   const handleClearColumnFilters = () => {
     setColumnFilters(initialTaskColumnFilters);
+  };
+
+  const flushTaskAutosave = async (taskId, draftOverride = null) => {
+    const task = tasks.find((currentTask) => currentTask.rawId === taskId);
+    const draft = draftOverride || taskDrafts[taskId];
+
+    if (!task || !draft || !authSession?.token) {
+      return;
+    }
+
+    const trimmedTitle = draft.title.trim();
+
+    if (!trimmedTitle) {
+      return;
+    }
+
+    const normalizedTags = draft.tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    const nextPayload = {
+      title: trimmedTitle,
+      description: task.rawTask?.description || "",
+      status: draft.status || "todo",
+      priority: draft.priority || "medium",
+      taskType: task.rawTask?.taskType || "feature",
+      parentTaskId: task.rawTask?.parentTaskId || undefined,
+      assignedBy: draft.assignedBy ? Number(draft.assignedBy) : undefined,
+      assignedTo: draft.assignedTo ? Number(draft.assignedTo) : undefined,
+      startDate: task.rawTask?.startDate || undefined,
+      dueDate: draft.dueDate || undefined,
+      completedAt: task.rawTask?.completedAt || undefined,
+      tags: normalizedTags,
+    };
+
+    const hasChanges =
+      trimmedTitle !== String(task.rawTask?.title || "") ||
+      nextPayload.status !== String(task.rawTask?.status || "todo") ||
+      nextPayload.priority !== String(task.rawTask?.priority || "medium") ||
+      String(nextPayload.dueDate || "") !== String(task.rawTask?.dueDate || "") ||
+      String(nextPayload.assignedTo || "") !== String(task.rawTask?.assignedTo || "") ||
+      String(nextPayload.assignedBy || "") !== String(task.rawTask?.assignedBy || "") ||
+      JSON.stringify(normalizedTags) !==
+      JSON.stringify(Array.isArray(task.rawTask?.tags) ? task.rawTask.tags : []);
+
+    if (!hasChanges) {
+      return;
+    }
+
+    setSavingTaskIds((currentIds) =>
+      currentIds.includes(taskId) ? currentIds : [...currentIds, taskId]
+    );
+
+    try {
+      const result = await updateTask(taskId, nextPayload, authSession.token);
+      const updatedTask = result?.task;
+
+      if (!updatedTask) {
+        return;
+      }
+
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.rawId === taskId ? mapApiTaskToTableRow(updatedTask) : currentTask
+        )
+      );
+
+      setTaskDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [taskId]: buildEditableTaskValues(mapApiTaskToTableRow(updatedTask)),
+      }));
+
+      await showSuccessAlert(
+        "Task updated",
+        result?.message || "The task has been updated successfully."
+      );
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to update task",
+        error.message || "Something went wrong while updating the task."
+      );
+    } finally {
+      setSavingTaskIds((currentIds) => currentIds.filter((id) => id !== taskId));
+    }
+  };
+
+  const handleInlineTaskChange = (taskId, field, value, options = {}) => {
+    let nextDraft = null;
+
+    setTaskDrafts((currentDrafts) => {
+      nextDraft = {
+        ...(currentDrafts[taskId] || {}),
+        [field]: value,
+      };
+
+      return {
+        ...currentDrafts,
+        [taskId]: nextDraft,
+      };
+    });
+
+    if (options.saveImmediately && nextDraft) {
+      void flushTaskAutosave(taskId, nextDraft);
+    }
+  };
+
+  const handleInlineTaskBlur = (taskId) => {
+    if (editingTitleTaskId === taskId) {
+      setEditingTitleTaskId(null);
+    }
+
+    void flushTaskAutosave(taskId);
+  };
+
+  const handleInlineCellMouseLeave = (taskId, field) => {
+    const cellKey = buildHoveredCellKey(taskId, field);
+
+    setHoveredCellKey((currentKey) => (currentKey === cellKey ? "" : currentKey));
   };
 
   const handleCloseCreateTaskModal = async (forceClose = false) => {
@@ -940,9 +1134,6 @@ export default function ProjectTasksMain({
                   <th style={{ width: "140px", minWidth: "140px" }}>Due Date</th>
                   <th style={{ width: "160px", minWidth: "160px" }}>Assignee</th>
                   <th style={{ width: "160px", minWidth: "160px" }}>Assigned By</th>
-                  <th style={{ width: "220px", minWidth: "220px" }}>Tags</th>
-                  <th style={{ width: "170px", minWidth: "170px" }}>Updated At</th>
-                  <th style={{ width: "170px", minWidth: "170px" }}>Created At</th>
                   <th style={{ width: "120px", minWidth: "120px" }}>Options</th>
                 </tr>
                 <tr>
@@ -1038,33 +1229,6 @@ export default function ProjectTasksMain({
                     </Select>
                   </th>
                   <th>
-                    <Input
-                      size="sm"
-                      placeholder="Tags"
-                      value={columnFilters.tags}
-                      onChange={(event) => handleColumnFilterChange("tags", event.target.value)}
-                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
-                    />
-                  </th>
-                  <th>
-                    <Input
-                      size="sm"
-                      type="date"
-                      value={columnFilters.updatedAt}
-                      onChange={(event) => handleColumnFilterChange("updatedAt", event.target.value)}
-                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
-                    />
-                  </th>
-                  <th>
-                    <Input
-                      size="sm"
-                      type="date"
-                      value={columnFilters.createdAt}
-                      onChange={(event) => handleColumnFilterChange("createdAt", event.target.value)}
-                      sx={{ "--Input-minHeight": "30px", fontSize: "0.8rem" }}
-                    />
-                  </th>
-                  <th>
                     <Typography level="body-xs" sx={{ color: "#98a3bd" }}>
                       Filter only
                     </Typography>
@@ -1074,7 +1238,7 @@ export default function ProjectTasksMain({
               <tbody>
                 {isLoadingTasks ? (
                   <tr>
-                    <td colSpan={11}>
+                    <td colSpan={8}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           Loading tasks...
@@ -1090,90 +1254,270 @@ export default function ProjectTasksMain({
                         {task.id}
                       </Typography>
                     </td>
-                    <td>
-                      <Typography sx={{ fontWeight: 700, color: "#4b5563" }}>
-                        <Box
-                          component="button"
-                          type="button"
-                          onClick={() => handleShowTask(task)}
+                    <td
+                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "taskName"))}
+                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "taskName")}
+                      onClick={() => {
+                        if (editingTitleTaskId !== task.rawId) {
+                          handleShowTask(task);
+                        }
+                      }}
+                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+                      style={{ cursor: editingTitleTaskId === task.rawId ? "default" : "pointer" }}
+                    >
+                      {editingTitleTaskId === task.rawId ? (
+                        <Input
+                          size="sm"
+                          value={taskDrafts[task.rawId]?.title ?? task.title}
+                          onChange={(event) =>
+                            handleInlineTaskChange(task.rawId, "title", event.target.value)
+                          }
+                          onBlur={() => handleInlineTaskBlur(task.rawId)}
+                          autoFocus
                           sx={{
-                            border: "none",
-                            background: "transparent",
-                            p: 0,
-                            m: 0,
-                            font: "inherit",
-                            color: "#4b5563",
+                            "--Input-minHeight": "34px",
                             fontWeight: 700,
-                            textAlign: "left",
-                            cursor: "pointer",
-                            "&:hover": {
-                              color: "#3155ff",
-                            },
+                            color: "#4b5563",
                           }}
-                        >
-                          {task.title}
-                        </Box>
-                      </Typography>
-                      {task.parentTaskProjectTaskNumber || task.subtasksCount > 0 ? (
-                        <Stack direction="row" spacing={0.75} sx={{ mt: 0.45 }} flexWrap="wrap" useFlexGap>
-                          {task.parentTaskProjectTaskNumber ? (
-                            <Typography level="body-xs" sx={{ color: "#7b8596", fontWeight: 600 }}>
-                              Subtask of {formatTaskCode(task.parentTaskProjectTaskNumber)}
-                            </Typography>
-                          ) : null}
-                          {task.subtasksCount > 0 ? (
-                            <Typography level="body-xs" sx={{ color: "#3155ff", fontWeight: 600 }}>
-                              {task.subtasksCount} subtask{task.subtasksCount === 1 ? "" : "s"}
-                            </Typography>
-                          ) : null}
-                        </Stack>
-                      ) : null}
-                    </td>
-                    <td>
-                      <Chip
-                        size="sm"
-                        variant="soft"
-                        sx={{ borderRadius: "999px", fontWeight: 700, ...statusStyles[task.status] }}
-                      >
-                        {task.status}
-                      </Chip>
-                    </td>
-                    <td>
-                      <Chip
-                        size="sm"
-                        variant="soft"
-                        sx={{ borderRadius: "999px", fontWeight: 700, ...priorityStyles[task.priority] }}
-                      >
-                        {task.priority}
-                      </Chip>
-                    </td>
-                    <td>{formatDateLabel(task.dueDate)}</td>
-                    <td>{task.assignedTo}</td>
-                    <td>{task.assignedBy}</td>
-                    <td>
-                      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-                        {task.tags.map((tag) => (
-                          <Chip
-                            key={tag}
-                            size="sm"
-                            variant="soft"
+                        />
+                      ) : (
+                        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+                          <Typography
                             sx={{
-                              borderRadius: "999px",
-                              backgroundColor: "#eef2ff",
-                              color: "#3155ff",
-                              fontWeight: 600,
+                              fontWeight: 700,
+                              color: "#4b5563",
+                              minWidth: 0,
+                              flex: 1,
                             }}
                           >
-                            {tag}
-                          </Chip>
-                        ))}
-                      </Stack>
+                            <Box
+                              component="button"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setEditingTitleTaskId(task.rawId);
+                                setTaskDrafts((currentDrafts) => ({
+                                  ...currentDrafts,
+                                  [task.rawId]:
+                                    currentDrafts[task.rawId] || buildEditableTaskValues(task),
+                                }));
+                              }}
+                              sx={{
+                                background: "transparent",
+                                p: 0,
+                                m: 0,
+                                font: "inherit",
+                                color: "#4b5563",
+                                fontWeight: 700,
+                                textAlign: "left",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                maxWidth: "100%",
+                                minWidth: 0,
+                                px: 0.75,
+                                py: 0.55,
+                                border: "1px solid transparent",
+                                borderRadius: "8px",
+                                outline: "none",
+                                overflow: "hidden",
+                                transition: "border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease",
+                                "&:hover": {
+                                  borderColor: "rgba(49, 85, 255, 0.28)",
+                                  backgroundColor: "#f7f9ff",
+                                  color: "#3155ff",
+                                },
+                              }}
+                            >
+                              <OverflowTooltip title={task.title}>
+                                {task.title}
+                              </OverflowTooltip>
+                            </Box>
+                          </Typography>
+                          <Tooltip title="Open task" variant="soft">
+                            <IconButton
+                              size="sm"
+                              variant="plain"
+                              sx={{
+                                color: "#3155ff",
+                                flexShrink: 0,
+                                opacity:
+                                  hoveredCellKey === buildHoveredCellKey(task.rawId, "taskName") &&
+                                  editingTitleTaskId !== task.rawId
+                                    ? 1
+                                    : 0,
+                                visibility:
+                                  hoveredCellKey === buildHoveredCellKey(task.rawId, "taskName") &&
+                                  editingTitleTaskId !== task.rawId
+                                    ? "visible"
+                                    : "hidden",
+                                transition: "opacity 0.18s ease, visibility 0.18s ease",
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleShowTask(task);
+                              }}
+                            >
+                              <EyeIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      )}
                     </td>
-                    <td>{formatDateLabel(task.updatedAt, true)}</td>
-                    <td>{formatDateLabel(task.createdAt, true)}</td>
+                    <td
+                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "status"))}
+                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "status")}
+                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+                    >
+                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "status") ? (
+                        <Select
+                          size="sm"
+                          value={taskDrafts[task.rawId]?.status ?? task.rawTask?.status ?? "todo"}
+                          onChange={(_, value) =>
+                            handleInlineTaskChange(task.rawId, "status", value || "todo", {
+                              saveImmediately: true,
+                            })
+                          }
+                          onClose={() => handleInlineTaskBlur(task.rawId)}
+                          sx={{ minHeight: "34px", fontSize: "0.85rem" }}
+                        >
+                          {taskStatusFilterOptions.map((option) => (
+                            <Option key={`inline-status-${task.rawId}-${option.value}`} value={option.value}>
+                              {option.label}
+                            </Option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Chip
+                          size="sm"
+                          variant="soft"
+                          sx={{ borderRadius: "999px", fontWeight: 700, ...statusStyles[task.status] }}
+                        >
+                          {task.status}
+                        </Chip>
+                      )}
+                    </td>
+                    <td
+                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "priority"))}
+                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "priority")}
+                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+                    >
+                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "priority") ? (
+                        <Select
+                          size="sm"
+                          value={taskDrafts[task.rawId]?.priority ?? task.rawTask?.priority ?? "medium"}
+                          onChange={(_, value) =>
+                            handleInlineTaskChange(task.rawId, "priority", value || "medium", {
+                              saveImmediately: true,
+                            })
+                          }
+                          onClose={() => handleInlineTaskBlur(task.rawId)}
+                          sx={{ minHeight: "34px", fontSize: "0.85rem" }}
+                        >
+                          {taskPriorityFilterOptions.map((option) => (
+                            <Option key={`inline-priority-${task.rawId}-${option.value}`} value={option.value}>
+                              {option.label}
+                            </Option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Chip
+                          size="sm"
+                          variant="soft"
+                          sx={{ borderRadius: "999px", fontWeight: 700, ...priorityStyles[task.priority] }}
+                        >
+                          {task.priority}
+                        </Chip>
+                      )}
+                    </td>
+                    <td
+                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "dueDate"))}
+                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "dueDate")}
+                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+                    >
+                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "dueDate") ? (
+                        <Input
+                          size="sm"
+                          type="date"
+                          value={taskDrafts[task.rawId]?.dueDate ?? task.dueDate ?? ""}
+                          onChange={(event) =>
+                            handleInlineTaskChange(task.rawId, "dueDate", event.target.value, {
+                              saveImmediately: true,
+                            })
+                          }
+                          onBlur={() => handleInlineTaskBlur(task.rawId)}
+                          sx={{ "--Input-minHeight": "34px", fontSize: "0.82rem" }}
+                        />
+                      ) : (
+                        formatDateLabel(task.dueDate)
+                      )}
+                    </td>
+                    <td
+                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "assignedTo"))}
+                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "assignedTo")}
+                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+                    >
+                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "assignedTo") ? (
+                        <Select
+                          size="sm"
+                          value={taskDrafts[task.rawId]?.assignedTo ?? ""}
+                          onChange={(_, value) =>
+                            handleInlineTaskChange(task.rawId, "assignedTo", value || "", {
+                              saveImmediately: true,
+                            })
+                          }
+                          onClose={() => handleInlineTaskBlur(task.rawId)}
+                          placeholder="Assignee"
+                          sx={{ minHeight: "34px", fontSize: "0.82rem" }}
+                        >
+                          <Option value="">Unassigned</Option>
+                          {assigneeOptions.map((option) => (
+                            <Option key={`inline-assigned-to-${task.rawId}-${option.id}`} value={String(option.id)}>
+                              {option.label}
+                            </Option>
+                          ))}
+                        </Select>
+                      ) : (
+                        task.assignedTo
+                      )}
+                    </td>
+                    <td
+                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "assignedBy"))}
+                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "assignedBy")}
+                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+                    >
+                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "assignedBy") ? (
+                        <Select
+                          size="sm"
+                          value={taskDrafts[task.rawId]?.assignedBy ?? ""}
+                          onChange={(_, value) =>
+                            handleInlineTaskChange(task.rawId, "assignedBy", value || "", {
+                              saveImmediately: true,
+                            })
+                          }
+                          onClose={() => handleInlineTaskBlur(task.rawId)}
+                          placeholder="Assigned by"
+                          sx={{ minHeight: "34px", fontSize: "0.82rem" }}
+                        >
+                          <Option value="">Not set</Option>
+                          {assigneeOptions.map((option) => (
+                            <Option key={`inline-assigned-by-${task.rawId}-${option.id}`} value={String(option.id)}>
+                              {option.label}
+                            </Option>
+                          ))}
+                        </Select>
+                      ) : (
+                        task.assignedBy
+                      )}
+                    </td>
                     <td>
                       <Stack direction="row" spacing={0.5} alignItems="center">
-                        <Tooltip title="Edit task" variant="soft">
+                        {savingTaskIds.includes(task.rawId) ? (
+                          <Typography level="body-xs" sx={{ color: "#3155ff", fontWeight: 600 }}>
+                            Saving...
+                          </Typography>
+                        ) : null}
+                        <Tooltip title="Open task" variant="soft">
                           <IconButton
                             variant="plain"
                             sx={{ color: "#3155ff" }}
@@ -1203,7 +1547,7 @@ export default function ProjectTasksMain({
                 ))}
                 {!isLoadingTasks && tasks.length === 0 ? (
                   <tr>
-                    <td colSpan={11}>
+                    <td colSpan={8}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           No tasks found

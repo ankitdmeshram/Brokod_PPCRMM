@@ -11,7 +11,6 @@ import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotific
 import {
   GridIcon,
   NotificationIcon,
-  SettingsIcon,
   TasksIcon,
   UsersIcon,
 } from "../components/workspace/WorkspaceIcons";
@@ -275,13 +274,6 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
         label: "Notifications",
         to: buildProjectSectionRoute(workspaceSlug, projectSlug, "notifications"),
         active: section === "notifications",
-      },
-      {
-        key: "settings",
-        icon: <SettingsIcon />,
-        label: "Settings",
-        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "settings"),
-        active: section === "settings",
       },
     ],
     [projectSlug, section, workspaceSlug]

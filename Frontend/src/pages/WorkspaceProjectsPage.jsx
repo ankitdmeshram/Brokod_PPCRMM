@@ -6,7 +6,6 @@ import {
   FolderIcon,
   GridIcon,
   NotificationIcon,
-  SettingsIcon,
   UsersIcon,
 } from "../components/workspace/WorkspaceIcons";
 import WorkspaceOverviewMain from "../components/workspace/WorkspaceOverviewMain";
@@ -82,7 +81,6 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
         to: buildWorkspaceNotificationsRoute(workspaceSlug),
         active: section === "notifications",
       },
-      { key: "settings", icon: <SettingsIcon />, label: "Settings" },
     ],
     [section, workspaceSlug]
   );

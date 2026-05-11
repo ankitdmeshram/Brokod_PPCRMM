@@ -24,7 +24,6 @@ import {
   GridIcon,
   NotificationIcon,
   PlusIcon,
-  SettingsIcon,
   TasksIcon,
 } from "../components/workspace/WorkspaceIcons";
 import { useAuthContext } from "../context/AuthContext";
@@ -200,12 +199,6 @@ export default function WorkspaceTaskDetailsPage() {
         icon: <NotificationIcon />,
         label: "Notifications",
         to: buildProjectSectionRoute(workspaceSlug, projectSlug, "notifications"),
-      },
-      {
-        key: "settings",
-        icon: <SettingsIcon />,
-        label: "Settings",
-        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "settings"),
       },
     ],
     [projectSlug, workspaceSlug]

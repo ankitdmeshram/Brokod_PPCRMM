@@ -730,13 +730,6 @@ export default function SuperAdminProjectsPage({ section = "overview" }) {
         to: SUPER_ADMIN_ROUTES.users,
         active: location.pathname === SUPER_ADMIN_ROUTES.users,
       },
-      {
-        key: "settings",
-        icon: <SettingsIcon />,
-        label: "Settings",
-        to: SUPER_ADMIN_ROUTES.settings,
-        active: location.pathname === SUPER_ADMIN_ROUTES.settings,
-      },
     ],
     [location.pathname]
   );
