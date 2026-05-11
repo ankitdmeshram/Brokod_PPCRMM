@@ -35,7 +35,7 @@ docker compose down -v
 
 - Nginx handles all public routes and forwards `/`, `/projects`, and `/api` to the right container.
 - The React app runs with Vite in Docker dev mode on `/projects`, including HMR through nginx.
+- The Next.js `web` app runs in Docker dev mode with polling enabled so changes in `./web` reflect immediately on Windows bind mounts too.
 - The React app uses same-origin API calls, so `VITE_API_DOMAIN` can stay empty in Docker.
 - The backend allows the origin defined by `FRONTEND_DOMAIN`.
-- The Next.js `web` app runs in `next dev` during local Docker development.
 - The MySQL container is exposed on host port `3307` by default, which avoids conflicts with any local MySQL already using port `3306`.
