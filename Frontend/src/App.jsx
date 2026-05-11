@@ -68,6 +68,14 @@ export default function App() {
             }
           />
           <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/notifications`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="notifications" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/overview`}
             element={
               <ProtectedRoute>

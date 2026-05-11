@@ -33,6 +33,18 @@ const getWorkspaceUsers = asyncHandler(async (request, response) => {
   });
 });
 
+const getWorkspaceNotifications = asyncHandler(async (request, response) => {
+  const notifications = await workspaceService.getWorkspaceNotifications(
+    request.workspaceId,
+    request.user.sub,
+    request.query
+  );
+
+  response.status(200).json({
+    notifications,
+  });
+});
+
 const inviteWorkspaceUser = asyncHandler(async (request, response) => {
   const result = await workspaceService.inviteWorkspaceUser(
     request.workspaceId,
@@ -113,6 +125,7 @@ module.exports = {
   createWorkspace,
   deleteWorkspace,
   deleteWorkspaceUser,
+  getWorkspaceNotifications,
   getWorkspaceUsers,
   getWorkspaces,
   inviteWorkspaceUser,

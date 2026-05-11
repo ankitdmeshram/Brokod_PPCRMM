@@ -1,6 +1,5 @@
 import {
   Avatar,
-  Box,
   Button,
   Chip,
   Divider,
@@ -18,7 +17,6 @@ import { useAuthContext } from "../../context/AuthContext";
 import { APP_ROUTES } from "../../router/authRoutes";
 import { showErrorAlert } from "../../services/alert.service";
 import {
-  BellIcon,
   ExpandIcon,
   MenuIcon,
 } from "../workspace/WorkspaceIcons";
@@ -118,35 +116,6 @@ export default function AppHeader({
         >
           <ExpandIcon />
         </IconButton>
-        <Box sx={{ position: "relative" }}>
-          <IconButton
-            variant="plain"
-            color="neutral"
-            size="sm"
-            sx={{ color: "var(--color-font-secondary)" }}
-          >
-            <BellIcon />
-          </IconButton>
-          <Sheet
-            sx={{
-              position: "absolute",
-              top: 2,
-              right: 0,
-              minWidth: "16px",
-              height: "16px",
-              px: 0.5,
-              borderRadius: "999px",
-              backgroundColor: "#ff6f59",
-              color: "#fff",
-              display: "grid",
-              placeItems: "center",
-              fontSize: "0.62rem",
-              fontWeight: 700,
-            }}
-          >
-            3
-          </Sheet>
-        </Box>
         <Divider orientation="vertical" />
         <Dropdown>
           <MenuButton

@@ -78,6 +78,26 @@ export async function fetchWorkspaceUsers(workspaceId, token, filters = {}) {
   return parseApiResponse(response);
 }
 
+export async function fetchWorkspaceNotifications(workspaceId, token, filters = {}) {
+  const query = new URLSearchParams();
+
+  if (filters.projectName?.trim()) {
+    query.set("projectName", filters.projectName.trim());
+  }
+
+  const response = await fetch(
+    `${WORKSPACE_API_BASE}/${workspaceId}/notifications${query.toString() ? `?${query}` : ""}`,
+    {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    }
+  );
+
+  return parseApiResponse(response);
+}
+
 export async function fetchAllWorkspaceUsers(workspaceId, token, filters = {}) {
   const aggregatedUsers = [];
   let page = 1;

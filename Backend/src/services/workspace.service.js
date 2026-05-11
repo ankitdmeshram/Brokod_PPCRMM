@@ -78,6 +78,44 @@ const splitInviteeName = (name = "") => {
 const generateTemporaryPassword = () =>
   `Brokod@${Math.random().toString(36).slice(-8)}${Date.now().toString().slice(-4)}`;
 
+const formatDateOnly = (date = new Date()) => {
+  const value = new Date(date);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const addDays = (dateString, days) => {
+  const [year, month, day] = String(dateString || "")
+    .split("-")
+    .map((part) => Number(part));
+  const nextDate = new Date(year, month - 1, day);
+  nextDate.setDate(nextDate.getDate() + days);
+  return formatDateOnly(nextDate);
+};
+
+const buildFullName = (firstName = "", lastName = "") =>
+  `${String(firstName || "").trim()} ${String(lastName || "").trim()}`.trim();
+
+const mapWorkspaceNotification = (notification) => ({
+  id: notification.id,
+  type: notification.type,
+  category: notification.category,
+  severity: notification.severity,
+  title: notification.title,
+  message: notification.message,
+  workspaceId: notification.workspaceId,
+  projectId: notification.projectId,
+  projectName: notification.projectName,
+  projectSlug: notification.projectSlug,
+  taskId: notification.taskId ?? null,
+  taskTitle: notification.taskTitle ?? null,
+  taskSlug: notification.taskSlug ?? null,
+  dueDate: notification.dueDate ?? null,
+  createdAt: notification.createdAt,
+});
+
 const createWorkspace = async (payload, userId) => {
   const { workspaceName, workspaceDescription } =
     validateCreateWorkspacePayload(payload);
@@ -157,6 +195,281 @@ const getWorkspaceUsers = async (workspaceId, filters = {}) => {
       totalPages: Math.max(1, Math.ceil(total / limit)),
     },
   };
+};
+
+const getWorkspaceNotifications = async (workspaceId, userId, filters = {}) => {
+  const normalizedWorkspaceId = Number(workspaceId);
+  const normalizedUserId = Number(userId);
+  const normalizedProjectName = String(filters?.projectName || "").trim();
+
+  if (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId <= 0) {
+    throw new AppError("Please provide a valid workspace id.", 400);
+  }
+
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    throw new AppError("Please provide a valid user id.", 400);
+  }
+
+  const today = formatDateOnly();
+  const taskDueSoonDate = addDays(today, 2);
+  const projectDueSoonDate = addDays(today, 7);
+
+  const [
+    assignedTasks,
+    projectMemberships,
+    publicProjects,
+    taskDeadlines,
+    projectDeadlines,
+  ] = await Promise.all([
+    getDb()("tasks")
+      .join("projects", "projects.id", "tasks.project_id")
+      .leftJoin({ actor: "users" }, "actor.id", "tasks.assigned_by")
+      .leftJoin({ project_membership: "project_users" }, function joinMembership() {
+        this.on("project_membership.project_id", "=", "projects.id")
+          .andOn("project_membership.user_id", "=", getDb().raw("?", [normalizedUserId]))
+          .andOn("project_membership.status", "=", getDb().raw("?", ["active"]));
+      })
+      .select(
+        "tasks.id as task_id",
+        "tasks.title as task_title",
+        "tasks.slug as task_slug",
+        "tasks.due_date",
+        "tasks.created_at",
+        "tasks.updated_at",
+        "projects.id as project_id",
+        "projects.project_name",
+        "projects.slug as project_slug",
+        "actor.first_name as actor_first_name",
+        "actor.last_name as actor_last_name"
+      )
+      .where("tasks.workspace_id", normalizedWorkspaceId)
+      .andWhere("tasks.assigned_to", normalizedUserId)
+      .whereNotNull("tasks.assigned_by")
+      .andWhere("tasks.assigned_by", "!=", normalizedUserId)
+      .modify((query) => {
+        if (normalizedProjectName) {
+          query.andWhere("projects.project_name", normalizedProjectName);
+        }
+      })
+      .andWhere((builder) => {
+        builder.where("projects.access", "public").orWhereNotNull("project_membership.user_id");
+      })
+      .whereNull("tasks.deleted_at")
+      .whereNull("projects.deleted_at")
+      .orderBy("tasks.updated_at", "desc"),
+    getDb()("project_users")
+      .join("projects", "projects.id", "project_users.project_id")
+      .leftJoin({ actor: "users" }, "actor.id", "project_users.created_by")
+      .select(
+        "project_users.user_id",
+        "project_users.role",
+        "project_users.created_at",
+        "projects.id as project_id",
+        "projects.project_name",
+        "projects.slug as project_slug",
+        "actor.first_name as actor_first_name",
+        "actor.last_name as actor_last_name"
+      )
+      .where("projects.workspace_id", normalizedWorkspaceId)
+      .andWhere("project_users.user_id", normalizedUserId)
+      .andWhere("project_users.status", "active")
+      .andWhere("project_users.role", "!=", "owner")
+      .andWhere("project_users.created_by", "!=", normalizedUserId)
+      .modify((query) => {
+        if (normalizedProjectName) {
+          query.andWhere("projects.project_name", normalizedProjectName);
+        }
+      })
+      .whereNull("projects.deleted_at")
+      .orderBy("project_users.created_at", "desc"),
+    getDb()("projects")
+      .leftJoin({ actor: "users" }, "actor.id", "projects.created_by")
+      .select(
+        "projects.id as project_id",
+        "projects.project_name",
+        "projects.slug as project_slug",
+        "projects.created_at",
+        "actor.first_name as actor_first_name",
+        "actor.last_name as actor_last_name"
+      )
+      .where("projects.workspace_id", normalizedWorkspaceId)
+      .andWhere("projects.access", "public")
+      .andWhere("projects.created_by", "!=", normalizedUserId)
+      .modify((query) => {
+        if (normalizedProjectName) {
+          query.andWhere("projects.project_name", normalizedProjectName);
+        }
+      })
+      .whereNull("projects.deleted_at")
+      .orderBy("projects.created_at", "desc"),
+    getDb()("tasks")
+      .join("projects", "projects.id", "tasks.project_id")
+      .leftJoin({ project_membership: "project_users" }, function joinMembership() {
+        this.on("project_membership.project_id", "=", "projects.id")
+          .andOn("project_membership.user_id", "=", getDb().raw("?", [normalizedUserId]))
+          .andOn("project_membership.status", "=", getDb().raw("?", ["active"]));
+      })
+      .select(
+        "tasks.id as task_id",
+        "tasks.title as task_title",
+        "tasks.slug as task_slug",
+        "tasks.due_date",
+        "tasks.status",
+        "projects.id as project_id",
+        "projects.project_name",
+        "projects.slug as project_slug"
+      )
+      .where("tasks.workspace_id", normalizedWorkspaceId)
+      .whereNotNull("tasks.due_date")
+      .andWhere("tasks.status", "!=", "done")
+      .andWhereRaw("DATE(tasks.due_date) <= DATE(?)", [taskDueSoonDate])
+      .modify((query) => {
+        if (normalizedProjectName) {
+          query.andWhere("projects.project_name", normalizedProjectName);
+        }
+      })
+      .andWhere((builder) => {
+        builder.where("projects.access", "public").orWhereNotNull("project_membership.user_id");
+      })
+      .whereNull("tasks.deleted_at")
+      .whereNull("projects.deleted_at")
+      .orderBy("tasks.due_date", "asc"),
+    getDb()("projects")
+      .leftJoin({ project_membership: "project_users" }, function joinMembership() {
+        this.on("project_membership.project_id", "=", "projects.id")
+          .andOn("project_membership.user_id", "=", getDb().raw("?", [normalizedUserId]))
+          .andOn("project_membership.status", "=", getDb().raw("?", ["active"]));
+      })
+      .select(
+        "projects.id as project_id",
+        "projects.project_name",
+        "projects.slug as project_slug",
+        "projects.end_date",
+        "projects.status"
+      )
+      .where("projects.workspace_id", normalizedWorkspaceId)
+      .whereNotNull("projects.end_date")
+      .whereNotIn("projects.status", ["completed", "cancelled"])
+      .andWhereRaw("DATE(projects.end_date) <= DATE(?)", [projectDueSoonDate])
+      .modify((query) => {
+        if (normalizedProjectName) {
+          query.andWhere("projects.project_name", normalizedProjectName);
+        }
+      })
+      .andWhere((builder) => {
+        builder.where("projects.access", "public").orWhereNotNull("project_membership.user_id");
+      })
+      .whereNull("projects.deleted_at")
+      .orderBy("projects.end_date", "asc"),
+  ]);
+
+  const notifications = [
+    ...assignedTasks.map((task) => {
+      const actorName = buildFullName(task.actor_first_name, task.actor_last_name) || "Someone";
+
+      return mapWorkspaceNotification({
+        id: `task-assignment-${task.task_id}`,
+        type: "task_assignment",
+        category: "assignments",
+        severity: "info",
+        title: "Task assigned to you",
+        message: `${actorName} assigned "${task.task_title}" to you in ${task.project_name}.`,
+        workspaceId: normalizedWorkspaceId,
+        projectId: task.project_id,
+        projectName: task.project_name,
+        projectSlug: task.project_slug,
+        taskId: task.task_id,
+        taskTitle: task.task_title,
+        taskSlug: task.task_slug,
+        dueDate: task.due_date,
+        createdAt: task.updated_at ?? task.created_at,
+      });
+    }),
+    ...projectMemberships.map((membership) => {
+      const actorName =
+        buildFullName(membership.actor_first_name, membership.actor_last_name) || "Someone";
+
+      return mapWorkspaceNotification({
+        id: `project-membership-${membership.project_id}-${membership.created_at}`,
+        type: "project_added",
+        category: "projects",
+        severity: "success",
+        title: "Added to a project",
+        message: `${actorName} added you to ${membership.project_name} as ${membership.role}.`,
+        workspaceId: normalizedWorkspaceId,
+        projectId: membership.project_id,
+        projectName: membership.project_name,
+        projectSlug: membership.project_slug,
+        createdAt: membership.created_at,
+      });
+    }),
+    ...publicProjects.map((project) => {
+      const actorName = buildFullName(project.actor_first_name, project.actor_last_name) || "Someone";
+
+      return mapWorkspaceNotification({
+        id: `public-project-${project.project_id}`,
+        type: "public_project_created",
+        category: "projects",
+        severity: "info",
+        title: "New public project",
+        message: `${actorName} created a new public project: ${project.project_name}.`,
+        workspaceId: normalizedWorkspaceId,
+        projectId: project.project_id,
+        projectName: project.project_name,
+        projectSlug: project.project_slug,
+        createdAt: project.created_at,
+      });
+    }),
+    ...taskDeadlines.map((task) => {
+      const isOverdue = String(task.due_date || "") < today;
+
+      return mapWorkspaceNotification({
+        id: `task-deadline-${task.task_id}`,
+        type: isOverdue ? "task_overdue" : "task_due_soon",
+        category: "deadlines",
+        severity: isOverdue ? "danger" : "warning",
+        title: isOverdue ? "Task overdue" : "Task due soon",
+        message: isOverdue
+          ? `"${task.task_title}" in ${task.project_name} missed its due date.`
+          : `"${task.task_title}" in ${task.project_name} is due within 2 days.`,
+        workspaceId: normalizedWorkspaceId,
+        projectId: task.project_id,
+        projectName: task.project_name,
+        projectSlug: task.project_slug,
+        taskId: task.task_id,
+        taskTitle: task.task_title,
+        taskSlug: task.task_slug,
+        dueDate: task.due_date,
+        createdAt: task.due_date,
+      });
+    }),
+    ...projectDeadlines.map((project) => {
+      const isOverdue = String(project.end_date || "") < today;
+
+      return mapWorkspaceNotification({
+        id: `project-deadline-${project.project_id}`,
+        type: isOverdue ? "project_overdue" : "project_due_soon",
+        category: "deadlines",
+        severity: isOverdue ? "danger" : "warning",
+        title: isOverdue ? "Project overdue" : "Project due soon",
+        message: isOverdue
+          ? `${project.project_name} missed its target end date.`
+          : `${project.project_name} is due within 7 days.`,
+        workspaceId: normalizedWorkspaceId,
+        projectId: project.project_id,
+        projectName: project.project_name,
+        projectSlug: project.project_slug,
+        dueDate: project.end_date,
+        createdAt: project.end_date,
+      });
+    }),
+  ]
+    .sort((leftNotification, rightNotification) =>
+      new Date(rightNotification.createdAt).getTime() -
+      new Date(leftNotification.createdAt).getTime()
+    );
+
+  return notifications;
 };
 
 const inviteWorkspaceUser = async (workspaceId, payload, userId) => {
@@ -455,6 +768,7 @@ module.exports = {
   createWorkspace,
   deleteWorkspace,
   deleteWorkspaceUser,
+  getWorkspaceNotifications,
   getWorkspaceUsers,
   getWorkspaces,
   inviteWorkspaceUser,

@@ -209,6 +209,12 @@ router.get(
   requireActiveWorkspaceUser,
   workspaceController.getWorkspaceUsers
 );
+router.get(
+  "/:workspaceId/notifications",
+  requireAuth,
+  requireActiveWorkspaceUser,
+  workspaceController.getWorkspaceNotifications
+);
 router.post(
   "/:workspaceId/users",
   requireAuth,

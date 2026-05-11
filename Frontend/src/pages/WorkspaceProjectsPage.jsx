@@ -16,12 +16,14 @@ import {
   APP_ROUTES,
   buildWorkspaceOverviewRoute,
   buildWorkspaceProjectsRoute,
+  buildWorkspaceNotificationsRoute,
   buildWorkspaceUsersRoute,
 } from "../router/authRoutes";
 import { fetchWorkspaces } from "../services/workspace.service";
 import { showAccessDeniedAlert, showErrorAlert } from "../services/alert.service";
 import WorkspaceUsersMain from "../components/workspace/WorkspaceUsersMain";
 import { Box } from "@mui/joy";
+import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotificationsMain";
 
 const formatWorkspaceTitle = (workspaceName = "") =>
   workspaceName
@@ -73,7 +75,13 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
         to: buildWorkspaceUsersRoute(workspaceSlug),
         active: section === "users",
       },
-      { key: "notifications", icon: <NotificationIcon />, label: "Notifications" },
+      {
+        key: "notifications",
+        icon: <NotificationIcon />,
+        label: "Notifications",
+        to: buildWorkspaceNotificationsRoute(workspaceSlug),
+        active: section === "notifications",
+      },
       { key: "settings", icon: <SettingsIcon />, label: "Settings" },
     ],
     [section, workspaceSlug]
@@ -154,6 +162,22 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
           }}
         >
           <WorkspaceUsersMain workspace={workspace} workspaceTitle={workspaceTitle} />
+        </Box>
+      ) : section === "notifications" ? (
+        <Box
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            maxWidth: "100%",
+            px: { xs: 1.25, md: 1.75 },
+            py: { xs: 1.25, md: 1.75 },
+          }}
+        >
+          <WorkspaceNotificationsMain
+            workspace={workspace}
+            workspaceSlug={workspaceSlug}
+            workspaceTitle={workspaceTitle}
+          />
         </Box>
       ) : (
         <ProjectsMain workspace={workspace} workspaceTitle={workspaceTitle} />

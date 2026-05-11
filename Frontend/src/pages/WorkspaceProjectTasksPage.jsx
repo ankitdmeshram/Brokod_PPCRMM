@@ -7,6 +7,7 @@ import OverviewTaskSection from "../components/workspace/OverviewTaskSection";
 import ProjectUsersMain from "../components/workspace/ProjectUsersMain";
 import ProjectTasksMain from "../components/workspace/ProjectTasksMain";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
+import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotificationsMain";
 import {
   GridIcon,
   NotificationIcon,
@@ -647,6 +648,23 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
               statusChipStyles={statusChipStyles}
             />
           </Box>
+        </Box>
+      ) : section === "notifications" ? (
+        <Box
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            maxWidth: "100%",
+            px: { xs: 1.25, md: 1.75 },
+            py: { xs: 1.25, md: 1.75 },
+          }}
+        >
+          <WorkspaceNotificationsMain
+            workspace={workspace}
+            workspaceSlug={workspaceSlug}
+            workspaceTitle={workspace?.workspaceName || "Workspace"}
+            projectName={projectTitle}
+          />
         </Box>
       ) : (
         <Box
