@@ -21,7 +21,7 @@ import {
 import { fetchWorkspaces } from "../services/workspace.service";
 import { showAccessDeniedAlert, showErrorAlert } from "../services/alert.service";
 import WorkspaceUsersMain from "../components/workspace/WorkspaceUsersMain";
-import { Box } from "@mui/joy";
+import { Box, Typography } from "@mui/joy";
 import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotificationsMain";
 
 const formatWorkspaceTitle = (workspaceName = "") =>
@@ -42,13 +42,13 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
   const [workspace, setWorkspace] = useState(() => location.state?.workspace || null);
   const [isResolvingWorkspace, setIsResolvingWorkspace] = useState(!location.state?.workspace);
   const currentYear = new Date().getFullYear();
-  const firstName = authSession?.user?.firstName || "Ankit";
-  const lastName = authSession?.user?.lastName || "Meshram";
+  const firstName = authSession?.user?.firstName || "";
+  const lastName = authSession?.user?.lastName || "";
   const userRole = authSession?.user?.role || "";
   const fullName = `${firstName} ${lastName}`.trim();
   const initial = firstName.charAt(0).toUpperCase() || "A";
   const workspaceTitle = useMemo(
-    () => workspace?.workspaceName || formatWorkspaceTitle(workspaceSlug) || "Workspace",
+    () => workspace?.workspaceName || formatWorkspaceTitle(workspaceSlug) || "",
     [workspace?.workspaceName, workspaceSlug]
   );
   const sidebarItems = useMemo(
@@ -141,6 +141,11 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
           items={sidebarItems}
           showBackToWorkspace
         />
+      }
+      titleContent={
+        <Typography sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}>
+          {workspaceTitle}
+        </Typography>
       }
       fullName={fullName}
       initial={initial}

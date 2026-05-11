@@ -178,6 +178,7 @@ export default function WorkspaceTaskDetailsPage() {
   const currentUserId = authSession?.user?.id ? Number(authSession.user.id) : null;
   const fullName = `${firstName} ${lastName}`.trim();
   const initial = firstName.charAt(0).toUpperCase() || "A";
+  const headerTitle = task?.title || project?.projectName || "";
 
   const sidebarItems = useMemo(
     () => [
@@ -890,6 +891,11 @@ export default function WorkspaceTaskDetailsPage() {
           showBackToWorkspace={false}
           onNavigateAttempt={handleAttemptNavigation}
         />
+      }
+      titleContent={
+        <Typography sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}>
+          {headerTitle}
+        </Typography>
       }
       fullName={fullName}
       initial={initial}
