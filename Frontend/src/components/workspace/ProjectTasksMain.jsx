@@ -113,24 +113,6 @@ const buildInitialTaskFormValues = ({ projectId, workspaceId, currentUserId }) =
   activityLogs: "",
 });
 
-const areTaskFormValuesDirty = (values, initialValues) =>
-  values.title !== initialValues.title ||
-  values.description !== initialValues.description ||
-  values.status !== initialValues.status ||
-  values.priority !== initialValues.priority ||
-  values.taskType !== initialValues.taskType ||
-  values.assignedBy !== initialValues.assignedBy ||
-  values.assignedTo !== initialValues.assignedTo ||
-  values.createdBy !== initialValues.createdBy ||
-  values.startDate !== initialValues.startDate ||
-  values.dueDate !== initialValues.dueDate ||
-  values.completedDate !== initialValues.completedDate ||
-  values.projectId !== initialValues.projectId ||
-  values.workspaceId !== initialValues.workspaceId ||
-  values.comments !== initialValues.comments ||
-  values.activityLogs !== initialValues.activityLogs ||
-  JSON.stringify(values.tags) !== JSON.stringify(initialValues.tags);
-
 const toTitleCase = (value = "") =>
   String(value || "")
     .split("_")
@@ -304,8 +286,6 @@ export default function ProjectTasksMain({
     [currentUserId, project?.id, workspace?.id]
   );
 
-  const [createTaskValues, setCreateTaskValues] = useState(initialTaskFormValues);
-
   const assigneeOptions = useMemo(() => {
     const projectAccess = String(project?.access || "").trim().toLowerCase();
     const baseOptions =
@@ -341,12 +321,6 @@ export default function ProjectTasksMain({
       .filter((page) => page >= 1 && page <= totalPages)
       .sort((a, b) => a - b);
   }, [safeCurrentPage, totalPages]);
-
-  useEffect(() => {
-    if (!isCreateTaskModalOpen) {
-      setCreateTaskValues(initialTaskFormValues);
-    }
-  }, [initialTaskFormValues, isCreateTaskModalOpen]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -485,13 +459,6 @@ export default function ProjectTasksMain({
     }
   }, [currentPage, safeCurrentPage]);
 
-  const handleTaskFieldChange = (field, value) => {
-    setCreateTaskValues((currentValues) => ({
-      ...currentValues,
-      [field]: value,
-    }));
-  };
-
   const handleColumnFilterChange = (field, value) => {
     setColumnFilters((currentFilters) => ({
       ...currentFilters,
@@ -622,33 +589,15 @@ export default function ProjectTasksMain({
     setHoveredCellKey((currentKey) => (currentKey === cellKey ? "" : currentKey));
   };
 
-  const handleCloseCreateTaskModal = async (forceClose = false) => {
+  const handleCloseCreateTaskModal = async () => {
     if (isCreatingTask) {
       return;
     }
 
-    if (!forceClose && areTaskFormValuesDirty(createTaskValues, initialTaskFormValues)) {
-      const confirmation = await showConfirmAlert(
-        "Discard task draft?",
-        "You have unsaved task changes. Closing now will discard them.",
-        {
-          confirmButtonText: "Discard",
-          cancelButtonText: "Keep Editing",
-        }
-      );
-
-      if (!confirmation.isConfirmed) {
-        return;
-      }
-    }
-
     setIsCreateTaskModalOpen(false);
-    setCreateTaskValues(initialTaskFormValues);
   };
 
-  const handleCreateTask = async (event) => {
-    event.preventDefault();
-
+  const handleCreateTask = async (taskValues) => {
     if (!authSession?.token) {
       await showErrorAlert("Signin required", "Please sign in again to create a task.");
       return;
@@ -666,21 +615,21 @@ export default function ProjectTasksMain({
 
     try {
       const payload = {
-        title: createTaskValues.title.trim(),
-        description: createTaskValues.description.trim(),
-        status: createTaskValues.status,
-        priority: createTaskValues.priority,
-        taskType: createTaskValues.taskType,
-        assignedBy: createTaskValues.assignedBy || undefined,
-        assignedTo: createTaskValues.assignedTo || undefined,
+        title: taskValues.title.trim(),
+        description: taskValues.description.trim(),
+        status: taskValues.status,
+        priority: taskValues.priority,
+        taskType: taskValues.taskType,
+        assignedBy: taskValues.assignedBy || undefined,
+        assignedTo: taskValues.assignedTo || undefined,
         projectId: Number(project.id),
         workspaceId: Number(workspace.id),
-        startDate: createTaskValues.startDate || undefined,
-        dueDate: createTaskValues.dueDate || undefined,
-        completedDate: createTaskValues.completedDate || undefined,
-        tags: createTaskValues.tags,
-        comments: createTaskValues.comments.trim(),
-        activityLogs: createTaskValues.activityLogs.trim(),
+        startDate: taskValues.startDate || undefined,
+        dueDate: taskValues.dueDate || undefined,
+        completedDate: taskValues.completedDate || undefined,
+        tags: taskValues.tags,
+        comments: taskValues.comments.trim(),
+        activityLogs: taskValues.activityLogs.trim(),
       };
 
       const result = await createTask(payload, authSession.token);
@@ -690,7 +639,7 @@ export default function ProjectTasksMain({
         result?.message || "The task has been created successfully."
       );
 
-      await handleCloseCreateTaskModal(true);
+      await handleCloseCreateTaskModal();
       setCurrentPage(1);
       setReloadTasksKey((currentValue) => currentValue + 1);
     } catch (error) {
@@ -967,7 +916,6 @@ export default function ProjectTasksMain({
               <Button
                 startDecorator={<PlusIcon />}
                 onClick={() => {
-                  setCreateTaskValues(initialTaskFormValues);
                   setIsCreateTaskModalOpen(true);
                 }}
                 sx={{
@@ -1683,12 +1631,11 @@ export default function ProjectTasksMain({
 
       <CreateTaskModal
         open={isCreateTaskModalOpen}
-        values={createTaskValues}
+        initialValues={initialTaskFormValues}
         projectUserOptions={assigneeOptions}
         projectTitle={projectTitle}
         loading={isCreatingTask}
         onClose={handleCloseCreateTaskModal}
-        onChange={handleTaskFieldChange}
         onSubmit={handleCreateTask}
       />
     </Box>

@@ -11,9 +11,11 @@ import {
   Option,
   Select,
   Stack,
-  Textarea,
   Typography,
 } from "@mui/joy";
+import { useEffect, useState } from "react";
+import { showConfirmAlert } from "../../services/alert.service";
+import RichTextEditor from "../common/RichTextEditor";
 
 const statusOptions = [
   { value: "todo", label: "Todo" },
@@ -39,15 +41,70 @@ const taskTypeOptions = [
 
 const tagSuggestions = ["Planning", "Backend", "Frontend", "Bugfix", "Research", "Sprint"];
 
+const areTaskFormValuesDirty = (values, initialValues) =>
+  values.title !== initialValues.title ||
+  values.description !== initialValues.description ||
+  values.status !== initialValues.status ||
+  values.priority !== initialValues.priority ||
+  values.taskType !== initialValues.taskType ||
+  values.assignedBy !== initialValues.assignedBy ||
+  values.assignedTo !== initialValues.assignedTo ||
+  values.createdBy !== initialValues.createdBy ||
+  values.startDate !== initialValues.startDate ||
+  values.dueDate !== initialValues.dueDate ||
+  values.completedDate !== initialValues.completedDate ||
+  values.projectId !== initialValues.projectId ||
+  values.workspaceId !== initialValues.workspaceId ||
+  values.comments !== initialValues.comments ||
+  values.activityLogs !== initialValues.activityLogs ||
+  JSON.stringify(values.tags) !== JSON.stringify(initialValues.tags);
+
 export default function CreateTaskModal({
   open,
-  values,
+  initialValues,
   projectUserOptions = [],
   loading,
   onClose,
-  onChange,
   onSubmit,
 }) {
+  const [values, setValues] = useState(initialValues);
+
+  useEffect(() => {
+    if (open) {
+      setValues(initialValues);
+    }
+  }, [initialValues, open]);
+
+  const handleFieldChange = (field, value) => {
+    setValues((currentValues) => ({
+      ...currentValues,
+      [field]: value,
+    }));
+  };
+
+  const handleClose = async (forceClose = false) => {
+    if (loading) {
+      return;
+    }
+
+    if (!forceClose && areTaskFormValuesDirty(values, initialValues)) {
+      const confirmation = await showConfirmAlert(
+        "Discard task draft?",
+        "You have unsaved task changes. Closing now will discard them.",
+        {
+          confirmButtonText: "Discard",
+          cancelButtonText: "Keep Editing",
+        }
+      );
+
+      if (!confirmation.isConfirmed) {
+        return;
+      }
+    }
+
+    onClose();
+  };
+
   const createdByOption =
     projectUserOptions.find((option) => Number(option.id) === Number(values.createdBy)) || null;
 
@@ -55,34 +112,32 @@ export default function CreateTaskModal({
     <Modal
       open={open}
       onClose={() => {
-        void onClose();
+        void handleClose();
       }}
     >
       <ModalDialog
         layout="center"
         sx={{
-          // width: "calc(100vw - 2rem)",
-          // maxWidth: "calc(100vw - 2rem)",
-          // height: "calc(100vh - 2rem)",
-          // maxHeight: "calc(100vh - 2rem)",
-          // m: "1rem",
           width: "100%",
           borderRadius: "16px",
           px: { xs: 2, sm: 3 },
           py: { xs: 2, sm: 2.5 },
-          overflow: "hidden",
+          overflow: "visible",
         }}
       >
         <ModalClose
           onClick={(event) => {
             event.preventDefault();
-            void onClose();
+            void handleClose();
           }}
         />
 
         <Box
           component="form"
-          onSubmit={onSubmit}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onSubmit(values);
+          }}
           sx={{
             height: "100%",
             overflowY: "auto",
@@ -118,17 +173,17 @@ export default function CreateTaskModal({
                 <FormLabel>Task title</FormLabel>
                 <Input
                   value={values.title}
-                  onChange={(event) => onChange("title", event.target.value)}
+                  onChange={(event) => handleFieldChange("title", event.target.value)}
                   placeholder="Enter task title"
                 />
               </FormControl>
               <FormControl>
                 <FormLabel>Description</FormLabel>
-                <Textarea
-                  minRows={4}
+                <RichTextEditor
                   value={values.description}
-                  onChange={(event) => onChange("description", event.target.value)}
+                  onChange={(value) => handleFieldChange("description", value)}
                   placeholder="Describe the task scope, intent, and expected outcome"
+                  minHeight={180}
                 />
               </FormControl>
             </Stack>
@@ -139,7 +194,7 @@ export default function CreateTaskModal({
                   <FormLabel>Status</FormLabel>
                   <Select
                     value={values.status}
-                    onChange={(_, value) => onChange("status", value || "")}
+                    onChange={(_, value) => handleFieldChange("status", value || "")}
                     placeholder="Select status"
                   >
                     {statusOptions.map((option) => (
@@ -153,7 +208,7 @@ export default function CreateTaskModal({
                   <FormLabel>Priority</FormLabel>
                   <Select
                     value={values.priority}
-                    onChange={(_, value) => onChange("priority", value || "")}
+                    onChange={(_, value) => handleFieldChange("priority", value || "")}
                     placeholder="Select priority"
                   >
                     {priorityOptions.map((option) => (
@@ -167,7 +222,7 @@ export default function CreateTaskModal({
                   <FormLabel>Task type</FormLabel>
                   <Select
                     value={values.taskType}
-                    onChange={(_, value) => onChange("taskType", value || "")}
+                    onChange={(_, value) => handleFieldChange("taskType", value || "")}
                     placeholder="Select type"
                   >
                     {taskTypeOptions.map((option) => (
@@ -186,7 +241,7 @@ export default function CreateTaskModal({
                   <FormLabel>Assigned by</FormLabel>
                   <Select
                     value={values.assignedBy}
-                    onChange={(_, value) => onChange("assignedBy", value || "")}
+                    onChange={(_, value) => handleFieldChange("assignedBy", value || "")}
                     placeholder="Select assigner"
                   >
                     {projectUserOptions.map((option) => (
@@ -200,7 +255,7 @@ export default function CreateTaskModal({
                   <FormLabel>Assigned to</FormLabel>
                   <Select
                     value={values.assignedTo}
-                    onChange={(_, value) => onChange("assignedTo", value || "")}
+                    onChange={(_, value) => handleFieldChange("assignedTo", value || "")}
                     placeholder="Select assignee"
                   >
                     {projectUserOptions.map((option) => (
@@ -228,7 +283,7 @@ export default function CreateTaskModal({
                   <Input
                     type="date"
                     value={values.startDate}
-                    onChange={(event) => onChange("startDate", event.target.value)}
+                    onChange={(event) => handleFieldChange("startDate", event.target.value)}
                   />
                 </FormControl>
                 <FormControl sx={{ flex: 1 }}>
@@ -236,7 +291,7 @@ export default function CreateTaskModal({
                   <Input
                     type="date"
                     value={values.dueDate}
-                    onChange={(event) => onChange("dueDate", event.target.value)}
+                    onChange={(event) => handleFieldChange("dueDate", event.target.value)}
                   />
                 </FormControl>
                 <FormControl sx={{ flex: 1 }}>
@@ -244,7 +299,7 @@ export default function CreateTaskModal({
                   <Input
                     type="date"
                     value={values.completedDate}
-                    onChange={(event) => onChange("completedDate", event.target.value)}
+                    onChange={(event) => handleFieldChange("completedDate", event.target.value)}
                   />
                 </FormControl>
               </Stack>
@@ -258,14 +313,20 @@ export default function CreateTaskModal({
                   freeSolo
                   options={tagSuggestions}
                   value={values.tags}
-                  onChange={(_, value) => onChange("tags", value)}
+                  onChange={(_, value) => handleFieldChange("tags", value)}
                   placeholder="Add task tags"
                 />
               </FormControl>
             </Stack>
 
             <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button variant="plain" color="neutral" onClick={onClose}>
+              <Button
+                variant="plain"
+                color="neutral"
+                onClick={() => {
+                  void handleClose();
+                }}
+              >
                 Cancel
               </Button>
               <Button type="submit" loading={loading} sx={{ color: "var(--color-font-secondary)" }}>

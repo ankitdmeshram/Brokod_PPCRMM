@@ -11,12 +11,12 @@ import {
   Select,
   Sheet,
   Stack,
-  Textarea,
   Typography,
 } from "@mui/joy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
+import RichTextEditor from "../components/common/RichTextEditor";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import {
   DeleteIcon,
@@ -1010,10 +1010,10 @@ export default function WorkspaceTaskDetailsPage() {
                   />
                   <FormControl>
                     <FormLabel>Description</FormLabel>
-                    <Textarea
-                      minRows={5}
+                    <RichTextEditor
                       value={taskValues.description}
-                      onChange={(event) => handleFieldChange("description", event.target.value)}
+                      onChange={(value) => handleFieldChange("description", value)}
+                      minHeight={220}
                     />
                   </FormControl>
                   <Stack alignItems="flex-start" spacing={1}>
