@@ -5,6 +5,7 @@ const { requireAuth } = require("../middlewares/auth.middleware");
 const {
   requireActiveWorkspaceUser,
   requireWorkspaceOwner,
+  requireWorkspaceOwnerOrAdmin,
 } = require("../middlewares/workspace-access.middleware");
 
 const router = Router();
@@ -176,7 +177,7 @@ const router = Router();
  *       401:
  *         description: Missing or invalid token
  *       403:
- *         description: Only the owner can update the workspace
+ *         description: Only the owner or admin can update the workspace
  *       404:
  *         description: Workspace not found
  *   delete:
@@ -247,7 +248,7 @@ router.put(
   "/:workspaceId",
   requireAuth,
   requireActiveWorkspaceUser,
-  requireWorkspaceOwner,
+  requireWorkspaceOwnerOrAdmin,
   workspaceController.updateWorkspace
 );
 router.delete(

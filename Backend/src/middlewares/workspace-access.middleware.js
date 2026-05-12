@@ -215,6 +215,19 @@ const requireWorkspaceOwner = (request, _response, next) => {
   next();
 };
 
+const requireWorkspaceOwnerOrAdmin = (request, _response, next) => {
+  const role = String(request.workspaceMembership?.role || "")
+    .trim()
+    .toLowerCase();
+
+  if (role !== "owner" && role !== "admin") {
+    next(new AppError("Only workspace owners and admins can access this resource.", 403));
+    return;
+  }
+
+  next();
+};
+
 module.exports = {
   requireActiveWorkspaceUser,
   requireActiveWorkspaceUserByProjectId,
@@ -225,4 +238,5 @@ module.exports = {
   requireActiveWorkspaceUserFromQuery,
   requireActiveWorkspaceUserFromQueryWhenPresent,
   requireWorkspaceOwner,
+  requireWorkspaceOwnerOrAdmin,
 };

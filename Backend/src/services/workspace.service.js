@@ -716,15 +716,35 @@ const updateWorkspaceUserStatus = async (workspaceId, workspaceUserId, payload, 
 
 const updateWorkspace = async (workspaceId, payload, userId) => {
   const normalizedWorkspaceId = Number(workspaceId);
+  const normalizedUserId = Number(userId);
 
   if (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId <= 0) {
     throw new AppError("Please provide a valid workspace id.", 400);
+  }
+
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    throw new AppError("Please provide a valid user id.", 400);
   }
 
   const existingWorkspace = await workspaceRepository.findById(normalizedWorkspaceId);
 
   if (!existingWorkspace) {
     throw new AppError("Workspace not found.", 404);
+  }
+
+  const membership = await workspaceUserRepository.findByWorkspaceIdAndUserId(
+    normalizedWorkspaceId,
+    normalizedUserId
+  );
+
+  if (!membership || String(membership.status || "").trim().toLowerCase() !== "active") {
+    throw new AppError("Workspace not found.", 404);
+  }
+
+  const membershipRole = String(membership.role || "").trim().toLowerCase();
+
+  if (membershipRole !== "owner" && membershipRole !== "admin") {
+    throw new AppError("Only the workspace owner or admin can update this workspace.", 403);
   }
 
   const updates = validateUpdateWorkspacePayload(payload);
@@ -743,22 +763,43 @@ const updateWorkspace = async (workspaceId, payload, userId) => {
     slug: nextSlug,
   });
 
-  const updatedWorkspace = await workspaceRepository.findById(normalizedWorkspaceId);
+  const updatedWorkspace = await workspaceRepository.findByIdForUser(
+    normalizedWorkspaceId,
+    normalizedUserId
+  );
 
   return mapWorkspace(updatedWorkspace);
 };
 
 const deleteWorkspace = async (workspaceId, userId) => {
   const normalizedWorkspaceId = Number(workspaceId);
+  const normalizedUserId = Number(userId);
 
   if (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId <= 0) {
     throw new AppError("Please provide a valid workspace id.", 400);
+  }
+
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    throw new AppError("Please provide a valid user id.", 400);
   }
 
   const existingWorkspace = await workspaceRepository.findById(normalizedWorkspaceId);
 
   if (!existingWorkspace) {
     throw new AppError("Workspace not found.", 404);
+  }
+
+  const membership = await workspaceUserRepository.findByWorkspaceIdAndUserId(
+    normalizedWorkspaceId,
+    normalizedUserId
+  );
+
+  if (!membership || String(membership.status || "").trim().toLowerCase() !== "active") {
+    throw new AppError("Workspace not found.", 404);
+  }
+
+  if (String(membership.role || "").trim().toLowerCase() !== "owner") {
+    throw new AppError("Only the workspace owner can delete this workspace.", 403);
   }
 
   await workspaceRepository.softDeleteById(normalizedWorkspaceId, userId);

@@ -54,6 +54,13 @@ export default function WorkspaceMain() {
     workspaceDescription: "",
   });
 
+  const isWorkspaceOwner = (workspace) =>
+    String(workspace?.membershipRole || "").trim().toLowerCase() === "owner";
+  const canEditWorkspace = (workspace) => {
+    const role = String(workspace?.membershipRole || "").trim().toLowerCase();
+    return role === "owner" || role === "admin";
+  };
+
   const handleEnterWorkspace = (workspace) => {
     if (!workspace?.slug) {
       return;
@@ -169,6 +176,14 @@ export default function WorkspaceMain() {
   };
 
   const handleOpenEditModal = (workspace) => {
+    if (!canEditWorkspace(workspace)) {
+      void showErrorAlert(
+        "Access denied",
+        "Only workspace owners and admins can edit this workspace."
+      );
+      return;
+    }
+
     setSelectedWorkspace(workspace);
     setEditValues({
       workspaceName: workspace.workspaceName || "",
@@ -222,7 +237,14 @@ export default function WorkspaceMain() {
 
       setWorkspaces((currentWorkspaces) =>
         currentWorkspaces.map((workspace) =>
-          workspace.id === selectedWorkspace.id ? result.workspace : workspace
+          workspace.id === selectedWorkspace.id
+            ? {
+                ...workspace,
+                ...result.workspace,
+                membershipRole: result.workspace?.membershipRole || workspace.membershipRole,
+                membershipStatus: result.workspace?.membershipStatus || workspace.membershipStatus,
+              }
+            : workspace
         )
       );
       setIsEditModalOpen(false);
@@ -247,6 +269,14 @@ export default function WorkspaceMain() {
   };
 
   const handleOpenDeleteModal = (workspace) => {
+    if (!isWorkspaceOwner(workspace)) {
+      void showErrorAlert(
+        "Owner access required",
+        "Only the workspace owner can delete this workspace."
+      );
+      return;
+    }
+
     setSelectedWorkspace(workspace);
     setDeleteConfirmText("");
     setIsDeleteModalOpen(true);
@@ -359,6 +389,7 @@ export default function WorkspaceMain() {
                 <Sheet
                   key={workspace.id}
                   variant="outlined"
+                  onDoubleClick={() => handleEnterWorkspace(workspace)}
                   sx={{
                     width: "100%",
                     maxWidth: "256px",
@@ -367,6 +398,7 @@ export default function WorkspaceMain() {
                     borderColor: "rgba(220, 226, 244, 0.95)",
                     backgroundColor: "#fff",
                     boxShadow: "0 18px 38px rgba(170, 180, 214, 0.16)",
+                    cursor: "default",
                   }}
                 >
                   <Stack spacing={1.75}>
@@ -423,30 +455,43 @@ export default function WorkspaceMain() {
                       justifyContent="flex-end"
                       alignItems="center"
                     >
-                      <Tooltip title="Edit workspace" variant="soft">
-                        <IconButton
-                          variant="plain"
-                          color="neutral"
-                          onClick={() => handleOpenEditModal(workspace)}
-                          sx={{ color: "#64748b", minWidth: 30, minHeight: 30 }}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete workspace" variant="soft">
-                        <IconButton
-                          variant="plain"
-                          color="danger"
-                          onClick={() => handleOpenDeleteModal(workspace)}
-                          sx={{ minWidth: 30, minHeight: 30 }}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
+                      {canEditWorkspace(workspace) ? (
+                        <Tooltip title="Edit workspace" variant="soft">
+                          <IconButton
+                            variant="plain"
+                            color="neutral"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleOpenEditModal(workspace);
+                            }}
+                            sx={{ color: "#64748b", minWidth: 30, minHeight: 30 }}
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                      ) : null}
+                      {isWorkspaceOwner(workspace) ? (
+                        <Tooltip title="Delete workspace" variant="soft">
+                          <IconButton
+                            variant="plain"
+                            color="danger"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleOpenDeleteModal(workspace);
+                            }}
+                            sx={{ minWidth: 30, minHeight: 30 }}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      ) : null}
                       <Tooltip title="Enter workspace" variant="soft">
                         <IconButton
                           variant="soft"
-                          onClick={() => handleEnterWorkspace(workspace)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleEnterWorkspace(workspace);
+                          }}
                           sx={{
                             backgroundColor: "#eef2ff",
                             color: "var(--color-primary)",
