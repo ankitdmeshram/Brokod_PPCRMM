@@ -15,6 +15,7 @@
     "@mui/icons-material": "^7.3.2",
     "@mui/joy": "^5.0.0-beta.52",
     "@mui/material": "^7.3.2",
+    "ckeditor5": "^48.0.1",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.6",
     "react": "^19.2.4",

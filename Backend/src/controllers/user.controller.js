@@ -14,6 +14,14 @@ const getUsers = asyncHandler(async (request, response) => {
   });
 });
 
+const exportDatabase = asyncHandler(async (_request, response) => {
+  const result = await userService.exportDatabaseAsJson();
+
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+  response.status(200).send(JSON.stringify(result.content, null, 2));
+});
+
 const updateUserStatus = asyncHandler(async (request, response) => {
   const user = await userService.updateUserStatus(
     request.params.userId,
@@ -50,6 +58,7 @@ const deleteUser = asyncHandler(async (request, response) => {
 
 module.exports = {
   deleteUser,
+  exportDatabase,
   getUsers,
   updateUser,
   updateUserStatus,

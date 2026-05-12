@@ -251,26 +251,6 @@ export default function CreateTaskModal({
             </Stack>
 
             <Stack spacing={1}>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                <FormControl sx={{ flex: 1 }}>
-                  <FormLabel>Project ID</FormLabel>
-                  <Input
-                    value={values.projectId}
-                    onChange={(event) => onChange("projectId", event.target.value)}
-                    placeholder="Project ID"
-                    readOnly
-                  />
-                </FormControl>
-                <FormControl sx={{ flex: 1 }}>
-                  <FormLabel>Workspace ID</FormLabel>
-                  <Input
-                    value={values.workspaceId}
-                    onChange={(event) => onChange("workspaceId", event.target.value)}
-                    placeholder="Workspace ID"
-                    readOnly
-                  />
-                </FormControl>
-              </Stack>
               <FormControl>
                 <FormLabel>Tags</FormLabel>
                 <Autocomplete

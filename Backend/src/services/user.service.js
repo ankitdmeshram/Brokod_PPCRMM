@@ -1,3 +1,4 @@
+const { getDb } = require("../config/database");
 const AppError = require("../utils/app-error");
 const userRepository = require("../repositories/user.repository");
 
@@ -11,6 +12,17 @@ const mapUser = (user) => ({
   isActive: Boolean(user.is_active ?? user.isActive),
   lastLogin: user.last_login ?? user.lastLogin ?? null,
 });
+
+const databaseExportTables = [
+  "users",
+  "workspaces",
+  "workspace_users",
+  "projects",
+  "project_users",
+  "tasks",
+  "task_comments",
+  "task_activity_logs",
+];
 
 const getUsers = async (filters = {}) => {
   const normalizedFilters = {};
@@ -44,6 +56,34 @@ const getUsers = async (filters = {}) => {
       limit,
       total,
       totalPages: Math.max(1, Math.ceil(total / limit)),
+    },
+  };
+};
+
+const exportDatabaseAsJson = async () => {
+  const db = getDb();
+  const exportedAt = new Date().toISOString();
+  const tableEntries = await Promise.all(
+    databaseExportTables.map(async (tableName) => {
+      const rows = await db(tableName).select("*").orderBy("id", "asc");
+
+      return [tableName, rows];
+    })
+  );
+
+  const tables = Object.fromEntries(tableEntries);
+  const summary = Object.fromEntries(
+    tableEntries.map(([tableName, rows]) => [tableName, rows.length])
+  );
+
+  return {
+    fileName: `database-export-${exportedAt.replace(/[:.]/g, "-")}.json`,
+    content: {
+      exportedAt,
+      tableCount: databaseExportTables.length,
+      totalRecords: Object.values(summary).reduce((count, value) => count + value, 0),
+      summary,
+      tables,
     },
   };
 };
@@ -144,6 +184,7 @@ const deleteUser = async (userId, currentUserId) => {
 
 module.exports = {
   deleteUser,
+  exportDatabaseAsJson,
   getUsers,
   updateUser,
   updateUserStatus,

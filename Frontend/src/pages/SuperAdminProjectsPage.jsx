@@ -30,6 +30,7 @@ import {
 import { APP_ROUTES, SUPER_ADMIN_ROUTES } from "../router/authRoutes";
 import {
   deleteUser,
+  exportDatabaseBackup,
   fetchUsers,
   updateUser,
   updateUserStatus,
@@ -38,6 +39,7 @@ import {
   GridIcon,
   DeleteIcon,
   EditIcon,
+  ExportIcon,
   SearchIcon,
   SettingsIcon,
   UsersIcon,
@@ -53,6 +55,11 @@ const sectionContent = {
     title: "Users",
     description:
       "The super admin users page is coming soon. This space will help you manage platform users, access, and account-level actions.",
+  },
+  backup: {
+    title: "Backup",
+    description:
+      "Download a full JSON backup of the application database, including users, workspaces, projects, tasks, comments, and activity logs.",
   },
   settings: {
     title: "Settings",
@@ -704,6 +711,110 @@ function SuperAdminUsersPanel() {
   );
 }
 
+function SuperAdminBackupPanel() {
+  const { authSession } = useAuthContext();
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+
+  const handleDownloadBackup = async () => {
+    if (!authSession?.token || isExportingBackup) {
+      return;
+    }
+
+    setIsExportingBackup(true);
+
+    try {
+      const result = await exportDatabaseBackup(authSession.token);
+      const downloadUrl = window.URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download = result.fileName || "database-backup.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      await showSuccessAlert(
+        "Backup downloaded",
+        "The database backup has been exported successfully."
+      );
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to export backup",
+        error.message || "Something went wrong while exporting the database backup."
+      );
+    } finally {
+      setIsExportingBackup(false);
+    }
+  };
+
+  return (
+    <Sheet
+      variant="outlined"
+      sx={{
+        width: "100%",
+        minHeight: { xs: "calc(100vh - 180px)", md: "calc(100vh - 170px)" },
+        borderRadius: "10px",
+        borderColor: "rgba(220, 226, 244, 0.95)",
+        backgroundColor: "#fff",
+        boxShadow: "0 18px 38px rgba(170, 180, 214, 0.12)",
+        px: { xs: 2, md: 3 },
+        py: { xs: 2.5, md: 3 },
+      }}
+    >
+      <Stack spacing={2.5} sx={{ maxWidth: 720 }}>
+        <Stack spacing={0.75}>
+          <Typography
+            level="title-lg"
+            sx={{ fontWeight: 700, color: "var(--color-font-primary)", fontSize: "1.18rem" }}
+          >
+            Database Backup
+          </Typography>
+          <Typography level="body-sm" sx={{ color: "#5c6d90", lineHeight: 1.7 }}>
+            Export the full application database as a JSON snapshot. This backup includes users,
+            workspaces, workspace members, projects, project members, tasks, task comments, and
+            task activity logs.
+          </Typography>
+        </Stack>
+
+        <Sheet
+          variant="soft"
+          sx={{
+            borderRadius: "14px",
+            px: 2,
+            py: 2,
+            backgroundColor: "#f7f9ff",
+            border: "1px solid rgba(220, 226, 244, 0.95)",
+          }}
+        >
+          <Stack spacing={1.5}>
+            <Typography level="body-sm" sx={{ color: "#42526b", lineHeight: 1.7 }}>
+              This action calls the super admin backup API and downloads the latest database export
+              as a `.json` file.
+            </Typography>
+            <Box>
+              <Button
+                startDecorator={<ExportIcon />}
+                loading={isExportingBackup}
+                onClick={() => {
+                  void handleDownloadBackup();
+                }}
+                sx={{
+                  minHeight: "38px",
+                  px: 1.6,
+                  color: "var(--color-font-secondary)",
+                }}
+              >
+                Download Backup
+              </Button>
+            </Box>
+          </Stack>
+        </Sheet>
+      </Stack>
+    </Sheet>
+  );
+}
+
 export default function SuperAdminProjectsPage({ section = "overview" }) {
   const { authSession } = useAuthContext();
   const location = useLocation();
@@ -729,6 +840,13 @@ export default function SuperAdminProjectsPage({ section = "overview" }) {
         label: "Users",
         to: SUPER_ADMIN_ROUTES.users,
         active: location.pathname === SUPER_ADMIN_ROUTES.users,
+      },
+      {
+        key: "backup",
+        icon: <ExportIcon />,
+        label: "Backup",
+        to: SUPER_ADMIN_ROUTES.backup,
+        active: location.pathname === SUPER_ADMIN_ROUTES.backup,
       },
     ],
     [location.pathname]
@@ -778,6 +896,8 @@ export default function SuperAdminProjectsPage({ section = "overview" }) {
       >
         {section === "users" ? (
           <SuperAdminUsersPanel />
+        ) : section === "backup" ? (
+          <SuperAdminBackupPanel />
         ) : (
           <Sheet
             variant="outlined"

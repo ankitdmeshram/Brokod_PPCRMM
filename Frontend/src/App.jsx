@@ -140,6 +140,14 @@ export default function App() {
             }
           />
           <Route
+            path={SUPER_ADMIN_ROUTES.backup}
+            element={
+              <ProtectedRoute requireSuperAdmin>
+                <SuperAdminProjectsPage section="backup" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={SUPER_ADMIN_ROUTES.settings}
             element={
               <ProtectedRoute requireSuperAdmin>

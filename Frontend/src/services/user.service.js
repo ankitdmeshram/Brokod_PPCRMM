@@ -71,3 +71,26 @@ export async function deleteUser(userId, token) {
 
   return parseApiResponse(response);
 }
+
+export async function exportDatabaseBackup(token) {
+  const response = await fetch(`${USER_API_BASE}/export/json`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.message || "Something went wrong. Please try again.");
+  }
+
+  const blob = await response.blob();
+  const contentDisposition = response.headers.get("content-disposition") || "";
+  const fileNameMatch = contentDisposition.match(/filename=\"?([^"]+)\"?/i);
+
+  return {
+    blob,
+    fileName: fileNameMatch?.[1] || "database-backup.json",
+  };
+}
