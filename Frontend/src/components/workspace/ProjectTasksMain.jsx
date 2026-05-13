@@ -195,7 +195,7 @@ const buildEditableTaskValues = (task) => ({
     : "",
 });
 
-function OverflowTooltip({ title, children }) {
+function OverflowTooltip({ title, children, maxLines = 1 }) {
   const contentRef = useRef(null);
   const [isOverflowed, setIsOverflowed] = useState(false);
 
@@ -208,7 +208,9 @@ function OverflowTooltip({ title, children }) {
         return;
       }
 
-      setIsOverflowed(element.scrollWidth > element.clientWidth);
+      setIsOverflowed(
+        element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight
+      );
     };
 
     measureOverflow();
@@ -217,7 +219,7 @@ function OverflowTooltip({ title, children }) {
     return () => {
       window.removeEventListener("resize", measureOverflow);
     };
-  }, [title]);
+  }, [title, maxLines]);
 
   return (
     <Tooltip title={isOverflowed ? title : ""} placement="top" disableHoverListener={!isOverflowed}>
@@ -225,11 +227,12 @@ function OverflowTooltip({ title, children }) {
         ref={contentRef}
         component="span"
         sx={{
-          display: "block",
+          display: "-webkit-box",
+          WebkitBoxOrient: "vertical",
+          WebkitLineClamp: maxLines,
           minWidth: 0,
           overflow: "hidden",
           textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
         }}
       >
         {children}
@@ -1010,17 +1013,17 @@ export default function ProjectTasksMain({
                 "--TableCell-headBackground": "transparent",
                 "--TableCell-selectedBackground": "transparent",
                 "& thead th:nth-of-type(1)": {
-                  position: "sticky",
-                  left: 0,
-                  zIndex: 3,
+                  position: { xs: "static", md: "sticky" },
+                  left: { md: 0 },
+                  zIndex: { md: 3 },
                   backgroundColor: "#fff",
                 },
                 "& thead th:nth-of-type(2)": {
-                  position: "sticky",
-                  left: "102px",
-                  zIndex: 3,
+                  position: { xs: "static", md: "sticky" },
+                  left: { md: "102px" },
+                  zIndex: { md: 3 },
                   backgroundColor: "#fff",
-                  boxShadow: "inset -1px 0 0 rgba(223, 228, 243, 0.95)",
+                  boxShadow: { md: "inset -1px 0 0 rgba(223, 228, 243, 0.95)" },
                 },
                 "& thead th": {
                   py: 1.5,
@@ -1040,17 +1043,17 @@ export default function ProjectTasksMain({
                   backgroundColor: "#fbfcff",
                 },
                 "& tbody td:nth-of-type(1)": {
-                  position: "sticky",
-                  left: 0,
-                  zIndex: 2,
+                  position: { xs: "static", md: "sticky" },
+                  left: { md: 0 },
+                  zIndex: { md: 2 },
                   backgroundColor: "#fff",
                 },
                 "& tbody td:nth-of-type(2)": {
-                  position: "sticky",
-                  left: "102px",
-                  zIndex: 2,
+                  position: { xs: "static", md: "sticky" },
+                  left: { md: "102px" },
+                  zIndex: { md: 2 },
                   backgroundColor: "#fff",
-                  boxShadow: "inset -1px 0 0 rgba(236, 240, 249, 0.95)",
+                  boxShadow: { md: "inset -1px 0 0 rgba(236, 240, 249, 0.95)" },
                 },
                 "& tbody td": {
                   py: 1.15,
@@ -1277,7 +1280,7 @@ export default function ProjectTasksMain({
                                 },
                               }}
                             >
-                              <OverflowTooltip title={task.title}>
+                              <OverflowTooltip title={task.title} maxLines={2}>
                                 {task.title}
                               </OverflowTooltip>
                             </Box>
