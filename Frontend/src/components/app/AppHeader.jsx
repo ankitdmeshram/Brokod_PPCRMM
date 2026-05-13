@@ -22,8 +22,6 @@ import {
 } from "../workspace/WorkspaceIcons";
 
 export default function AppHeader({
-  title,
-  titleContent,
   fullName,
   initial,
   userRole,
@@ -57,6 +55,8 @@ export default function AppHeader({
     <Sheet
       sx={{
         px: { xs: 1.5, md: 2.5 },
+        py: 1,
+        minHeight: 64,
         borderBottom: "1px solid rgba(198, 205, 228, 0.8)",
         backgroundColor: "#fff",
         display: "flex",
@@ -65,7 +65,7 @@ export default function AppHeader({
         gap: 1.5,
       }}
     >
-      <Stack direction="row" spacing={1.5} alignItems="center">
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
         <IconButton
           variant="plain"
           color="neutral"
@@ -75,17 +75,9 @@ export default function AppHeader({
         >
           <MenuIcon />
         </IconButton>
-        {titleContent || (
-          <Typography
-            level="title-md"
-            sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
-          >
-            {title}
-          </Typography>
-        )}
       </Stack>
 
-      <Stack direction="row" spacing={1.25} alignItems="center">
+      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexShrink: 0 }}>
         {isSuperAdmin && showSuperAdminChip ? (
           <Chip
             component={RouterLink}
@@ -123,18 +115,19 @@ export default function AppHeader({
             variant="plain"
             color="neutral"
             sx={{
-              px: 0.625,
+              px: { xs: 0.375, lg: 0.625 },
               py: 0.375,
               borderRadius: "999px",
               color: "var(--color-font-primary)",
               backgroundColor: "#eef2ff",
               minHeight: 38,
+              minWidth: { xs: 38, lg: "auto" },
               "&:hover": {
                 backgroundColor: "#e4ebff",
               },
             }}
           >
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={{ xs: 0, lg: 1 }} alignItems="center">
               <Avatar
                 size="sm"
                 sx={{ backgroundColor: "#fff", color: "#5f6d8b" }}
@@ -143,7 +136,11 @@ export default function AppHeader({
               </Avatar>
               <Typography
                 level="body-md"
-                sx={{ fontWeight: 700, color: "var(--color-font-primary)" }}
+                sx={{
+                  display: { xs: "none", lg: "block" },
+                  fontWeight: 700,
+                  color: "var(--color-font-primary)",
+                }}
               >
                 {fullName}
               </Typography>

@@ -1,11 +1,15 @@
 import { Button, Sheet, Stack, Typography } from "@mui/joy";
 import { ArrowIcon, WorkspaceIcon } from "./WorkspaceIcons";
 
-export default function WorkspaceSidebar({ isCollapsed = false }) {
+export default function WorkspaceSidebar({
+  isCollapsed = false,
+  isMobile = false,
+  onItemClick = null,
+}) {
   return (
     <Sheet
       sx={{
-        display: { xs: "none", md: "flex" },
+        display: isMobile ? "flex" : { xs: "none", md: "flex" },
         flexDirection: "column",
         backgroundColor: "var(--color-primary)",
         color: "var(--color-font-secondary)",
@@ -13,6 +17,8 @@ export default function WorkspaceSidebar({ isCollapsed = false }) {
         py: 1.75,
         overflow: "hidden",
         transition: "padding 0.25s ease",
+        width: "100%",
+        minHeight: "100%",
       }}
     >
       <Stack spacing={1} alignItems={isCollapsed ? "center" : "stretch"}>
@@ -60,6 +66,7 @@ export default function WorkspaceSidebar({ isCollapsed = false }) {
 
           <Button
             variant="soft"
+            onClick={onItemClick}
             startDecorator={isCollapsed ? null : <WorkspaceIcon />}
             endDecorator={isCollapsed ? null : <ArrowIcon />}
             sx={{

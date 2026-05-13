@@ -9,7 +9,7 @@ exports.up = async function up(knex) {
       table.increments("id").primary();
       table.integer("project_id").unsigned().notNullable();
       table.integer("workspace_id").unsigned().notNullable();
-      table.string("title", 255).notNullable();
+      table.string("title", 500).notNullable();
       table.text("description").notNullable().defaultTo("");
       table.string("status", 50).notNullable().defaultTo("todo");
       table.string("priority", 50).notNullable().defaultTo("medium");

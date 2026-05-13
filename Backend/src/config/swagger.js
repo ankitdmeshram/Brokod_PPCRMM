@@ -502,6 +502,7 @@ const swaggerSpec = swaggerJsdoc({
             },
             title: {
               type: "string",
+              maxLength: 500,
               example: "Plan CRM backlog",
             },
             slug: {
@@ -612,6 +613,7 @@ const swaggerSpec = swaggerJsdoc({
             },
             title: {
               type: "string",
+              maxLength: 500,
               example: "Plan CRM backlog",
             },
             description: {
@@ -683,6 +685,7 @@ const swaggerSpec = swaggerJsdoc({
           properties: {
             title: {
               type: "string",
+              maxLength: 500,
               example: "Plan CRM backlog",
             },
             description: {

@@ -1,4 +1,6 @@
 import { Box, Button, Chip, Dropdown, IconButton, Input, Menu, MenuButton, MenuItem, Option, Select, Sheet, Stack, Table, Tooltip, Typography } from "@mui/joy";
+import { useTheme } from "@mui/joy/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../context/AuthContext";
@@ -246,6 +248,8 @@ export default function ProjectTasksMain({
   project = null,
   workspace = null,
 }) {
+  const theme = useTheme();
+  const enableInlineTitleEditing = useMediaQuery(theme.breakpoints.up("lg"));
   const { authSession } = useAuthContext();
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState("");
@@ -1209,14 +1213,23 @@ export default function ProjectTasksMain({
                       onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "taskName"))}
                       onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "taskName")}
                       onClick={() => {
-                        if (editingTitleTaskId !== task.rawId) {
+                        if (!enableInlineTitleEditing || editingTitleTaskId !== task.rawId) {
                           handleShowTask(task);
                         }
                       }}
-                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
-                      style={{ cursor: editingTitleTaskId === task.rawId ? "default" : "pointer" }}
+                      onBlurCapture={() => {
+                        if (enableInlineTitleEditing) {
+                          handleInlineTaskBlur(task.rawId);
+                        }
+                      }}
+                      style={{
+                        cursor:
+                          enableInlineTitleEditing && editingTitleTaskId === task.rawId
+                            ? "default"
+                            : "pointer",
+                      }}
                     >
-                      {editingTitleTaskId === task.rawId ? (
+                      {enableInlineTitleEditing && editingTitleTaskId === task.rawId ? (
                         <Input
                           size="sm"
                           value={taskDrafts[task.rawId]?.title ?? task.title}
@@ -1225,6 +1238,11 @@ export default function ProjectTasksMain({
                           }
                           onBlur={() => handleInlineTaskBlur(task.rawId)}
                           autoFocus
+                          slotProps={{
+                            input: {
+                              maxLength: 500,
+                            },
+                          }}
                           sx={{
                             "--Input-minHeight": "34px",
                             fontWeight: 700,
@@ -1242,9 +1260,13 @@ export default function ProjectTasksMain({
                             }}
                           >
                             <Box
-                              component="button"
-                              type="button"
+                              component={enableInlineTitleEditing ? "button" : "span"}
+                              type={enableInlineTitleEditing ? "button" : undefined}
                               onClick={(event) => {
+                                if (!enableInlineTitleEditing) {
+                                  return;
+                                }
+
                                 event.stopPropagation();
                                 setEditingTitleTaskId(task.rawId);
                                 setTaskDrafts((currentDrafts) => ({
@@ -1254,14 +1276,14 @@ export default function ProjectTasksMain({
                                 }));
                               }}
                               sx={{
-                                background: "transparent",
+                                background: enableInlineTitleEditing ? "transparent" : "none",
                                 p: 0,
                                 m: 0,
                                 font: "inherit",
                                 color: "#4b5563",
                                 fontWeight: 700,
                                 textAlign: "left",
-                                cursor: "pointer",
+                                cursor: enableInlineTitleEditing ? "pointer" : "inherit",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 maxWidth: "100%",
@@ -1270,13 +1292,14 @@ export default function ProjectTasksMain({
                                 py: 0.55,
                                 border: "1px solid transparent",
                                 borderRadius: "8px",
-                                outline: "none",
                                 overflow: "hidden",
                                 transition: "border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease",
                                 "&:hover": {
-                                  borderColor: "rgba(49, 85, 255, 0.28)",
-                                  backgroundColor: "#f7f9ff",
-                                  color: "#3155ff",
+                                  borderColor: enableInlineTitleEditing
+                                    ? "rgba(49, 85, 255, 0.28)"
+                                    : "transparent",
+                                  backgroundColor: enableInlineTitleEditing ? "#f7f9ff" : "transparent",
+                                  color: enableInlineTitleEditing ? "#3155ff" : "#4b5563",
                                 },
                               }}
                             >
@@ -1294,12 +1317,12 @@ export default function ProjectTasksMain({
                                 flexShrink: 0,
                                 opacity:
                                   hoveredCellKey === buildHoveredCellKey(task.rawId, "taskName") &&
-                                  editingTitleTaskId !== task.rawId
+                                  (!enableInlineTitleEditing || editingTitleTaskId !== task.rawId)
                                     ? 1
                                     : 0,
                                 visibility:
                                   hoveredCellKey === buildHoveredCellKey(task.rawId, "taskName") &&
-                                  editingTitleTaskId !== task.rawId
+                                  (!enableInlineTitleEditing || editingTitleTaskId !== task.rawId)
                                     ? "visible"
                                     : "hidden",
                                 transition: "opacity 0.18s ease, visibility 0.18s ease",

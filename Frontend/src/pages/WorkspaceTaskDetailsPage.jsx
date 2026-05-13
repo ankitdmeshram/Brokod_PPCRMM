@@ -11,6 +11,7 @@ import {
   Select,
   Sheet,
   Stack,
+  Textarea,
   Typography,
 } from "@mui/joy";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -974,12 +975,18 @@ export default function WorkspaceTaskDetailsPage() {
                       {`Parent Service - ${task.parentTaskTitle}`}
                     </Button>
                   ) : null}
-                  <Input
+                  <Textarea
                     value={taskValues.title}
                     onChange={(event) => handleFieldChange("title", event.target.value)}
                     variant="outlined"
                     placeholder="Task title"
                     aria-label="Task title"
+                    minRows={1}
+                    slotProps={{
+                      textarea: {
+                        maxLength: 500,
+                      },
+                    }}
                     sx={{
                       px: 0.5,
                       py: 0.25,
@@ -1001,10 +1008,11 @@ export default function WorkspaceTaskDetailsPage() {
                         backgroundColor: "var(--joy-palette-background-surface)",
                         borderColor: "var(--joy-palette-primary-outlinedBorder)",
                       },
-                      "& input": {
+                      "& textarea": {
                         p: 0,
                         font: "inherit",
                         color: "inherit",
+                        lineHeight: 1.4,
                       },
                     }}
                   />

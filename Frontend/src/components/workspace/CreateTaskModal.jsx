@@ -175,6 +175,11 @@ export default function CreateTaskModal({
                   value={values.title}
                   onChange={(event) => handleFieldChange("title", event.target.value)}
                   placeholder="Enter task title"
+                  slotProps={{
+                    input: {
+                      maxLength: 500,
+                    },
+                  }}
                 />
               </FormControl>
               <FormControl>

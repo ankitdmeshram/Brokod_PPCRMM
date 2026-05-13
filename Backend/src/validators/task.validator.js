@@ -6,6 +6,7 @@ const allowedTaskTypes = new Set(["feature", "bug", "improvement", "research"]);
 const stringFilterOperators = new Set(["starts_with", "ends_with", "contains", "eq", "neq"]);
 const comparableFilterOperators = new Set(["eq", "neq", "gt", "lt", "gte", "lte"]);
 const booleanFilterOperators = new Set(["eq", "neq"]);
+const MAX_TASK_TITLE_LENGTH = 500;
 
 const advancedTaskFilterFields = {
   id: { type: "number" },
@@ -321,6 +322,10 @@ const validateCreateTaskPayload = (payload) => {
     throw new AppError("title is required.", 400);
   }
 
+  if (title.length > MAX_TASK_TITLE_LENGTH) {
+    throw new AppError(`title must be ${MAX_TASK_TITLE_LENGTH} characters or fewer.`, 400);
+  }
+
   if (!allowedStatuses.has(status)) {
     throw new AppError("status must be one of: todo, in_progress, review, done, blocked.", 400);
   }
@@ -378,6 +383,10 @@ const validateUpdateTaskPayload = (payload) => {
 
   if (!normalizedPayload.title) {
     throw new AppError("title is required.", 400);
+  }
+
+  if (normalizedPayload.title.length > MAX_TASK_TITLE_LENGTH) {
+    throw new AppError(`title must be ${MAX_TASK_TITLE_LENGTH} characters or fewer.`, 400);
   }
 
   if (!allowedStatuses.has(normalizedPayload.status)) {

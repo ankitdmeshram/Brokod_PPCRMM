@@ -19,12 +19,14 @@ const navItems = [
 
 export default function ProjectsSidebar({
   isCollapsed = false,
+  isMobile = false,
   sectionLabel = "",
   items = navItems,
   backToProjectsRoute = "",
   backToProjectsLabel = "Back to Projects",
   showBackToWorkspace = true,
   onNavigateAttempt = null,
+  onItemClick = null,
 }) {
   const buildNavigationProps = (to) =>
     onNavigateAttempt && to
@@ -32,11 +34,15 @@ export default function ProjectsSidebar({
           component: "button",
           onClick: () => {
             void onNavigateAttempt(to);
+            onItemClick?.();
           },
         }
       : {
           component: to ? RouterLink : "button",
           to,
+          onClick: () => {
+            onItemClick?.();
+          },
         };
 
   const renderSidebarAction = (content, tooltipTitle) =>
@@ -51,7 +57,7 @@ export default function ProjectsSidebar({
   return (
     <Sheet
       sx={{
-        display: { xs: "none", md: "flex" },
+        display: isMobile ? "flex" : { xs: "none", md: "flex" },
         flexDirection: "column",
         backgroundColor: "var(--color-primary)",
         color: "var(--color-font-secondary)",
@@ -59,6 +65,8 @@ export default function ProjectsSidebar({
         py: 1.75,
         overflow: "hidden",
         transition: "padding 0.25s ease",
+        width: "100%",
+        minHeight: "100%",
       }}
     >
       <Stack
