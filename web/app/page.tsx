@@ -82,7 +82,7 @@ export default function HomePage() {
                 Solutions
               </a>
               <div className={styles.dropdownMenu}>
-                <a className={styles.dropdownItem} href="/projects">
+                <a className={styles.dropdownItem} href="/workspace">
                   Project Management
                 </a>
                 <a

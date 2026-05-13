@@ -56,7 +56,7 @@ services:
       - backend
     environment:
       VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
-      VITE_BASE_PATH: ${VITE_BASE_PATH:-/projects/}
+      VITE_BASE_PATH: ${VITE_BASE_PATH:-/}
       VITE_PROXY_TARGET: http://backend:5000
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
