@@ -132,6 +132,43 @@ export async function fetchTaskBySlug(taskSlug, token, options = {}) {
   return parseApiResponse(response);
 }
 
+export async function fetchTaskComments(taskId, token) {
+  const response = await fetch(`${TASK_API_BASE}/${taskId}/comments`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function createTaskComment(taskId, payload, token) {
+  const response = await fetch(`${TASK_API_BASE}/${taskId}/comments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function updateTaskComment(taskId, commentId, payload, token) {
+  const response = await fetch(`${TASK_API_BASE}/${taskId}/comments/${commentId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
 export async function updateTask(taskId, payload, token) {
   const response = await fetch(`${TASK_API_BASE}/${taskId}`, {
     method: "PATCH",

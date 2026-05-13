@@ -370,6 +370,24 @@ router.get(
   requireActiveWorkspaceUserByTaskSlug,
   taskController.getTaskBySlug
 );
+router.get(
+  "/:taskId/comments",
+  requireAuth,
+  requireActiveWorkspaceUserByTaskId,
+  taskController.getTaskComments
+);
+router.post(
+  "/:taskId/comments",
+  requireAuth,
+  requireActiveWorkspaceUserByTaskId,
+  taskController.createTaskComment
+);
+router.patch(
+  "/:taskId/comments/:commentId",
+  requireAuth,
+  requireActiveWorkspaceUserByTaskId,
+  taskController.updateTaskComment
+);
 router.get("/:taskId", requireAuth, requireActiveWorkspaceUserByTaskId, taskController.getTaskById);
 router.patch(
   "/:taskId",

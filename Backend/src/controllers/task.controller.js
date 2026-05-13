@@ -129,6 +129,47 @@ const getTaskBySlug = asyncHandler(async (request, response) => {
   });
 });
 
+const getTaskComments = asyncHandler(async (request, response) => {
+  const comments = await taskService.getTaskComments(
+    request.params.taskId,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    comments,
+  });
+});
+
+const createTaskComment = asyncHandler(async (request, response) => {
+  const comment = await taskService.createTaskComment(
+    request.params.taskId,
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(201).json({
+    message: "Task comment created successfully.",
+    comment,
+  });
+});
+
+const updateTaskComment = asyncHandler(async (request, response) => {
+  const comment = await taskService.updateTaskComment(
+    request.params.taskId,
+    request.params.commentId,
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    message: "Task comment updated successfully.",
+    comment,
+  });
+});
+
 const updateTask = asyncHandler(async (request, response) => {
   const task = await taskService.updateTask(
     request.params.taskId,
@@ -156,12 +197,15 @@ const deleteTask = asyncHandler(async (request, response) => {
 });
 
 module.exports = {
+  createTaskComment,
   createTask,
   deleteTask,
   exportTasks,
   importTasks,
+  getTaskComments,
   getTaskById,
   getTaskBySlug,
   getTasks,
+  updateTaskComment,
   updateTask,
 };

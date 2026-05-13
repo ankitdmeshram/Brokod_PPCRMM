@@ -105,6 +105,10 @@ const buildNotificationMessage = (notification, isProjectScoped = false) => {
     return `"${notification.taskTitle}" is assigned to you.`;
   }
 
+  if (notification.type === "task_comment") {
+    return notification.message;
+  }
+
   if (notification.type === "task_overdue") {
     return `"${notification.taskTitle}" missed its due date.`;
   }

@@ -7,6 +7,7 @@ const userRepository = require("../repositories/user.repository");
 const workspaceRepository = require("../repositories/workspace.repository");
 const AppError = require("../utils/app-error");
 const {
+  validateCreateTaskCommentPayload,
   validateCreateTaskPayload,
   validateExportTasksFilters,
   validateGetTasksFilters,
@@ -75,6 +76,19 @@ const mapTask = (task) => ({
   updatedAt: task.updated_at ?? task.updatedAt ?? null,
   deletedAt: task.deleted_at ?? task.deletedAt ?? null,
   deletedBy: task.deleted_by ?? task.deletedBy ?? null,
+});
+
+const mapTaskComment = (comment) => ({
+  id: comment.id,
+  taskId: comment.task_id ?? comment.taskId,
+  comment: comment.comment,
+  createdBy: comment.created_by ?? comment.createdBy,
+  createdByName:
+    `${String(comment.created_by_first_name || "").trim()} ${String(comment.created_by_last_name || "").trim()}`.trim() ||
+    comment.created_by_email ||
+    null,
+  createdAt: comment.created_at ?? comment.createdAt ?? null,
+  updatedAt: comment.updated_at ?? comment.updatedAt ?? null,
 });
 
 const assertUserExists = async (userId, label) => {
@@ -629,6 +643,119 @@ const getTaskBySlug = async (taskSlug, userId, userRole = "", projectId = null) 
   return mapTask(task);
 };
 
+const getTaskComments = async (taskId, userId, userRole = "") => {
+  const normalizedTaskId = validateTaskId(taskId);
+
+  const task = await taskRepository.findById(normalizedTaskId);
+
+  if (!task) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  const project = isSuperAdmin(userRole)
+    ? await projectRepository.findById(Number(task.project_id ?? task.projectId))
+    : await projectRepository.findByIdForUser(
+        Number(task.project_id ?? task.projectId),
+        userId
+      );
+
+  if (!project) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  const comments = await taskCommentRepository.findByTaskId(normalizedTaskId);
+  return comments.map(mapTaskComment);
+};
+
+const createTaskComment = async (taskId, payload, userId, userRole = "") => {
+  const normalizedTaskId = validateTaskId(taskId);
+  const { comment } = validateCreateTaskCommentPayload(payload);
+
+  const task = await taskRepository.findById(normalizedTaskId);
+
+  if (!task) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  const project = isSuperAdmin(userRole)
+    ? await projectRepository.findById(Number(task.project_id ?? task.projectId))
+    : await projectRepository.findByIdForUser(
+        Number(task.project_id ?? task.projectId),
+        userId
+      );
+
+  if (!project) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  const commentId = await taskCommentRepository.create({
+    taskId: normalizedTaskId,
+    comment,
+    createdBy: userId,
+  });
+
+  const createdComment = await taskCommentRepository.findById(commentId);
+
+  if (!createdComment) {
+    throw new AppError("Unable to create task comment.", 500);
+  }
+
+  return mapTaskComment(createdComment);
+};
+
+const updateTaskComment = async (taskId, commentId, payload, userId, userRole = "") => {
+  const normalizedTaskId = validateTaskId(taskId);
+  const normalizedCommentId = validateTaskId(commentId);
+  const { comment } = validateCreateTaskCommentPayload(payload);
+
+  const task = await taskRepository.findById(normalizedTaskId);
+
+  if (!task) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  const project = isSuperAdmin(userRole)
+    ? await projectRepository.findById(Number(task.project_id ?? task.projectId))
+    : await projectRepository.findByIdForUser(
+        Number(task.project_id ?? task.projectId),
+        userId
+      );
+
+  if (!project) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  const existingComment = await taskCommentRepository.findById(normalizedCommentId);
+
+  if (!existingComment || Number(existingComment.task_id ?? existingComment.taskId) !== normalizedTaskId) {
+    throw new AppError("Comment not found.", 404);
+  }
+
+  if (!isSuperAdmin(userRole)) {
+    const isOwner = String(project.membership_role || "").toLowerCase() === "owner";
+    const isCommentCreator =
+      Number(existingComment.created_by ?? existingComment.createdBy) === Number(userId);
+
+    if (!isOwner && !isCommentCreator) {
+      throw new AppError("Only the comment creator or project owner can update this comment.", 403);
+    }
+  }
+
+  await taskCommentRepository.updateById({
+    id: normalizedCommentId,
+    taskId: normalizedTaskId,
+    comment,
+  });
+
+  const updatedComment = await taskCommentRepository.findById(normalizedCommentId);
+
+  if (!updatedComment) {
+    throw new AppError("Unable to update task comment.", 500);
+  }
+
+  return mapTaskComment(updatedComment);
+};
+
 const updateTask = async (taskId, payload, userId, userRole = "") => {
   const normalizedTaskId = validateTaskId(taskId);
   const updates = validateUpdateTaskPayload(payload);
@@ -717,12 +844,15 @@ const deleteTask = async (taskId, userId, userRole = "") => {
 };
 
 module.exports = {
+  createTaskComment,
   createTask,
   deleteTask,
   exportTasks,
   importTasks,
+  getTaskComments,
   getTaskById,
   getTaskBySlug,
   getTasks,
+  updateTaskComment,
   updateTask,
 };

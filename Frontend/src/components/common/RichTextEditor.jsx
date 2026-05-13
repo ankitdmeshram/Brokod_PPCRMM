@@ -1,4 +1,5 @@
 import { Box } from "@mui/joy";
+import { memo } from "react";
 import { CKEditor } from "@ckeditor/ckeditor5-react";
 import {
   BlockQuote,
@@ -49,7 +50,7 @@ const editorConfig = {
   ],
 };
 
-export default function RichTextEditor({
+function RichTextEditor({
   value = "",
   placeholder = "",
   minHeight = 180,
@@ -125,3 +126,11 @@ export default function RichTextEditor({
     </Box>
   );
 }
+
+export default memo(RichTextEditor, (previousProps, nextProps) => {
+  return (
+    previousProps.value === nextProps.value &&
+    previousProps.placeholder === nextProps.placeholder &&
+    previousProps.minHeight === nextProps.minHeight
+  );
+});

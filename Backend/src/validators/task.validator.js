@@ -7,6 +7,7 @@ const stringFilterOperators = new Set(["starts_with", "ends_with", "contains", "
 const comparableFilterOperators = new Set(["eq", "neq", "gt", "lt", "gte", "lte"]);
 const booleanFilterOperators = new Set(["eq", "neq"]);
 const MAX_TASK_TITLE_LENGTH = 500;
+const MAX_TASK_COMMENT_LENGTH = 10000;
 
 const advancedTaskFilterFields = {
   id: { type: "number" },
@@ -601,7 +602,32 @@ const validateTaskId = (taskId) => {
   return normalizedTaskId;
 };
 
+const stripHtmlTags = (value) =>
+  String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const validateCreateTaskCommentPayload = (payload = {}) => {
+  const comment = String(payload?.comment || "").trim();
+  const plainTextComment = stripHtmlTags(comment);
+
+  if (!plainTextComment) {
+    throw new AppError("comment is required.", 400);
+  }
+
+  if (plainTextComment.length > MAX_TASK_COMMENT_LENGTH) {
+    throw new AppError(`comment must be ${MAX_TASK_COMMENT_LENGTH} characters or fewer.`, 400);
+  }
+
+  return {
+    comment,
+  };
+};
+
 module.exports = {
+  validateCreateTaskCommentPayload,
   validateCreateTaskPayload,
   validateExportTasksFilters,
   validateGetTasksFilters,

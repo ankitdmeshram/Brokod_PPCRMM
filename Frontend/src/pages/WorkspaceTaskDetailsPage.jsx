@@ -14,13 +14,14 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
 import RichTextEditor from "../components/common/RichTextEditor";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import {
   DeleteIcon,
+  EditIcon,
   EyeIcon,
   GridIcon,
   NotificationIcon,
@@ -41,7 +42,16 @@ import {
   showSuccessAlert,
 } from "../services/alert.service";
 import { fetchProjectUsers, fetchProjectBySlug } from "../services/project.service";
-import { createTask, deleteTask, fetchAllTasks, fetchTaskBySlug, updateTask } from "../services/task.service";
+import {
+  createTask,
+  createTaskComment,
+  deleteTask,
+  fetchAllTasks,
+  fetchTaskBySlug,
+  fetchTaskComments,
+  updateTaskComment,
+  updateTask,
+} from "../services/task.service";
 import { fetchAllWorkspaceUsers, fetchWorkspaces } from "../services/workspace.service";
 
 const statusOptions = [
@@ -141,11 +151,264 @@ const buildSubtaskDraftValues = () => ({
   dueDate: "",
 });
 
+const formatCommentTimestamp = (value) => {
+  if (!value) {
+    return "Just now";
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Just now";
+  }
+
+  return parsedDate.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const buildUserInitials = (value) =>
+  String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "U";
+
+const getPlainTextFromHtml = (value) =>
+  String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 const isCompletedStatus = (value) => String(value || "").trim().toLowerCase() === "done";
 const getTodayDateOnly = () => new Date().toISOString().slice(0, 10);
 const SUBTASK_AUTOSAVE_DELAY_MS = 400;
 const shouldRedirectToWorkspace = (error) =>
   Number(error?.status) === 403 || Number(error?.status) === 404;
+
+const TaskHeaderSection = memo(function TaskHeaderSection({
+  parentTaskTitle,
+  parentTaskNavigateLabel,
+  onOpenParentTask,
+  title,
+  description,
+  onFieldChange,
+}) {
+  return (
+    <Stack spacing={1}>
+      {parentTaskTitle ? (
+        <Button
+          variant="plain"
+          color="neutral"
+          onClick={onOpenParentTask}
+          sx={{
+            alignSelf: "flex-start",
+            px: 0,
+            py: 0,
+            minHeight: "auto",
+            color: "#60708e",
+            fontWeight: 600,
+            "&:hover": {
+              backgroundColor: "transparent",
+              color: "#3155ff",
+            },
+          }}
+        >
+          {parentTaskNavigateLabel}
+        </Button>
+      ) : null}
+      <Textarea
+        value={title}
+        onChange={(event) => onFieldChange("title", event.target.value)}
+        variant="outlined"
+        placeholder="Task title"
+        aria-label="Task title"
+        minRows={1}
+        slotProps={{
+          textarea: {
+            maxLength: 500,
+          },
+        }}
+        sx={{
+          px: 0.5,
+          py: 0.25,
+          minHeight: "auto",
+          borderRadius: "sm",
+          backgroundColor: "transparent",
+          borderColor: "transparent",
+          boxShadow: "none",
+          fontSize: "1.14rem",
+          fontWeight: 700,
+          color: "#23314d",
+          "--Input-focusedThickness": "0px",
+          "--Input-focusedHighlight": "transparent",
+          "&:hover": {
+            backgroundColor: "rgba(0, 0, 0, 0.04)",
+            borderColor: "var(--joy-palette-neutral-outlinedBorder)",
+          },
+          "&.Mui-focused": {
+            backgroundColor: "var(--joy-palette-background-surface)",
+            borderColor: "var(--joy-palette-primary-outlinedBorder)",
+          },
+          "& textarea": {
+            p: 0,
+            font: "inherit",
+            color: "inherit",
+            lineHeight: 1.4,
+          },
+        }}
+      />
+      <FormControl>
+        <FormLabel>Description</FormLabel>
+        <RichTextEditor
+          value={description}
+          onChange={(value) => onFieldChange("description", value)}
+          minHeight={220}
+        />
+      </FormControl>
+    </Stack>
+  );
+});
+
+const TaskMetadataSection = memo(function TaskMetadataSection({
+  status,
+  priority,
+  taskType,
+  assignedBy,
+  assignedTo,
+  createdByName,
+  startDate,
+  dueDate,
+  completedDate,
+  tags,
+  projectUserOptions,
+  onFieldChange,
+  onTagsChange,
+}) {
+  return (
+    <>
+      <Stack spacing={1}>
+        <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
+          Workflow
+        </Typography>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Status</FormLabel>
+            <Select value={status} onChange={(_, value) => onFieldChange("status", value || "")}>
+              {statusOptions.map((option) => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Priority</FormLabel>
+            <Select value={priority} onChange={(_, value) => onFieldChange("priority", value || "")}>
+              {priorityOptions.map((option) => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Task type</FormLabel>
+            <Select value={taskType} onChange={(_, value) => onFieldChange("taskType", value || "")}>
+              {taskTypeOptions.map((option) => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
+      </Stack>
+
+      <Stack spacing={1}>
+        <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
+          Assignment
+        </Typography>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Assigned by</FormLabel>
+            <Select value={assignedBy} onChange={(_, value) => onFieldChange("assignedBy", value || "")}>
+              {projectUserOptions.map((option) => (
+                <Option key={option.id} value={String(option.id)}>
+                  {option.label}
+                </Option>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Assigned to</FormLabel>
+            <Select value={assignedTo} onChange={(_, value) => onFieldChange("assignedTo", value || "")}>
+              {projectUserOptions.map((option) => (
+                <Option key={option.id} value={String(option.id)}>
+                  {option.label}
+                </Option>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Created by</FormLabel>
+            <Input value={createdByName || "-"} readOnly />
+          </FormControl>
+        </Stack>
+      </Stack>
+
+      <Stack spacing={1}>
+        <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
+          Dates And Tags
+        </Typography>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Start date</FormLabel>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(event) => onFieldChange("startDate", event.target.value)}
+            />
+          </FormControl>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Due date</FormLabel>
+            <Input
+              type="date"
+              value={dueDate}
+              onChange={(event) => onFieldChange("dueDate", event.target.value)}
+            />
+          </FormControl>
+          <FormControl sx={{ flex: 1 }}>
+            <FormLabel>Completed date</FormLabel>
+            <Input
+              type="date"
+              value={completedDate}
+              onChange={(event) => onFieldChange("completedDate", event.target.value)}
+            />
+          </FormControl>
+        </Stack>
+        <FormControl>
+          <FormLabel>Tags</FormLabel>
+          <Autocomplete
+            multiple
+            freeSolo
+            options={tagSuggestions}
+            value={tags}
+            onChange={onTagsChange}
+            placeholder="Add task tags"
+          />
+        </FormControl>
+      </Stack>
+    </>
+  );
+});
 
 export default function WorkspaceTaskDetailsPage() {
   const { authSession } = useAuthContext();
@@ -164,6 +427,14 @@ export default function WorkspaceTaskDetailsPage() {
   const [creatingSubtaskIds, setCreatingSubtaskIds] = useState([]);
   const [deletingSubtaskIds, setDeletingSubtaskIds] = useState([]);
   const [updatingSubtaskIds, setUpdatingSubtaskIds] = useState([]);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [commentEntries, setCommentEntries] = useState([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isCreatingComment, setIsCreatingComment] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentDraft, setEditingCommentDraft] = useState("");
+  const [isUpdatingComment, setIsUpdatingComment] = useState(false);
+  const [hoveredCommentId, setHoveredCommentId] = useState(null);
   const [taskValues, setTaskValues] = useState(() => buildTaskFormValues(null));
   const [lastSavedValues, setLastSavedValues] = useState(() => buildTaskFormValues(null));
   const [saveState, setSaveState] = useState("idle");
@@ -412,10 +683,41 @@ export default function WorkspaceTaskDetailsPage() {
       setTaskValues(nextValues);
       setLastSavedValues(nextValues);
       setSubtaskDrafts([]);
+      setCommentDraft("");
+      setCommentEntries([]);
+      setEditingCommentId(null);
+      setEditingCommentDraft("");
       setSaveState("idle");
       setSaveMessage("");
     }
-  }, [task]);
+  }, [task?.id]);
+
+  useEffect(() => {
+    const loadTaskComments = async () => {
+      if (!authSession?.token || !task?.id) {
+        setCommentEntries([]);
+        setIsLoadingComments(false);
+        return;
+      }
+
+      setIsLoadingComments(true);
+
+      try {
+        const result = await fetchTaskComments(task.id, authSession.token);
+        setCommentEntries(Array.isArray(result?.comments) ? result.comments : []);
+      } catch (error) {
+        setCommentEntries([]);
+        await showErrorAlert(
+          "Unable to load comments",
+          error.message || "Something went wrong while loading task comments."
+        );
+      } finally {
+        setIsLoadingComments(false);
+      }
+    };
+
+    void loadTaskComments();
+  }, [authSession?.token, task?.id]);
 
   useEffect(
     () => () => {
@@ -464,7 +766,7 @@ export default function WorkspaceTaskDetailsPage() {
     }
   }, [isResolving, navigate, project, projectSlug, task, workspace, workspaceSlug]);
 
-  const handleFieldChange = (field, value) => {
+  const handleFieldChange = useCallback((field, value) => {
     setSaveState("idle");
     setSaveMessage("");
 
@@ -472,7 +774,7 @@ export default function WorkspaceTaskDetailsPage() {
       ...currentValues,
       [field]: value,
     }));
-  };
+  }, []);
 
   const saveTaskValues = async (nextValues) => {
     if (!authSession?.token || !task?.id) {
@@ -526,18 +828,126 @@ export default function WorkspaceTaskDetailsPage() {
     }
   };
 
-  const handleCancelChanges = () => {
+  const handleCancelChanges = useCallback(() => {
     setTaskValues(lastSavedValues);
     setSaveState("idle");
     setSaveMessage("");
-  };
+  }, [lastSavedValues]);
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = useCallback(() => {
     void saveTaskValues(taskValues);
-  };
+  }, [taskValues]);
 
   const handleAddSubtaskDraft = () => {
     setSubtaskDrafts((currentDrafts) => [...currentDrafts, buildSubtaskDraftValues()]);
+  };
+
+  const handleAddComment = async () => {
+    const trimmedComment = getPlainTextFromHtml(commentDraft);
+
+    if (!trimmedComment || !authSession?.token || !task?.id || isCreatingComment) {
+      return;
+    }
+
+    setIsCreatingComment(true);
+
+    try {
+      const result = await createTaskComment(
+        task.id,
+        {
+          comment: String(commentDraft || "").trim(),
+        },
+        authSession.token
+      );
+      const createdComment = result?.comment || null;
+
+      if (createdComment) {
+        setCommentEntries((currentComments) => [createdComment, ...currentComments]);
+        setTask((currentTask) =>
+          currentTask
+            ? {
+                ...currentTask,
+                commentsCount: Number(currentTask.commentsCount || 0) + 1,
+              }
+            : currentTask
+        );
+        setProjectTasks((currentTasks) =>
+          currentTasks.map((projectTask) =>
+            Number(projectTask.id) === Number(task.id)
+              ? {
+                  ...projectTask,
+                  commentsCount: Number(projectTask.commentsCount || 0) + 1,
+                }
+              : projectTask
+          )
+        );
+      }
+
+      setCommentDraft("");
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to add comment",
+        error.message || "Something went wrong while creating the comment."
+      );
+    } finally {
+      setIsCreatingComment(false);
+    }
+  };
+
+  const handleStartCommentEdit = (commentItem) => {
+    setEditingCommentId(Number(commentItem.id));
+    setEditingCommentDraft(String(commentItem.comment || ""));
+  };
+
+  const handleCancelCommentEdit = () => {
+    setEditingCommentId(null);
+    setEditingCommentDraft("");
+  };
+
+  const handleUpdateComment = async (commentItem) => {
+    const trimmedComment = getPlainTextFromHtml(editingCommentDraft);
+
+    if (
+      !trimmedComment ||
+      !authSession?.token ||
+      !task?.id ||
+      !commentItem?.id ||
+      isUpdatingComment
+    ) {
+      return;
+    }
+
+    setIsUpdatingComment(true);
+
+    try {
+      const result = await updateTaskComment(
+        task.id,
+        commentItem.id,
+        {
+          comment: String(editingCommentDraft || "").trim(),
+        },
+        authSession.token
+      );
+      const updatedComment = result?.comment || null;
+
+      if (updatedComment) {
+        setCommentEntries((currentComments) =>
+          currentComments.map((currentComment) =>
+            Number(currentComment.id) === Number(updatedComment.id) ? updatedComment : currentComment
+          )
+        );
+      }
+
+      setEditingCommentId(null);
+      setEditingCommentDraft("");
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to update comment",
+        error.message || "Something went wrong while updating the comment."
+      );
+    } finally {
+      setIsUpdatingComment(false);
+    }
   };
 
   const handleSubtaskDraftChange = (localId, field, value) => {
@@ -873,13 +1283,645 @@ export default function WorkspaceTaskDetailsPage() {
     }
   };
 
-  const handleSelectChange = (field) => (_, value) => {
-    handleFieldChange(field, value || "");
-  };
-
-  const handleTagsChange = (_, value) => {
+  const handleTagsChange = useCallback((_, value) => {
     handleFieldChange("tags", value);
-  };
+  }, [handleFieldChange]);
+
+  const commentsSection = useMemo(
+    () => (
+      <Sheet
+        variant="outlined"
+        sx={{
+          width: "100%",
+          borderRadius: "10px",
+          borderColor: "rgba(220, 226, 244, 0.95)",
+          backgroundColor: "#fff",
+          boxShadow: "0 18px 38px rgba(170, 180, 214, 0.12)",
+          overflow: "hidden",
+        }}
+      >
+        <Box sx={{ px: 2.1, py: 2.1 }}>
+          <Stack spacing={1.25}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={0.75}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", sm: "center" }}
+            >
+              <Box>
+                <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
+                  Comments
+                </Typography>
+                <Typography level="body-sm" sx={{ color: "#60708e", mt: 0.25 }}>
+                  Discuss progress, blockers, and implementation notes with your team.
+                </Typography>
+              </Box>
+              <Typography
+                level="body-sm"
+                sx={{
+                  px: 1,
+                  py: 0.45,
+                  borderRadius: "999px",
+                  backgroundColor: "rgba(49, 85, 255, 0.08)",
+                  color: "#3155ff",
+                  fontWeight: 700,
+                }}
+              >
+                {commentEntries.length} {commentEntries.length === 1 ? "comment" : "comments"}
+              </Typography>
+            </Stack>
+
+            <Sheet
+              variant="outlined"
+              sx={{
+                borderRadius: "14px",
+                borderColor: "rgba(220, 226, 244, 0.95)",
+                backgroundColor: "#fff",
+                p: 1.1,
+              }}
+            >
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1} alignItems="flex-start">
+                  <Box
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      flexShrink: 0,
+                      borderRadius: "50%",
+                      display: "grid",
+                      placeItems: "center",
+                      backgroundColor: "rgba(49, 85, 255, 0.14)",
+                      color: "#3155ff",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    {buildUserInitials(fullName)}
+                  </Box>
+                  <FormControl sx={{ flex: 1 }}>
+                    <RichTextEditor
+                      value={commentDraft}
+                      onChange={(value) => setCommentDraft(value)}
+                      placeholder="Write a comment for this task..."
+                      minHeight={140}
+                    />
+                  </FormControl>
+                </Stack>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={0.75}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", sm: "center" }}
+                >
+                  <Typography level="body-xs" sx={{ color: "#7b8596" }}>
+                    Comments are visible to team members who can access this task.
+                  </Typography>
+                  <Button
+                    onClick={() => {
+                      void handleAddComment();
+                    }}
+                    loading={isCreatingComment}
+                    disabled={!getPlainTextFromHtml(commentDraft) || isCreatingComment}
+                    sx={{ color: "var(--color-font-secondary)" }}
+                  >
+                    Add comment
+                  </Button>
+                </Stack>
+              </Stack>
+            </Sheet>
+
+            {isLoadingComments ? (
+              <Sheet
+                variant="outlined"
+                sx={{
+                  borderRadius: "14px",
+                  borderColor: "rgba(220, 226, 244, 0.95)",
+                  backgroundColor: "#fff",
+                  p: 1.5,
+                }}
+              >
+                <Typography level="body-sm" sx={{ color: "#60708e", fontWeight: 600 }}>
+                  Loading comments...
+                </Typography>
+              </Sheet>
+            ) : commentEntries.length > 0 ? (
+              <Stack spacing={1}>
+                {commentEntries.map((commentItem) => (
+                  <Sheet
+                    key={commentItem.id}
+                    variant="outlined"
+                    onMouseEnter={() => setHoveredCommentId(Number(commentItem.id))}
+                    onMouseLeave={() =>
+                      setHoveredCommentId((currentId) =>
+                        currentId === Number(commentItem.id) ? null : currentId
+                      )
+                    }
+                    sx={{
+                      borderRadius: "14px",
+                      borderColor: "rgba(220, 226, 244, 0.95)",
+                      backgroundColor: "#fff",
+                      p: 1.1,
+                    }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                      <Box
+                        sx={{
+                          width: 38,
+                          height: 38,
+                          flexShrink: 0,
+                          borderRadius: "50%",
+                          display: "grid",
+                          placeItems: "center",
+                          backgroundColor: "rgba(35, 49, 77, 0.08)",
+                          color: "#23314d",
+                          fontWeight: 700,
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        {buildUserInitials(commentItem.createdByName)}
+                      </Box>
+                      <Stack spacing={0.5} sx={{ minWidth: 0, flex: 1 }}>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={0.5}
+                          justifyContent="space-between"
+                          alignItems={{ xs: "flex-start", sm: "center" }}
+                        >
+                          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
+                            <Typography sx={{ fontWeight: 700, color: "#23314d" }}>
+                              {commentItem.createdByName}
+                            </Typography>
+                          </Stack>
+                        </Stack>
+                        {Number(editingCommentId) === Number(commentItem.id) ? (
+                          <Stack spacing={1}>
+                            <RichTextEditor
+                              value={editingCommentDraft}
+                              onChange={(value) => setEditingCommentDraft(value)}
+                              placeholder="Update your comment..."
+                              minHeight={120}
+                            />
+                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                              <Button
+                                size="sm"
+                                variant="plain"
+                                color="neutral"
+                                onClick={handleCancelCommentEdit}
+                                disabled={isUpdatingComment}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  void handleUpdateComment(commentItem);
+                                }}
+                                loading={isUpdatingComment}
+                                disabled={!getPlainTextFromHtml(editingCommentDraft) || isUpdatingComment}
+                                sx={{ color: "var(--color-font-secondary)" }}
+                              >
+                                Update
+                              </Button>
+                            </Stack>
+                          </Stack>
+                        ) : (
+                          <Stack spacing={0.35} alignItems="flex-start">
+                            <Box
+                              component="div"
+                              sx={{
+                                color: "#3b4863",
+                                overflowWrap: "anywhere",
+                                "& p": {
+                                  m: 0,
+                                },
+                                "& p + p": {
+                                  mt: 0.75,
+                                },
+                                "& ul, & ol": {
+                                  pl: 2.5,
+                                  my: 0.75,
+                                },
+                                "& blockquote": {
+                                  m: 0,
+                                  pl: 1.25,
+                                  borderLeft: "3px solid rgba(49, 85, 255, 0.18)",
+                                  color: "#52627d",
+                                },
+                              }}
+                              dangerouslySetInnerHTML={{ __html: commentItem.comment }}
+                            />
+                            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
+                              <Typography level="body-xs" sx={{ color: "#7b8596" }}>
+                                {formatCommentTimestamp(commentItem.updatedAt || commentItem.createdAt)}
+                              </Typography>
+                              {Number(commentItem.createdBy) === Number(currentUserId) ? (
+                                <Button
+                                  size="sm"
+                                  variant="plain"
+                                  color="neutral"
+                                  startDecorator={<EditIcon />}
+                                  onClick={() => handleStartCommentEdit(commentItem)}
+                                  disabled={
+                                    isUpdatingComment &&
+                                    Number(editingCommentId) === Number(commentItem.id)
+                                  }
+                                  sx={{
+                                    minHeight: "auto",
+                                    px: 0.5,
+                                    py: 0.2,
+                                    color: "#3155ff",
+                                    opacity:
+                                      hoveredCommentId === Number(commentItem.id) ? 1 : 0,
+                                    visibility:
+                                      hoveredCommentId === Number(commentItem.id)
+                                        ? "visible"
+                                        : "hidden",
+                                    transition: "opacity 0.18s ease, visibility 0.18s ease",
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                              ) : null}
+                            </Stack>
+                          </Stack>
+                        )}
+                      </Stack>
+                    </Stack>
+                  </Sheet>
+                ))}
+              </Stack>
+            ) : (
+              <Sheet
+                variant="outlined"
+                sx={{
+                  borderRadius: "14px",
+                  borderStyle: "dashed",
+                  borderColor: "rgba(182, 193, 223, 0.9)",
+                  backgroundColor: "#fff",
+                  p: 1.5,
+                }}
+              >
+                <Stack spacing={0.35}>
+                  <Typography sx={{ fontWeight: 700, color: "#23314d" }}>
+                    No comments yet
+                  </Typography>
+                  <Typography level="body-sm" sx={{ color: "#60708e" }}>
+                    Start the discussion here for blockers, decisions, or implementation notes.
+                  </Typography>
+                </Stack>
+              </Sheet>
+            )}
+          </Stack>
+        </Box>
+      </Sheet>
+    ),
+    [
+      commentDraft,
+      commentEntries,
+      currentUserId,
+      editingCommentDraft,
+      editingCommentId,
+      fullName,
+      hoveredCommentId,
+      isCreatingComment,
+      isLoadingComments,
+      isUpdatingComment,
+    ]
+  );
+
+  const subtasksSection = useMemo(
+    () => (
+      <>
+        <Stack alignItems="flex-start" spacing={1}>
+          <Button
+            variant="soft"
+            color="primary"
+            startDecorator={<PlusIcon />}
+            onClick={handleAddSubtaskDraft}
+            sx={{ borderRadius: "10px", fontWeight: 600 }}
+          >
+            Add sub task
+          </Button>
+        </Stack>
+        <Sheet
+          variant="soft"
+          sx={{
+            borderRadius: "12px",
+            border: "1px solid rgba(220, 226, 244, 0.95)",
+            backgroundColor: "#fbfcff",
+            p: 1.25,
+          }}
+        >
+          <Stack spacing={1.1}>
+            <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
+              Subtasks
+            </Typography>
+
+            {subtaskDrafts.map((draft) => (
+              <Sheet
+                key={draft.localId}
+                variant="outlined"
+                sx={{
+                  borderRadius: "12px",
+                  borderColor: "rgba(220, 226, 244, 0.95)",
+                  backgroundColor: "#fff",
+                  p: 1.15,
+                }}
+              >
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={1}
+                  alignItems={{ xs: "stretch", md: "center" }}
+                >
+                  <FormControl
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Checkbox
+                      checked={isCompletedStatus(draft.status)}
+                      onChange={(event) =>
+                        handleSubtaskDraftCompletionToggle(
+                          draft.localId,
+                          event.target.checked
+                        )
+                      }
+                    />
+                  </FormControl>
+                  <FormControl sx={{ flex: 1.8 }}>
+                    <Input
+                      value={draft.title}
+                      onChange={(event) =>
+                        handleSubtaskDraftChange(
+                          draft.localId,
+                          "title",
+                          event.target.value
+                        )
+                      }
+                      placeholder="Title"
+                    />
+                  </FormControl>
+                  <FormControl sx={{ flex: 1.2 }}>
+                    <Select
+                      value={draft.assignedTo || null}
+                      onChange={(_, value) =>
+                        handleSubtaskDraftChange(
+                          draft.localId,
+                          "assignedTo",
+                          value || ""
+                        )
+                      }
+                      placeholder="Select assignee"
+                    >
+                      {projectUserOptions.map((option) => (
+                        <Option key={option.id} value={String(option.id)}>
+                          {option.label}
+                        </Option>
+                      ))}
+                      placeholder="Assigned to"
+                    </Select>
+                  </FormControl>
+                  <FormControl sx={{ flex: 1 }}>
+                    <Input
+                      type="date"
+                      value={draft.dueDate}
+                      onChange={(event) =>
+                        handleSubtaskDraftChange(
+                          draft.localId,
+                          "dueDate",
+                          event.target.value
+                        )
+                      }
+                      slotProps={{ input: { "aria-label": "Due date" } }}
+                    />
+                  </FormControl>
+                  <FormControl sx={{ flex: 1 }}>
+                    <Select
+                      value={draft.status}
+                      onChange={(_, value) =>
+                        handleSubtaskDraftChange(
+                          draft.localId,
+                          "status",
+                          value || "todo"
+                        )
+                      }
+                    >
+                      {statusOptions.map((option) => (
+                        <Option key={option.value} value={option.value}>
+                          {option.label}
+                        </Option>
+                      ))}
+                      placeholder="Status"
+                    </Select>
+                  </FormControl>
+                  <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                    <Button
+                      loading={creatingSubtaskIds.includes(draft.localId)}
+                      onClick={() => {
+                        void handleCreateSubtask(draft);
+                      }}
+                      sx={{ color: "var(--color-font-secondary)" }}
+                    >
+                      Create
+                    </Button>
+                    <IconButton
+                      variant="plain"
+                      color="danger"
+                      onClick={() => handleRemoveSubtaskDraft(draft.localId)}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Stack>
+                </Stack>
+              </Sheet>
+            ))}
+
+            {subtasks.map((subtask) => (
+              <Sheet
+                key={subtask.id}
+                variant="outlined"
+                sx={{
+                  borderRadius: "12px",
+                  borderColor: "rgba(220, 226, 244, 0.95)",
+                  backgroundColor: "#fff",
+                  p: 1.15,
+                }}
+              >
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={1}
+                  alignItems={{ xs: "stretch", md: "center" }}
+                >
+                  <FormControl
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Checkbox
+                      checked={isCompletedStatus(subtask.status)}
+                      disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                      onChange={(event) =>
+                        handleExistingSubtaskCompletionToggle(
+                          subtask,
+                          event.target.checked
+                        )
+                      }
+                    />
+                  </FormControl>
+                  <FormControl sx={{ flex: 1.8 }}>
+                    <Input
+                      value={subtask.title || ""}
+                      placeholder="Title"
+                      disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                      onChange={(event) => {
+                        const nextTitle = event.target.value;
+
+                        handleExistingSubtaskFieldChange(
+                          subtask.id,
+                          "title",
+                          nextTitle
+                        );
+                        scheduleSubtaskAutosave(subtask.id, {
+                          title: nextTitle,
+                        });
+                      }}
+                      onBlur={() => {
+                        void flushSubtaskAutosave(subtask.id);
+                      }}
+                    />
+                  </FormControl>
+                  <FormControl sx={{ flex: 1.2 }}>
+                    <Select
+                      value={subtask.assignedTo ? String(subtask.assignedTo) : null}
+                      placeholder="Assigned to"
+                      disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                      onChange={(_, value) => {
+                        handleExistingSubtaskFieldChange(
+                          subtask.id,
+                          "assignedTo",
+                          value || null
+                        );
+
+                        const selectedOption = projectUserOptions.find(
+                          (option) => String(option.id) === String(value || "")
+                        );
+
+                        handleExistingSubtaskFieldChange(
+                          subtask.id,
+                          "assignedToName",
+                          selectedOption?.label || null
+                        );
+
+                        scheduleSubtaskAutosave(subtask.id, {
+                          assignedTo: value || null,
+                        });
+                      }}
+                    >
+                      {projectUserOptions.map((option) => (
+                        <Option key={option.id} value={String(option.id)}>
+                          {option.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl sx={{ flex: 1 }}>
+                    <Input
+                      value={normalizeDateInputValue(subtask.dueDate)}
+                      placeholder="Due date"
+                      type="date"
+                      disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                      onChange={(event) => {
+                        const nextDueDate = event.target.value;
+
+                        handleExistingSubtaskFieldChange(
+                          subtask.id,
+                          "dueDate",
+                          nextDueDate
+                        );
+                        scheduleSubtaskAutosave(subtask.id, {
+                          dueDate: nextDueDate,
+                        });
+                      }}
+                      onBlur={() => {
+                        void flushSubtaskAutosave(subtask.id);
+                      }}
+                    />
+                  </FormControl>
+                  <FormControl sx={{ flex: 1 }}>
+                    <Select
+                      value={subtask.status || null}
+                      placeholder="Status"
+                      disabled={updatingSubtaskIds.includes(Number(subtask.id))}
+                      onChange={(_, value) => {
+                        const nextStatus = value || "todo";
+                        const nextCompletedAt = isCompletedStatus(nextStatus)
+                          ? normalizeDateInputValue(subtask.completedAt) || getTodayDateOnly()
+                          : null;
+
+                        handleExistingSubtaskFieldChange(subtask.id, "status", nextStatus);
+                        handleExistingSubtaskFieldChange(
+                          subtask.id,
+                          "completedAt",
+                          nextCompletedAt
+                        );
+
+                        scheduleSubtaskAutosave(subtask.id, {
+                          status: nextStatus,
+                          completedAt: nextCompletedAt,
+                        });
+                      }}
+                    >
+                      {statusOptions.map((option) => (
+                        <Option key={option.value} value={option.value}>
+                          {option.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                    <IconButton
+                      variant="plain"
+                      color="neutral"
+                      onClick={() => handleOpenSubtask(subtask)}
+                    >
+                      <EyeIcon />
+                    </IconButton>
+                    <IconButton
+                      variant="plain"
+                      color="danger"
+                      loading={deletingSubtaskIds.includes(Number(subtask.id))}
+                      disabled={deletingSubtaskIds.includes(Number(subtask.id))}
+                      onClick={() => {
+                        void handleDeleteSubtask(subtask);
+                      }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Stack>
+                </Stack>
+              </Sheet>
+            ))}
+
+            {subtaskDrafts.length === 0 && subtasks.length === 0 ? (
+              <Typography level="body-sm" sx={{ color: "#60708e" }}>
+                No subtasks added yet.
+              </Typography>
+            ) : null}
+          </Stack>
+        </Sheet>
+      </>
+    ),
+    [
+      creatingSubtaskIds,
+      deletingSubtaskIds,
+      projectUserOptions,
+      subtaskDrafts,
+      subtasks,
+      updatingSubtaskIds,
+    ]
+  );
 
   return (
     <AppLayout
@@ -912,6 +1954,7 @@ export default function WorkspaceTaskDetailsPage() {
           py: { xs: 1.25, md: 1.75 },
         }}
       >
+        <Stack spacing={1.5}>
         <Sheet
           variant="outlined"
           sx={{
@@ -935,587 +1978,92 @@ export default function WorkspaceTaskDetailsPage() {
             <Stack spacing={0}>
               <Box sx={{ px: 2.1, py: 2.1 }}>
                 <Stack spacing={2.1}>
-                <Stack spacing={1}>
-                  {task?.parentTaskTitle ? (
+                  <TaskHeaderSection
+                    parentTaskTitle={task?.parentTaskTitle || ""}
+                    parentTaskNavigateLabel={
+                      task?.parentTaskTitle ? `Parent Service - ${task.parentTaskTitle}` : ""
+                    }
+                    onOpenParentTask={() => {
+                      if (!task?.parentTaskSlug || !workspace?.slug || !project?.slug) {
+                        return;
+                      }
+
+                      navigate(
+                        buildTaskDetailsRoute(
+                          workspace.slug,
+                          project.slug,
+                          task.parentTaskSlug
+                        ),
+                        {
+                          state: {
+                            workspace,
+                            project,
+                          },
+                        }
+                      );
+                    }}
+                    title={taskValues.title}
+                    description={taskValues.description}
+                    onFieldChange={handleFieldChange}
+                  />
+                  {subtasksSection}
+                  <TaskMetadataSection
+                    status={taskValues.status}
+                    priority={taskValues.priority}
+                    taskType={taskValues.taskType}
+                    assignedBy={taskValues.assignedBy}
+                    assignedTo={taskValues.assignedTo}
+                    createdByName={task?.createdByName || "-"}
+                    startDate={taskValues.startDate}
+                    dueDate={taskValues.dueDate}
+                    completedDate={taskValues.completedDate}
+                    tags={taskValues.tags}
+                    projectUserOptions={projectUserOptions}
+                    onFieldChange={handleFieldChange}
+                    onTagsChange={handleTagsChange}
+                  />
+
+                  <Typography
+                    level="body-sm"
+                    sx={{
+                      pt: 0.35,
+                      textAlign: "right",
+                      color:
+                        saveState === "error"
+                          ? "#d14343"
+                          : saveState === "saving"
+                            ? "#3155ff"
+                            : "#60708e",
+                      fontWeight: saveState === "saving" || saveState === "error" ? 600 : 500,
+                    }}
+                  >
+                    {saveMessage || (hasUnsavedChanges ? "You have unsaved changes." : "")}
+                  </Typography>
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
                     <Button
                       variant="plain"
                       color="neutral"
-                      onClick={() => {
-                        if (!task.parentTaskSlug || !workspace?.slug || !project?.slug) {
-                          return;
-                        }
-
-                        navigate(
-                          buildTaskDetailsRoute(
-                            workspace.slug,
-                            project.slug,
-                            task.parentTaskSlug
-                          ),
-                          {
-                            state: {
-                              workspace,
-                              project,
-                            },
-                          }
-                        );
-                      }}
-                      sx={{
-                        alignSelf: "flex-start",
-                        px: 0,
-                        py: 0,
-                        minHeight: "auto",
-                        color: "#60708e",
-                        fontWeight: 600,
-                        "&:hover": {
-                          backgroundColor: "transparent",
-                          color: "#3155ff",
-                        },
-                      }}
+                      onClick={handleCancelChanges}
+                      disabled={saveState === "saving" || !hasUnsavedChanges}
                     >
-                      {`Parent Service - ${task.parentTaskTitle}`}
+                      Cancel
                     </Button>
-                  ) : null}
-                  <Textarea
-                    value={taskValues.title}
-                    onChange={(event) => handleFieldChange("title", event.target.value)}
-                    variant="outlined"
-                    placeholder="Task title"
-                    aria-label="Task title"
-                    minRows={1}
-                    slotProps={{
-                      textarea: {
-                        maxLength: 500,
-                      },
-                    }}
-                    sx={{
-                      px: 0.5,
-                      py: 0.25,
-                      minHeight: "auto",
-                      borderRadius: "sm",
-                      backgroundColor: "transparent",
-                      borderColor: "transparent",
-                      boxShadow: "none",
-                      fontSize: "1.14rem",
-                      fontWeight: 700,
-                      color: "#23314d",
-                      "--Input-focusedThickness": "0px",
-                      "--Input-focusedHighlight": "transparent",
-                      "&:hover": {
-                        backgroundColor: "rgba(0, 0, 0, 0.04)",
-                        borderColor: "var(--joy-palette-neutral-outlinedBorder)",
-                      },
-                      "&.Mui-focused": {
-                        backgroundColor: "var(--joy-palette-background-surface)",
-                        borderColor: "var(--joy-palette-primary-outlinedBorder)",
-                      },
-                      "& textarea": {
-                        p: 0,
-                        font: "inherit",
-                        color: "inherit",
-                        lineHeight: 1.4,
-                      },
-                    }}
-                  />
-                  <FormControl>
-                    <FormLabel>Description</FormLabel>
-                    <RichTextEditor
-                      value={taskValues.description}
-                      onChange={(value) => handleFieldChange("description", value)}
-                      minHeight={220}
-                    />
-                  </FormControl>
-                  <Stack alignItems="flex-start" spacing={1}>
                     <Button
-                      variant="soft"
-                      color="primary"
-                      startDecorator={<PlusIcon />}
-                      onClick={handleAddSubtaskDraft}
-                      sx={{ borderRadius: "10px", fontWeight: 600 }}
+                      onClick={handleSaveChanges}
+                      loading={saveState === "saving"}
+                      disabled={saveState === "saving" || !hasUnsavedChanges}
+                      sx={{ color: "var(--color-font-secondary)" }}
                     >
-                      Add sub task
+                      Save
                     </Button>
                   </Stack>
-                  <Sheet
-                    variant="soft"
-                    sx={{
-                      borderRadius: "12px",
-                      border: "1px solid rgba(220, 226, 244, 0.95)",
-                      backgroundColor: "#fbfcff",
-                      p: 1.25,
-                    }}
-                  >
-                    <Stack spacing={1.1}>
-                      <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
-                        Subtasks
-                      </Typography>
-
-                      {subtaskDrafts.map((draft) => (
-                        <Sheet
-                          key={draft.localId}
-                          variant="outlined"
-                          sx={{
-                            borderRadius: "12px",
-                            borderColor: "rgba(220, 226, 244, 0.95)",
-                            backgroundColor: "#fff",
-                            p: 1.15,
-                          }}
-                        >
-                          <Stack
-                            direction={{ xs: "column", md: "row" }}
-                            spacing={1}
-                            alignItems={{ xs: "stretch", md: "center" }}
-                          >
-                            <FormControl
-                              sx={{
-                                display: "flex",
-                                justifyContent: "center",
-                              }}
-                            >
-                              <Checkbox
-                                checked={isCompletedStatus(draft.status)}
-                                onChange={(event) =>
-                                  handleSubtaskDraftCompletionToggle(
-                                    draft.localId,
-                                    event.target.checked
-                                  )
-                                }
-                              />
-                            </FormControl>
-                            <FormControl sx={{ flex: 1.8 }}>
-                              <Input
-                                value={draft.title}
-                                onChange={(event) =>
-                                  handleSubtaskDraftChange(
-                                    draft.localId,
-                                    "title",
-                                    event.target.value
-                                  )
-                                }
-                                placeholder="Title"
-                              />
-                            </FormControl>
-                            <FormControl sx={{ flex: 1.2 }}>
-                              <Select
-                                value={draft.assignedTo || null}
-                                onChange={(_, value) =>
-                                  handleSubtaskDraftChange(
-                                    draft.localId,
-                                    "assignedTo",
-                                    value || ""
-                                  )
-                                }
-                                placeholder="Select assignee"
-                              >
-                                {projectUserOptions.map((option) => (
-                                  <Option key={option.id} value={String(option.id)}>
-                                    {option.label}
-                                  </Option>
-                                ))}
-                                placeholder="Assigned to"
-                              </Select>
-                            </FormControl>
-                            <FormControl sx={{ flex: 1 }}>
-                              <Input
-                                type="date"
-                                value={draft.dueDate}
-                                onChange={(event) =>
-                                  handleSubtaskDraftChange(
-                                    draft.localId,
-                                    "dueDate",
-                                    event.target.value
-                                  )
-                                }
-                                slotProps={{ input: { "aria-label": "Due date" } }}
-                              />
-                            </FormControl>
-                            <FormControl sx={{ flex: 1 }}>
-                              <Select
-                                value={draft.status}
-                                onChange={(_, value) =>
-                                  handleSubtaskDraftChange(
-                                    draft.localId,
-                                    "status",
-                                    value || "todo"
-                                  )
-                                }
-                              >
-                                {statusOptions.map((option) => (
-                                  <Option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </Option>
-                                ))}
-                                placeholder="Status"
-                              </Select>
-                            </FormControl>
-                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                              <Button
-                                loading={creatingSubtaskIds.includes(draft.localId)}
-                                onClick={() => {
-                                  void handleCreateSubtask(draft);
-                                }}
-                                sx={{ color: "var(--color-font-secondary)" }}
-                              >
-                                Create
-                              </Button>
-                              <IconButton
-                                variant="plain"
-                                color="danger"
-                                onClick={() => handleRemoveSubtaskDraft(draft.localId)}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Stack>
-                          </Stack>
-                        </Sheet>
-                      ))}
-
-                      {subtasks.map((subtask) => (
-                        <Sheet
-                          key={subtask.id}
-                          variant="outlined"
-                          sx={{
-                            borderRadius: "12px",
-                            borderColor: "rgba(220, 226, 244, 0.95)",
-                            backgroundColor: "#fff",
-                            p: 1.15,
-                          }}
-                        >
-                          <Stack
-                            direction={{ xs: "column", md: "row" }}
-                            spacing={1}
-                            alignItems={{ xs: "stretch", md: "center" }}
-                          >
-                            <FormControl
-                              sx={{
-                                display: "flex",
-                                justifyContent: "center",
-                              }}
-                            >
-                              <Checkbox
-                                checked={isCompletedStatus(subtask.status)}
-                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
-                                onChange={(event) =>
-                                  handleExistingSubtaskCompletionToggle(
-                                    subtask,
-                                    event.target.checked
-                                  )
-                                }
-                              />
-                            </FormControl>
-                            <FormControl sx={{ flex: 1.8 }}>
-                              <Input
-                                value={subtask.title || ""}
-                                placeholder="Title"
-                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
-                                onChange={(event) =>
-                                  {
-                                    const nextTitle = event.target.value;
-
-                                    handleExistingSubtaskFieldChange(
-                                      subtask.id,
-                                      "title",
-                                      nextTitle
-                                    );
-                                    scheduleSubtaskAutosave(subtask.id, {
-                                      title: nextTitle,
-                                    });
-                                  }
-                                }
-                                onBlur={() => {
-                                  void flushSubtaskAutosave(subtask.id);
-                                }}
-                              />
-                            </FormControl>
-                            <FormControl sx={{ flex: 1.2 }}>
-                              <Select
-                                value={subtask.assignedTo ? String(subtask.assignedTo) : null}
-                                placeholder="Assigned to"
-                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
-                                onChange={(_, value) => {
-                                  handleExistingSubtaskFieldChange(
-                                    subtask.id,
-                                    "assignedTo",
-                                    value || null
-                                  );
-
-                                  const selectedOption = projectUserOptions.find(
-                                    (option) => String(option.id) === String(value || "")
-                                  );
-
-                                  handleExistingSubtaskFieldChange(
-                                    subtask.id,
-                                    "assignedToName",
-                                    selectedOption?.label || null
-                                  );
-
-                                  scheduleSubtaskAutosave(subtask.id, {
-                                    assignedTo: value || null,
-                                  });
-                                }}
-                              >
-                                {projectUserOptions.map((option) => (
-                                  <Option key={option.id} value={String(option.id)}>
-                                    {option.label}
-                                  </Option>
-                                ))}
-                              </Select>
-                            </FormControl>
-                            <FormControl sx={{ flex: 1 }}>
-                              <Input
-                                value={normalizeDateInputValue(subtask.dueDate)}
-                                placeholder="Due date"
-                                type="date"
-                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
-                                onChange={(event) =>
-                                  {
-                                    const nextDueDate = event.target.value;
-
-                                    handleExistingSubtaskFieldChange(
-                                      subtask.id,
-                                      "dueDate",
-                                      nextDueDate
-                                    );
-                                    scheduleSubtaskAutosave(subtask.id, {
-                                      dueDate: nextDueDate,
-                                    });
-                                  }
-                                }
-                                onBlur={() => {
-                                  void flushSubtaskAutosave(subtask.id);
-                                }}
-                              />
-                            </FormControl>
-                            <FormControl sx={{ flex: 1 }}>
-                              <Select
-                                value={subtask.status || null}
-                                placeholder="Status"
-                                disabled={updatingSubtaskIds.includes(Number(subtask.id))}
-                                onChange={(_, value) => {
-                                  const nextStatus = value || "todo";
-                                  const nextCompletedAt = isCompletedStatus(nextStatus)
-                                    ? normalizeDateInputValue(subtask.completedAt) || getTodayDateOnly()
-                                    : null;
-
-                                  handleExistingSubtaskFieldChange(subtask.id, "status", nextStatus);
-                                  handleExistingSubtaskFieldChange(
-                                    subtask.id,
-                                    "completedAt",
-                                    nextCompletedAt
-                                  );
-
-                                  scheduleSubtaskAutosave(subtask.id, {
-                                    status: nextStatus,
-                                    completedAt: nextCompletedAt,
-                                  });
-                                }}
-                              >
-                                {statusOptions.map((option) => (
-                                  <Option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </Option>
-                                ))}
-                              </Select>
-                            </FormControl>
-                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                              <IconButton
-                                variant="plain"
-                                color="neutral"
-                                onClick={() => handleOpenSubtask(subtask)}
-                              >
-                                <EyeIcon />
-                              </IconButton>
-                              <IconButton
-                                variant="plain"
-                                color="danger"
-                                loading={deletingSubtaskIds.includes(Number(subtask.id))}
-                                disabled={deletingSubtaskIds.includes(Number(subtask.id))}
-                                onClick={() => {
-                                  void handleDeleteSubtask(subtask);
-                                }}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Stack>
-                          </Stack>
-                        </Sheet>
-                      ))}
-
-                      {subtaskDrafts.length === 0 && subtasks.length === 0 ? (
-                        <Typography level="body-sm" sx={{ color: "#60708e" }}>
-                          No subtasks added yet.
-                        </Typography>
-                      ) : null}
-                    </Stack>
-                  </Sheet>
-                </Stack>
-
-                <Stack spacing={1}>
-                  <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
-                    Workflow
-                  </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Status</FormLabel>
-                      <Select
-                        value={taskValues.status}
-                        onChange={handleSelectChange("status")}
-                      >
-                        {statusOptions.map((option) => (
-                          <Option key={option.value} value={option.value}>
-                            {option.label}
-                          </Option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Priority</FormLabel>
-                      <Select
-                        value={taskValues.priority}
-                        onChange={handleSelectChange("priority")}
-                      >
-                        {priorityOptions.map((option) => (
-                          <Option key={option.value} value={option.value}>
-                            {option.label}
-                          </Option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Task type</FormLabel>
-                      <Select
-                        value={taskValues.taskType}
-                        onChange={handleSelectChange("taskType")}
-                      >
-                        {taskTypeOptions.map((option) => (
-                          <Option key={option.value} value={option.value}>
-                            {option.label}
-                          </Option>
-                        ))}
-                      </Select>
-                    </FormControl>
                   </Stack>
-                </Stack>
-
-                <Stack spacing={1}>
-                  <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
-                    Assignment
-                  </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Assigned by</FormLabel>
-                      <Select
-                        value={taskValues.assignedBy}
-                        onChange={handleSelectChange("assignedBy")}
-                      >
-                        {projectUserOptions.map((option) => (
-                          <Option key={option.id} value={String(option.id)}>
-                            {option.label}
-                          </Option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Assigned to</FormLabel>
-                      <Select
-                        value={taskValues.assignedTo}
-                        onChange={handleSelectChange("assignedTo")}
-                      >
-                        {projectUserOptions.map((option) => (
-                          <Option key={option.id} value={String(option.id)}>
-                            {option.label}
-                          </Option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Created by</FormLabel>
-                      <Input value={task?.createdByName || "-"} readOnly />
-                    </FormControl>
-                  </Stack>
-                </Stack>
-
-                <Stack spacing={1}>
-                  <Typography level="title-sm" sx={{ fontWeight: 700, color: "#23314d" }}>
-                    Dates And Tags
-                  </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Start date</FormLabel>
-                      <Input
-                        type="date"
-                        value={taskValues.startDate}
-                        onChange={(event) => handleFieldChange("startDate", event.target.value)}
-                      />
-                    </FormControl>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Due date</FormLabel>
-                      <Input
-                        type="date"
-                        value={taskValues.dueDate}
-                        onChange={(event) => handleFieldChange("dueDate", event.target.value)}
-                      />
-                    </FormControl>
-                    <FormControl sx={{ flex: 1 }}>
-                      <FormLabel>Completed date</FormLabel>
-                      <Input
-                        type="date"
-                        value={taskValues.completedDate}
-                        onChange={(event) => handleFieldChange("completedDate", event.target.value)}
-                      />
-                    </FormControl>
-                  </Stack>
-                  <FormControl>
-                    <FormLabel>Tags</FormLabel>
-                    <Autocomplete
-                      multiple
-                      freeSolo
-                      options={tagSuggestions}
-                      value={taskValues.tags}
-                      onChange={handleTagsChange}
-                      placeholder="Add task tags"
-                    />
-                  </FormControl>
-                </Stack>
-
-                <Typography
-                  level="body-sm"
-                  sx={{
-                    pt: 0.35,
-                    textAlign: "right",
-                    color:
-                      saveState === "error"
-                        ? "#d14343"
-                        : saveState === "saving"
-                          ? "#3155ff"
-                          : "#60708e",
-                    fontWeight: saveState === "saving" || saveState === "error" ? 600 : 500,
-                  }}
-                >
-                  {saveMessage || (hasUnsavedChanges ? "You have unsaved changes." : "")}
-                </Typography>
-                <Stack direction="row" spacing={1} justifyContent="flex-end">
-                  <Button
-                    variant="plain"
-                    color="neutral"
-                    onClick={handleCancelChanges}
-                    disabled={saveState === "saving" || !hasUnsavedChanges}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSaveChanges}
-                    loading={saveState === "saving"}
-                    disabled={saveState === "saving" || !hasUnsavedChanges}
-                    sx={{ color: "var(--color-font-secondary)" }}
-                  >
-                    Save
-                  </Button>
-                </Stack>
-                </Stack>
               </Box>
             </Stack>
           )}
         </Sheet>
+        {commentsSection}
+        </Stack>
       </Box>
     </AppLayout>
   );

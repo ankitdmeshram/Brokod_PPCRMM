@@ -98,6 +98,23 @@ const addDays = (dateString, days) => {
 const buildFullName = (firstName = "", lastName = "") =>
   `${String(firstName || "").trim()} ${String(lastName || "").trim()}`.trim();
 
+const stripHtmlTags = (value) =>
+  String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const truncateText = (value, maxLength = 180) => {
+  const normalizedValue = String(value || "").trim();
+
+  if (normalizedValue.length <= maxLength) {
+    return normalizedValue;
+  }
+
+  return `${normalizedValue.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
+};
+
 const mapWorkspaceNotification = (notification) => ({
   id: notification.id,
   type: notification.type,
@@ -216,6 +233,7 @@ const getWorkspaceNotifications = async (workspaceId, userId, filters = {}) => {
 
   const [
     assignedTasks,
+    taskComments,
     projectMemberships,
     publicProjects,
     taskDeadlines,
@@ -257,6 +275,51 @@ const getWorkspaceNotifications = async (workspaceId, userId, filters = {}) => {
       .whereNull("tasks.deleted_at")
       .whereNull("projects.deleted_at")
       .orderBy("tasks.updated_at", "desc"),
+    getDb()("task_comments")
+      .join("tasks", "tasks.id", "task_comments.task_id")
+      .join("projects", "projects.id", "tasks.project_id")
+      .leftJoin({ actor: "users" }, "actor.id", "task_comments.created_by")
+      .leftJoin({ project_membership: "project_users" }, function joinMembership() {
+        this.on("project_membership.project_id", "=", "projects.id")
+          .andOn("project_membership.user_id", "=", getDb().raw("?", [normalizedUserId]))
+          .andOn("project_membership.status", "=", getDb().raw("?", ["active"]));
+      })
+      .select(
+        "task_comments.id as comment_id",
+        "task_comments.comment as comment_text",
+        "task_comments.created_at as comment_created_at",
+        "task_comments.updated_at as comment_updated_at",
+        "tasks.id as task_id",
+        "tasks.title as task_title",
+        "tasks.slug as task_slug",
+        "tasks.assigned_by",
+        "tasks.assigned_to",
+        "tasks.created_by",
+        "projects.id as project_id",
+        "projects.project_name",
+        "projects.slug as project_slug",
+        "actor.first_name as actor_first_name",
+        "actor.last_name as actor_last_name"
+      )
+      .where("tasks.workspace_id", normalizedWorkspaceId)
+      .andWhere("task_comments.created_by", "!=", normalizedUserId)
+      .andWhere((builder) => {
+        builder
+          .where("tasks.assigned_by", normalizedUserId)
+          .orWhere("tasks.assigned_to", normalizedUserId)
+          .orWhere("tasks.created_by", normalizedUserId);
+      })
+      .modify((query) => {
+        if (normalizedProjectName) {
+          query.andWhere("projects.project_name", normalizedProjectName);
+        }
+      })
+      .andWhere((builder) => {
+        builder.where("projects.access", "public").orWhereNotNull("project_membership.user_id");
+      })
+      .whereNull("tasks.deleted_at")
+      .whereNull("projects.deleted_at")
+      .orderBy("task_comments.updated_at", "desc"),
     getDb()("project_users")
       .join("projects", "projects.id", "project_users.project_id")
       .leftJoin({ actor: "users" }, "actor.id", "project_users.created_by")
@@ -383,6 +446,29 @@ const getWorkspaceNotifications = async (workspaceId, userId, filters = {}) => {
         taskSlug: task.task_slug,
         dueDate: task.due_date,
         createdAt: task.updated_at ?? task.created_at,
+      });
+    }),
+    ...taskComments.map((comment) => {
+      const actorName = buildFullName(comment.actor_first_name, comment.actor_last_name) || "Someone";
+      const commentPreview = truncateText(stripHtmlTags(comment.comment_text), 180);
+
+      return mapWorkspaceNotification({
+        id: `task-comment-${comment.comment_id}-${normalizedUserId}`,
+        type: "task_comment",
+        category: "assignments",
+        severity: "info",
+        title: "New comment on task",
+        message: commentPreview
+          ? `${actorName} commented on "${comment.task_title}" in ${comment.project_name}: "${commentPreview}"`
+          : `${actorName} commented on "${comment.task_title}" in ${comment.project_name}.`,
+        workspaceId: normalizedWorkspaceId,
+        projectId: comment.project_id,
+        projectName: comment.project_name,
+        projectSlug: comment.project_slug,
+        taskId: comment.task_id,
+        taskTitle: comment.task_title,
+        taskSlug: comment.task_slug,
+        createdAt: comment.comment_updated_at ?? comment.comment_created_at,
       });
     }),
     ...projectMemberships.map((membership) => {
