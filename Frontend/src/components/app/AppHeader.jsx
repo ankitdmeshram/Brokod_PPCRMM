@@ -154,6 +154,9 @@ export default function AppHeader({
               p: 0.5,
             }}
           >
+            <MenuItem component={RouterLink} to={APP_ROUTES.myAccount}>
+              My Account
+            </MenuItem>
             <MenuItem onClick={handleSignOut}>Log out</MenuItem>
           </Menu>
         </Dropdown>

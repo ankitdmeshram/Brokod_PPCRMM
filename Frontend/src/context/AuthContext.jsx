@@ -4,7 +4,12 @@ import {
   showInfoAlert,
   showSuccessAlert,
 } from "../services/alert.service";
-import { fetchCurrentUser, signinUser, signupUser } from "../services/auth.service";
+import {
+  fetchCurrentUser,
+  signinUser,
+  signupUser,
+  updateCurrentUserProfile,
+} from "../services/auth.service";
 import { AUTH_STORAGE_KEY } from "../config/common";
 import { getCookie, removeCookie, setCookie } from "../utils/cookie";
 
@@ -80,6 +85,11 @@ export function AuthProvider({ children }) {
     setAuthSession(null);
   };
 
+  const persistAuthSession = (nextSession) => {
+    setAuthSession(nextSession);
+    setCookie(AUTH_STORAGE_KEY, JSON.stringify(nextSession));
+  };
+
   useEffect(() => {
     const syncCurrentUser = async () => {
       if (!authSession?.token) {
@@ -98,8 +108,7 @@ export function AuthProvider({ children }) {
           user: result.user,
         };
 
-        setAuthSession(nextSession);
-        setCookie(AUTH_STORAGE_KEY, JSON.stringify(nextSession));
+        persistAuthSession(nextSession);
       } catch (error) {
         clearAuthSession();
       }
@@ -138,7 +147,7 @@ export function AuthProvider({ children }) {
         setCookie(AUTH_STORAGE_KEY, JSON.stringify(sessionPayload));
       }
 
-      setAuthSession(sessionPayload);
+      persistAuthSession(sessionPayload);
       setSignInStatus({
         loading: false,
       });
@@ -159,6 +168,42 @@ export function AuthProvider({ children }) {
         error.message || "Unable to sign in right now.",
       );
 
+      return null;
+    }
+  };
+
+  const saveCurrentUserProfile = async (payload) => {
+    if (!authSession?.token) {
+      await showErrorAlert(
+        "Session expired",
+        "Please sign in again to update your profile."
+      );
+      return null;
+    }
+
+    try {
+      const result = await updateCurrentUserProfile(payload, authSession.token);
+
+      if (!result?.user) {
+        return null;
+      }
+
+      persistAuthSession({
+        ...authSession,
+        user: result.user,
+      });
+
+      await showSuccessAlert(
+        "Profile updated",
+        result.message || "Your profile has been updated successfully."
+      );
+
+      return result.user;
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to update profile",
+        error.message || "Something went wrong while updating your profile."
+      );
       return null;
     }
   };
@@ -243,6 +288,7 @@ export function AuthProvider({ children }) {
       updateSignUpField,
       resetSignIn,
       resetSignUp,
+      saveCurrentUserProfile,
       submitSignIn,
       submitSignUp,
     }),

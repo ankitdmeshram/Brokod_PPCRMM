@@ -6,6 +6,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import SuperAdminProjectsPage from "./pages/SuperAdminProjectsPage";
+import ProfilePage from "./pages/ProfilePage";
 import WorkspaceTaskDetailsPage from "./pages/WorkspaceTaskDetailsPage";
 import WorkspaceProjectTasksPage from "./pages/WorkspaceProjectTasksPage";
 import WorkspacePage from "./pages/WorkspacePage";
@@ -33,6 +34,14 @@ export default function App() {
               <AuthRedirect>
                 <AuthPage mode="signup" />
               </AuthRedirect>
+            }
+          />
+          <Route
+            path={APP_ROUTES.myAccount}
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
             }
           />
           <Route

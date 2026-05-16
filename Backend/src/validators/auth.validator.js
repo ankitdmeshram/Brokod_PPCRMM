@@ -1,4 +1,5 @@
 const AppError = require("../utils/app-error");
+const moment = require("moment-timezone");
 
 const validateSignupPayload = (payload) => {
   const firstName = payload?.firstName?.trim();
@@ -53,7 +54,43 @@ const validateSigninPayload = (payload) => {
   };
 };
 
+const validateUpdateProfilePayload = (payload) => {
+  const firstName = String(payload?.firstName || "").trim();
+  const lastName = String(payload?.lastName || "").trim();
+  const email = String(payload?.email || "").trim().toLowerCase();
+  const phone = String(payload?.phone || "").trim();
+  const timeZone = String(payload?.timeZone || "").trim() || "UTC";
+
+  if (!firstName || !lastName || !email || !phone) {
+    throw new AppError(
+      "firstName, lastName, email, and phone are required.",
+      400
+    );
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new AppError("Please provide a valid email address.", 400);
+  }
+
+  if (!/^[0-9+\-\s()]{7,20}$/.test(phone)) {
+    throw new AppError("Please provide a valid phone number.", 400);
+  }
+
+  if (!moment.tz.zone(timeZone)) {
+    throw new AppError("Please provide a valid time zone.", 400);
+  }
+
+  return {
+    firstName,
+    lastName,
+    email,
+    phone,
+    timeZone,
+  };
+};
+
 module.exports = {
   validateSigninPayload,
   validateSignupPayload,
+  validateUpdateProfilePayload,
 };

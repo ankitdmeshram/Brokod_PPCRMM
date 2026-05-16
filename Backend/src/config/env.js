@@ -9,6 +9,7 @@ const env = {
   dbUser: process.env.DB_USER || "root",
   dbPassword: process.env.DB_PASS || "",
   dbName: process.env.DB_DATABASE || "",
+  dbTimeZone: process.env.DB_TIMEZONE || "+00:00",
 };
 
 const requiredVariables = ["DB_DATABASE", "JWT_SECRET"];

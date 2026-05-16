@@ -44,3 +44,16 @@ export async function fetchCurrentUser(token) {
 
   return parseApiResponse(response);
 }
+
+export async function updateCurrentUserProfile(payload, token) {
+  const response = await fetch(`${AUTH_API_BASE}/me`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}

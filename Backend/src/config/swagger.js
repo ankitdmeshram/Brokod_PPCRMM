@@ -51,6 +51,10 @@ const swaggerSpec = swaggerJsdoc({
               type: "string",
               example: "9876543210",
             },
+            timeZone: {
+              type: "string",
+              example: "Asia/Kolkata",
+            },
             role: {
               type: "string",
               example: "user",
@@ -59,11 +63,48 @@ const swaggerSpec = swaggerJsdoc({
               type: "boolean",
               example: true,
             },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+            },
             lastLogin: {
               type: "string",
               format: "date-time",
               nullable: true,
               example: "2026-04-13T12:30:00.000Z",
+            },
+          },
+        },
+        UpdateCurrentUserRequest: {
+          type: "object",
+          required: ["firstName", "lastName", "email", "phone", "timeZone"],
+          properties: {
+            firstName: {
+              type: "string",
+              example: "Ankit",
+            },
+            lastName: {
+              type: "string",
+              example: "Meshram",
+            },
+            email: {
+              type: "string",
+              format: "email",
+              example: "ankit@example.com",
+            },
+            phone: {
+              type: "string",
+              example: "9876543210",
+            },
+            timeZone: {
+              type: "string",
+              example: "Asia/Kolkata",
             },
           },
         },

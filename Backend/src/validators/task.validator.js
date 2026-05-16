@@ -1,4 +1,5 @@
 const AppError = require("../utils/app-error");
+const { compareUtc, formatUtcDate, isValidDateTime, toUtcMoment } = require("../utils/time");
 
 const allowedStatuses = new Set(["todo", "in_progress", "review", "done", "blocked"]);
 const allowedPriorities = new Set(["low", "medium", "high", "critical"]);
@@ -47,7 +48,7 @@ const normalizeTags = (tags) => {
 };
 
 const validateDateValue = (label, value) => {
-  if (value && Number.isNaN(Date.parse(value))) {
+  if (value && !isValidDateTime(value)) {
     throw new AppError(`Please provide a valid ${label}.`, 400);
   }
 };
@@ -65,13 +66,13 @@ const normalizeOptionalDateValue = (value, label) => {
     return normalizedValue;
   }
 
-  const parsedDate = new Date(normalizedValue);
+  const parsedDate = toUtcMoment(normalizedValue);
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (!parsedDate.isValid()) {
     throw new AppError(`Please provide a valid ${label}.`, 400);
   }
 
-  return parsedDate.toISOString().slice(0, 10);
+  return formatUtcDate(parsedDate);
 };
 
 const normalizeOptionalString = (value) => {
@@ -351,11 +352,11 @@ const validateCreateTaskPayload = (payload) => {
     throw new AppError("assignedTo must be a valid integer when provided.", 400);
   }
 
-  if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) {
+  if (startDate && dueDate && compareUtc(dueDate, startDate) < 0) {
     throw new AppError("dueDate cannot be earlier than startDate.", 400);
   }
 
-  if (startDate && completedAt && new Date(completedAt) < new Date(startDate)) {
+  if (startDate && completedAt && compareUtc(completedAt, startDate) < 0) {
     throw new AppError("completedAt cannot be earlier than startDate.", 400);
   }
 
@@ -426,7 +427,7 @@ const validateUpdateTaskPayload = (payload) => {
   if (
     normalizedPayload.startDate &&
     normalizedPayload.dueDate &&
-    new Date(normalizedPayload.dueDate) < new Date(normalizedPayload.startDate)
+    compareUtc(normalizedPayload.dueDate, normalizedPayload.startDate) < 0
   ) {
     throw new AppError("dueDate cannot be earlier than startDate.", 400);
   }
@@ -434,7 +435,7 @@ const validateUpdateTaskPayload = (payload) => {
   if (
     normalizedPayload.startDate &&
     normalizedPayload.completedAt &&
-    new Date(normalizedPayload.completedAt) < new Date(normalizedPayload.startDate)
+    compareUtc(normalizedPayload.completedAt, normalizedPayload.startDate) < 0
   ) {
     throw new AppError("completedAt cannot be earlier than startDate.", 400);
   }

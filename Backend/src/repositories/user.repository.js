@@ -9,6 +9,9 @@ const findByEmail = async (email, trx = getDb()) => {
       "email",
       "phone",
       "password",
+      "timezone",
+      "created_at",
+      "updated_at",
       "last_login",
       "is_active",
       "role"
@@ -26,6 +29,9 @@ const findById = async (id, trx = getDb()) => {
       "email",
       "phone",
       "password",
+      "timezone",
+      "created_at",
+      "updated_at",
       "last_login",
       "is_active",
       "role"
@@ -40,6 +46,9 @@ const baseUserColumns = [
   "last_name",
   "email",
   "phone",
+  "timezone",
+  "created_at",
+  "updated_at",
   "last_login",
   "is_active",
   "role",
@@ -91,6 +100,7 @@ const create = async ({ firstName, lastName, email, phone, password }, trx = get
     email,
     phone,
     password,
+    timezone: "UTC",
     is_active: true,
     role: "user",
   });
@@ -123,6 +133,10 @@ const updateById = async (userId, updates, trx = getDb()) => {
 
   if (updates.phone !== undefined) {
     mappedUpdates.phone = updates.phone;
+  }
+
+  if (updates.timeZone !== undefined) {
+    mappedUpdates.timezone = updates.timeZone;
   }
 
   if (updates.isActive !== undefined) {

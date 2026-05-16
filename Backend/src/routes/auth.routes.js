@@ -39,6 +39,35 @@ const router = Router();
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *   patch:
+ *     tags:
+ *       - Auth
+ *     summary: Update the currently signed-in user profile
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateCurrentUserRequest'
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CurrentUserResponse'
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Missing or invalid token
+ *       403:
+ *         description: Inactive account
+ *       404:
+ *         description: User not found
+ *       409:
+ *         description: Email already exists
  *
  * /api/auth/signin:
  *   post:
@@ -109,6 +138,7 @@ const router = Router();
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/me", requireAuth, authController.me);
+router.patch("/me", requireAuth, authController.updateMe);
 router.post("/signin", authController.signin);
 router.post("/signup", authController.signup);
 

@@ -6,6 +6,7 @@ const taskRepository = require("../repositories/task.repository");
 const userRepository = require("../repositories/user.repository");
 const workspaceRepository = require("../repositories/workspace.repository");
 const AppError = require("../utils/app-error");
+const { toUtcIsoString } = require("../utils/time");
 const {
   validateCreateTaskCommentPayload,
   validateCreateTaskPayload,
@@ -490,7 +491,7 @@ const exportTasks = async (filters = {}, userId, userRole = "") => {
         createdAt,
         advancedFilters,
       },
-      exportedAt: new Date().toISOString(),
+      exportedAt: toUtcIsoString(),
       total: tasks.length,
       tasks: tasks.map(mapTask),
     },

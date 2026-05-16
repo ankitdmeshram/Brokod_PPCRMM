@@ -6,6 +6,12 @@ const AppError = require("../utils/app-error");
 const { buildTimestampedSlug, slugify } = require("../utils/slug");
 const { hashPassword } = require("../utils/password");
 const {
+  addUtcDays,
+  compareUtc,
+  formatUtcDate,
+  toUtcDate,
+} = require("../utils/time");
+const {
   validateCreateWorkspacePayload,
   validateInviteWorkspaceUserPayload,
   validateUpdateWorkspaceUserPayload,
@@ -77,23 +83,6 @@ const splitInviteeName = (name = "") => {
 
 const generateTemporaryPassword = () =>
   `Brokod@${Math.random().toString(36).slice(-8)}${Date.now().toString().slice(-4)}`;
-
-const formatDateOnly = (date = new Date()) => {
-  const value = new Date(date);
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const addDays = (dateString, days) => {
-  const [year, month, day] = String(dateString || "")
-    .split("-")
-    .map((part) => Number(part));
-  const nextDate = new Date(year, month - 1, day);
-  nextDate.setDate(nextDate.getDate() + days);
-  return formatDateOnly(nextDate);
-};
 
 const buildFullName = (firstName = "", lastName = "") =>
   `${String(firstName || "").trim()} ${String(lastName || "").trim()}`.trim();
@@ -227,9 +216,9 @@ const getWorkspaceNotifications = async (workspaceId, userId, filters = {}) => {
     throw new AppError("Please provide a valid user id.", 400);
   }
 
-  const today = formatDateOnly();
-  const taskDueSoonDate = addDays(today, 2);
-  const projectDueSoonDate = addDays(today, 7);
+  const today = formatUtcDate();
+  const taskDueSoonDate = addUtcDays(today, 2);
+  const projectDueSoonDate = addUtcDays(today, 7);
 
   const [
     assignedTasks,
@@ -550,10 +539,7 @@ const getWorkspaceNotifications = async (workspaceId, userId, filters = {}) => {
       });
     }),
   ]
-    .sort((leftNotification, rightNotification) =>
-      new Date(rightNotification.createdAt).getTime() -
-      new Date(leftNotification.createdAt).getTime()
-    );
+    .sort((leftNotification, rightNotification) => compareUtc(rightNotification.createdAt, leftNotification.createdAt));
 
   return notifications;
 };
@@ -624,9 +610,9 @@ const inviteWorkspaceUser = async (workspaceId, payload, userId) => {
         user_role: invitedUser.role ?? "user",
         workspace_role: role,
         workspace_status: "active",
-        joined_at: new Date(),
+        joined_at: toUtcDate(),
         created_by: userId,
-        updated_at: new Date(),
+        updated_at: toUtcDate(),
       }),
       temporaryPassword,
       createdNewUser: Boolean(temporaryPassword),

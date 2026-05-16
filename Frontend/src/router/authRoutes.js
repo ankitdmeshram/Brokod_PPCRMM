@@ -6,6 +6,7 @@ export const AUTH_ROUTES = {
 export const APP_ROUTES = {
   workspace: "/workspace",
   superAdmin: "/super-admin",
+  myAccount: "/my-account",
 };
 
 export const SUPER_ADMIN_ROUTES = {

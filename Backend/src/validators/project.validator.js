@@ -1,4 +1,5 @@
 const AppError = require("../utils/app-error");
+const { compareUtc, isValidDateTime } = require("../utils/time");
 
 const allowedStatuses = new Set(["planned", "in_progress", "on_hold", "completed", "cancelled"]);
 const allowedAccessValues = new Set(["private", "public"]);
@@ -25,11 +26,11 @@ const normalizeTags = (tags) => {
 };
 
 const validateProjectDates = (startDate, endDate) => {
-  if (Number.isNaN(Date.parse(startDate)) || Number.isNaN(Date.parse(endDate))) {
+  if (!isValidDateTime(startDate) || !isValidDateTime(endDate)) {
     throw new AppError("Please provide valid startDate and endDate values.", 400);
   }
 
-  if (new Date(endDate) < new Date(startDate)) {
+  if (compareUtc(endDate, startDate) < 0) {
     throw new AppError("endDate cannot be earlier than startDate.", 400);
   }
 };

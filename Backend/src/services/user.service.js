@@ -1,6 +1,7 @@
 const { getDb } = require("../config/database");
 const AppError = require("../utils/app-error");
 const userRepository = require("../repositories/user.repository");
+const { toUtcIsoString } = require("../utils/time");
 
 const mapUser = (user) => ({
   id: user.id,
@@ -62,7 +63,7 @@ const getUsers = async (filters = {}) => {
 
 const exportDatabaseAsJson = async () => {
   const db = getDb();
-  const exportedAt = new Date().toISOString();
+  const exportedAt = toUtcIsoString();
   const tableEntries = await Promise.all(
     databaseExportTables.map(async (tableName) => {
       const rows = await db(tableName).select("*").orderBy("id", "asc");

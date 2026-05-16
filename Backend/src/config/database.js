@@ -11,6 +11,7 @@ const knexConfig = {
     user: env.dbUser,
     password: env.dbPassword,
     database: env.dbName,
+    timezone: "Z",
   },
   pool: {
     min: 0,
@@ -68,6 +69,7 @@ const initializeDatabase = async () => {
     db = knex(knexConfig);
   }
 
+  await db.raw("SET time_zone = ?", [env.dbTimeZone]);
   await db.migrate.latest();
 };
 
