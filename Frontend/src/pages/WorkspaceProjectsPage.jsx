@@ -51,38 +51,47 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
     () => workspace?.workspaceName || formatWorkspaceTitle(workspaceSlug) || "",
     [workspace?.workspaceName, workspaceSlug]
   );
+  const canViewWorkspaceUsers =
+    ["owner", "admin", "member"].includes(
+      String(workspace?.membershipRole || "")
+        .trim()
+        .toLowerCase()
+    );
   const sidebarItems = useMemo(
-    () => [
-      {
-        key: "overview",
-        icon: <GridIcon />,
-        label: "Overview",
-        to: buildWorkspaceOverviewRoute(workspaceSlug),
-        active: section === "overview",
-      },
-      {
-        key: "projects",
-        icon: <FolderIcon />,
-        label: "Projects",
-        to: buildWorkspaceProjectsRoute(workspaceSlug),
-        active: section === "projects",
-      },
-      {
-        key: "users",
-        icon: <UsersIcon />,
-        label: "Users",
-        to: buildWorkspaceUsersRoute(workspaceSlug),
-        active: section === "users",
-      },
-      {
-        key: "notifications",
-        icon: <NotificationIcon />,
-        label: "Notifications",
-        to: buildWorkspaceNotificationsRoute(workspaceSlug),
-        active: section === "notifications",
-      },
-    ],
-    [section, workspaceSlug]
+    () =>
+      [
+        {
+          key: "overview",
+          icon: <GridIcon />,
+          label: "Overview",
+          to: buildWorkspaceOverviewRoute(workspaceSlug),
+          active: section === "overview",
+        },
+        {
+          key: "projects",
+          icon: <FolderIcon />,
+          label: "Projects",
+          to: buildWorkspaceProjectsRoute(workspaceSlug),
+          active: section === "projects",
+        },
+        canViewWorkspaceUsers
+          ? {
+              key: "users",
+              icon: <UsersIcon />,
+              label: "Users",
+              to: buildWorkspaceUsersRoute(workspaceSlug),
+              active: section === "users",
+            }
+          : null,
+        {
+          key: "notifications",
+          icon: <NotificationIcon />,
+          label: "Notifications",
+          to: buildWorkspaceNotificationsRoute(workspaceSlug),
+          active: section === "notifications",
+        },
+      ].filter(Boolean),
+    [canViewWorkspaceUsers, section, workspaceSlug]
   );
 
   useEffect(() => {

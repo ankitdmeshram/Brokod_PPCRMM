@@ -33,9 +33,8 @@ import {
   updateWorkspaceUser,
   updateWorkspaceUserStatus,
 } from "../../services/workspace.service";
-import EditWorkspaceUserModal from "./EditWorkspaceUserModal";
 import InviteWorkspaceUserModal from "./InviteWorkspaceUserModal";
-import { DeleteIcon, EditIcon, PlusIcon, SearchIcon } from "./WorkspaceIcons";
+import { DeleteIcon, PlusIcon, SearchIcon } from "./WorkspaceIcons";
 
 const buildUserFullName = (user = {}) =>
   `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim();
@@ -44,16 +43,17 @@ const roleChipStyles = {
   owner: { backgroundColor: "#eef2ff", color: "#3155ff" },
   admin: { backgroundColor: "#eef6ff", color: "#2f6adf" },
   member: { backgroundColor: "#f5f7ff", color: "#5c6d90" },
+  viewer: { backgroundColor: "#f4f4f5", color: "#52525b" },
 };
+
+const roleOptions = [
+  { value: "viewer", label: "Viewer" },
+  { value: "member", label: "Member" },
+  { value: "admin", label: "Admin" },
+  { value: "owner", label: "Owner" },
+];
 
 const initialInviteValues = {
-  name: "",
-  email: "",
-  phone: "",
-  role: "member",
-};
-
-const initialEditValues = {
   name: "",
   email: "",
   phone: "",
@@ -70,6 +70,25 @@ export default function WorkspaceUsersMain({
   const { authSession } = useAuthContext();
   const navigate = useNavigate();
   const currentUserId = authSession?.user?.id ? Number(authSession.user.id) : null;
+  const isWorkspaceOwner =
+    String(workspace?.membershipRole || "")
+      .trim()
+      .toLowerCase() === "owner";
+  const canEditWorkspaceUsers =
+    isWorkspaceOwner ||
+    String(workspace?.membershipRole || "")
+      .trim()
+      .toLowerCase() === "admin";
+  const canInviteWorkspaceUsers =
+    isWorkspaceOwner ||
+    String(workspace?.membershipRole || "")
+      .trim()
+      .toLowerCase() === "admin";
+  const canDeleteWorkspaceUsers =
+    isWorkspaceOwner ||
+    String(workspace?.membershipRole || "")
+      .trim()
+      .toLowerCase() === "admin";
   const [users, setUsers] = useState([]);
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearchValue, setDebouncedSearchValue] = useState("");
@@ -81,12 +100,10 @@ export default function WorkspaceUsersMain({
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
   const [inviteValues, setInviteValues] = useState(initialInviteValues);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isUpdatingWorkspaceUser, setIsUpdatingWorkspaceUser] = useState(false);
-  const [editingWorkspaceUserId, setEditingWorkspaceUserId] = useState(null);
-  const [editValues, setEditValues] = useState(initialEditValues);
+  const [updatingWorkspaceUserIds, setUpdatingWorkspaceUserIds] = useState([]);
   const [deletingWorkspaceUserIds, setDeletingWorkspaceUserIds] = useState([]);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState([]);
+  const [hoveredCellKey, setHoveredCellKey] = useState(null);
 
   const loadWorkspaceUsers = useCallback(async ({
     page = currentPage,
@@ -176,6 +193,8 @@ export default function WorkspaceUsersMain({
     }
   }, [currentPage, safeCurrentPage]);
 
+  const buildHoveredCellKey = (userId, field) => `${userId}:${field}`;
+
   const handleInviteFieldChange = (field, value) => {
     setInviteValues((currentValues) => ({
       ...currentValues,
@@ -192,40 +211,16 @@ export default function WorkspaceUsersMain({
     setInviteValues(initialInviteValues);
   };
 
-  const handleOpenEditModal = (user) => {
-    if (!user) {
-      return;
-    }
-
-    setEditingWorkspaceUserId(user.id);
-    setEditValues({
-      name: buildUserFullName(user),
-      email: user.email || "",
-      phone: user.phone || "",
-      role: user.workspaceRole || "member",
-    });
-    setIsEditModalOpen(true);
-  };
-
-  const handleEditFieldChange = (field, value) => {
-    setEditValues((currentValues) => ({
-      ...currentValues,
-      [field]: value,
-    }));
-  };
-
-  const handleCloseEditModal = () => {
-    if (isUpdatingWorkspaceUser) {
-      return;
-    }
-
-    setIsEditModalOpen(false);
-    setEditingWorkspaceUserId(null);
-    setEditValues(initialEditValues);
-  };
-
   const handleInviteUser = async (event) => {
     event.preventDefault();
+
+    if (!canInviteWorkspaceUsers) {
+      await showErrorAlert(
+        "Access denied",
+        "Only the workspace owner or admin can invite users."
+      );
+      return;
+    }
 
     if (
       !inviteValues.name.trim() ||
@@ -264,61 +259,88 @@ export default function WorkspaceUsersMain({
       );
       setIsInviteModalOpen(false);
       setInviteValues(initialInviteValues);
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to invite user",
+        error.message || "Something went wrong while inviting the user to the workspace."
+      );
     } finally {
       setIsSubmittingInvite(false);
     }
   };
 
-  const handleUpdateWorkspaceUser = async (event) => {
-    event.preventDefault();
-
-    if (
-      !editingWorkspaceUserId ||
-      !workspace?.id ||
-      !authSession?.token ||
-      !editValues.name.trim() ||
-      !editValues.email.trim() ||
-      !editValues.role.trim()
-    ) {
-      await showErrorAlert("Missing details", "Please complete all required user fields.");
+  const handleRoleChange = async (user, nextRole) => {
+    if (!canEditWorkspaceUsers) {
+      await showErrorAlert(
+        "Access denied",
+        "Only the workspace owner or admin can update workspace users."
+      );
       return;
     }
 
-    setIsUpdatingWorkspaceUser(true);
+    const normalizedNextRole = String(nextRole || "").trim().toLowerCase();
+    const currentRole = String(user?.workspaceRole || "").trim().toLowerCase();
+
+    if (!user?.id || !workspace?.id || !authSession?.token || !normalizedNextRole) {
+      await showErrorAlert("Missing details", "Please select a workspace role.");
+      return;
+    }
+
+    if (normalizedNextRole === currentRole) {
+      return;
+    }
+
+    const selectedRoleLabel =
+      roleOptions.find((roleOption) => roleOption.value === normalizedNextRole)?.label ||
+      normalizedNextRole;
+    const confirmation = await showConfirmAlert(
+      "Update role?",
+      `This will change ${buildUserFullName(user)} to ${selectedRoleLabel}.`,
+      {
+        confirmButtonText: "Update",
+        cancelButtonText: "Cancel",
+      }
+    );
+
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    setUpdatingWorkspaceUserIds((currentIds) => [...currentIds, Number(user.id)]);
 
     try {
       const result = await updateWorkspaceUser(
         workspace.id,
-        editingWorkspaceUserId,
+        user.id,
         {
-          name: editValues.name.trim(),
-          email: editValues.email.trim(),
-          phone: editValues.phone.trim(),
-          role: editValues.role.trim(),
+          role: normalizedNextRole,
         },
         authSession.token
       );
 
-      await loadWorkspaceUsers({ page: currentPage, search: debouncedSearchValue, limit: rowsPerPage });
-      await showSuccessAlert(
-        "User updated",
-        result?.message || "The workspace user has been updated successfully."
+      setUsers((currentUsers) =>
+        currentUsers.map((currentUser) =>
+          Number(currentUser.id) === Number(user.id) ? result.user : currentUser
+        )
       );
-      setIsEditModalOpen(false);
-      setEditingWorkspaceUserId(null);
-      setEditValues(initialEditValues);
+      await showSuccessAlert(
+        "Role updated",
+        result?.message || "The workspace role has been updated successfully."
+      );
     } catch (error) {
       await showErrorAlert(
-        "Unable to update user",
-        error.message || "Something went wrong while updating the workspace user."
+        "Unable to update role",
+        error.message || "Something went wrong while updating the workspace role."
       );
     } finally {
-      setIsUpdatingWorkspaceUser(false);
+      setUpdatingWorkspaceUserIds((currentIds) =>
+        currentIds.filter((id) => id !== Number(user.id))
+      );
     }
   };
 
   const handleDeleteWorkspaceUser = async (user) => {
-    if (!user?.id || !workspace?.id || !authSession?.token) {
+    if (!user?.id || !workspace?.id || !authSession?.token || !canDeleteWorkspaceUsers) {
       return;
     }
 
@@ -357,7 +379,7 @@ export default function WorkspaceUsersMain({
   };
 
   const handleStatusToggle = async (user) => {
-    if (!user?.id || !workspace?.id || !authSession?.token) {
+    if (!user?.id || !workspace?.id || !authSession?.token || !isWorkspaceOwner) {
       return;
     }
 
@@ -442,17 +464,19 @@ export default function WorkspaceUsersMain({
           </Stack>
 
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ width: { xs: "100%", lg: "auto" } }}>
-            <Button
-              startDecorator={<PlusIcon />}
-              onClick={() => setIsInviteModalOpen(true)}
-              sx={{
-                whiteSpace: "nowrap",
-                borderRadius: "12px",
-                color: "var(--color-font-secondary)",
-              }}
-            >
-              Invite Users
-            </Button>
+            {canInviteWorkspaceUsers ? (
+              <Button
+                startDecorator={<PlusIcon />}
+                onClick={() => setIsInviteModalOpen(true)}
+                sx={{
+                  whiteSpace: "nowrap",
+                  borderRadius: "12px",
+                  color: "var(--color-font-secondary)",
+                }}
+              >
+                Invite Users
+              </Button>
+            ) : null}
             <Input
               startDecorator={<SearchIcon />}
               placeholder="Search users"
@@ -530,7 +554,9 @@ export default function WorkspaceUsersMain({
                   <th style={{ width: "280px", minWidth: "280px" }}>Email</th>
                   <th style={{ width: "170px", minWidth: "170px" }}>Role</th>
                   <th style={{ width: "120px", minWidth: "120px" }}>Status</th>
-                  <th style={{ width: "140px", minWidth: "140px" }}>Action</th>
+                  {canDeleteWorkspaceUsers ? (
+                    <th style={{ width: "140px", minWidth: "140px" }}>Action</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -574,19 +600,43 @@ export default function WorkspaceUsersMain({
                           {user.email}
                         </Typography>
                       </td>
-                      <td>
-                        <Chip
-                          size="sm"
-                          variant="soft"
-                          sx={{
-                            borderRadius: "999px",
-                            fontWeight: 700,
-                            px: 1.2,
-                            ...chipStyle,
-                          }}
-                        >
-                          {user.workspaceRole}
-                        </Chip>
+                      <td
+                        onMouseEnter={() =>
+                          setHoveredCellKey(buildHoveredCellKey(user.id, "role"))
+                        }
+                        onMouseLeave={() => setHoveredCellKey(null)}
+                      >
+                        {canEditWorkspaceUsers &&
+                        hoveredCellKey === buildHoveredCellKey(user.id, "role") ? (
+                          <Select
+                            size="sm"
+                            value={membershipRole}
+                            onChange={(_, value) => {
+                              if (value) {
+                                void handleRoleChange(user, value);
+                              }
+                            }}
+                            onClose={() => setHoveredCellKey(null)}
+                            disabled={
+                              updatingWorkspaceUserIds.includes(Number(user.id)) || isCurrentUser
+                            }
+                            sx={{ minHeight: "34px", fontSize: "0.85rem" }}
+                          >
+                            {roleOptions.map((roleOption) => (
+                              <Option key={roleOption.value} value={roleOption.value}>
+                                {roleOption.label}
+                              </Option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <Chip
+                            size="sm"
+                            variant="soft"
+                            sx={{ borderRadius: "999px", fontWeight: 700, ...chipStyle }}
+                          >
+                            {user.workspaceRole}
+                          </Chip>
+                        )}
                       </td>
                       <td>
                         <Switch
@@ -597,53 +647,56 @@ export default function WorkspaceUsersMain({
                             void handleStatusToggle(user);
                           }}
                           disabled={
-                            isUpdatingStatus.includes(Number(user.id)) || isCurrentUser
+                            !isWorkspaceOwner ||
+                            isUpdatingStatus.includes(Number(user.id)) ||
+                            isCurrentUser
                           }
                           sx={{
                             cursor:
-                              isUpdatingStatus.includes(Number(user.id)) || isCurrentUser
+                              !isWorkspaceOwner ||
+                              isUpdatingStatus.includes(Number(user.id)) ||
+                              isCurrentUser
                               ? "not-allowed"
                               : "pointer",
                             "& *": {
                               cursor:
-                                isUpdatingStatus.includes(Number(user.id)) || isCurrentUser
+                                !isWorkspaceOwner ||
+                                isUpdatingStatus.includes(Number(user.id)) ||
+                                isCurrentUser
                                 ? "not-allowed"
                                 : "pointer",
                             },
                           }}
                         />
                       </td>
-                      <td>
-                        <Stack direction="row" spacing={0.5} justifyContent="center">
-                          <IconButton
-                            variant="plain"
-                            sx={{ color: "#3155ff" }}
-                            onClick={() => handleOpenEditModal(user)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            variant="plain"
-                            color="danger"
-                            disabled={
-                              deletingWorkspaceUserIds.includes(Number(user.id)) ||
-                              isCurrentUser
-                            }
-                            loading={deletingWorkspaceUserIds.includes(Number(user.id))}
-                            onClick={() => {
-                              void handleDeleteWorkspaceUser(user);
-                            }}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Stack>
-                      </td>
+                      {canDeleteWorkspaceUsers ? (
+                        <td>
+                          <Stack direction="row" spacing={0.5} justifyContent="center">
+                            {canDeleteWorkspaceUsers ? (
+                              <IconButton
+                                variant="plain"
+                                color="danger"
+                                disabled={
+                                  deletingWorkspaceUserIds.includes(Number(user.id)) ||
+                                  isCurrentUser
+                                }
+                                loading={deletingWorkspaceUserIds.includes(Number(user.id))}
+                                onClick={() => {
+                                  void handleDeleteWorkspaceUser(user);
+                                }}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            ) : null}
+                          </Stack>
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
                 {paginatedUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={canDeleteWorkspaceUsers ? 6 : 5}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           No users found
@@ -759,15 +812,6 @@ export default function WorkspaceUsersMain({
         onClose={handleCloseInviteModal}
         onChange={handleInviteFieldChange}
         onSubmit={handleInviteUser}
-      />
-      <EditWorkspaceUserModal
-        open={isEditModalOpen}
-        values={editValues}
-        disableRoleChange={Number(editingWorkspaceUserId) === currentUserId}
-        loading={isUpdatingWorkspaceUser}
-        onClose={handleCloseEditModal}
-        onChange={handleEditFieldChange}
-        onSubmit={handleUpdateWorkspaceUser}
       />
     </Sheet>
   );

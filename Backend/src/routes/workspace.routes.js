@@ -4,6 +4,7 @@ const workspaceController = require("../controllers/workspace.controller");
 const { requireAuth } = require("../middlewares/auth.middleware");
 const {
   requireActiveWorkspaceUser,
+  requireWorkspaceOwnerAdminOrMember,
   requireWorkspaceOwner,
   requireWorkspaceOwnerOrAdmin,
 } = require("../middlewares/workspace-access.middleware");
@@ -134,14 +135,14 @@ const router = Router();
  *                 type: string
  *               role:
  *                 type: string
- *                 enum: [owner, admin, member]
+ *                 enum: [owner, admin, member, viewer]
  *     responses:
  *       201:
  *         description: Workspace user invited successfully
  *       401:
  *         description: Missing or invalid token
  *       403:
- *         description: Only the workspace owner can invite users
+ *         description: Only the workspace owner or admin can invite users
  *       404:
  *         description: Workspace not found
  *   put:
@@ -208,6 +209,7 @@ router.get(
   "/:workspaceId/users",
   requireAuth,
   requireActiveWorkspaceUser,
+  requireWorkspaceOwnerAdminOrMember,
   workspaceController.getWorkspaceUsers
 );
 router.get(
@@ -220,14 +222,14 @@ router.post(
   "/:workspaceId/users",
   requireAuth,
   requireActiveWorkspaceUser,
-  requireWorkspaceOwner,
+  requireWorkspaceOwnerOrAdmin,
   workspaceController.inviteWorkspaceUser
 );
 router.patch(
   "/:workspaceId/users/:userId",
   requireAuth,
   requireActiveWorkspaceUser,
-  requireWorkspaceOwner,
+  requireWorkspaceOwnerOrAdmin,
   workspaceController.updateWorkspaceUser
 );
 router.patch(
@@ -241,7 +243,7 @@ router.delete(
   "/:workspaceId/users/:userId",
   requireAuth,
   requireActiveWorkspaceUser,
-  requireWorkspaceOwner,
+  requireWorkspaceOwnerOrAdmin,
   workspaceController.deleteWorkspaceUser
 );
 router.put(

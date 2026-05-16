@@ -1,6 +1,6 @@
 const AppError = require("../utils/app-error");
 
-const allowedWorkspaceRoles = new Set(["owner", "admin", "member"]);
+const allowedWorkspaceRoles = new Set(["owner", "admin", "member", "viewer"]);
 const allowedWorkspaceStatuses = new Set(["active", "inactive"]);
 
 const validateCreateWorkspacePayload = (payload) => {
@@ -52,7 +52,7 @@ const validateInviteWorkspaceUserPayload = (payload) => {
   }
 
   if (!allowedWorkspaceRoles.has(role)) {
-    throw new AppError("role must be one of: owner, admin, member.", 400);
+    throw new AppError("role must be one of: owner, admin, member, viewer.", 400);
   }
 
   return {
@@ -64,33 +64,13 @@ const validateInviteWorkspaceUserPayload = (payload) => {
 };
 
 const validateUpdateWorkspaceUserPayload = (payload) => {
-  const name = String(payload?.name || "").trim();
-  const email = String(payload?.email || "").trim().toLowerCase();
-  const phone = String(payload?.phone || "").trim();
   const role = String(payload?.role || "").trim().toLowerCase();
 
-  if (!name) {
-    throw new AppError("name is required.", 400);
-  }
-
-  if (!email) {
-    throw new AppError("email is required.", 400);
-  }
-
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  if (!emailPattern.test(email)) {
-    throw new AppError("Please provide a valid email address.", 400);
-  }
-
   if (!allowedWorkspaceRoles.has(role)) {
-    throw new AppError("role must be one of: owner, admin, member.", 400);
+    throw new AppError("role must be one of: owner, admin, member, viewer.", 400);
   }
 
   return {
-    name,
-    email,
-    phone,
     role,
   };
 };

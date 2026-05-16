@@ -14,6 +14,7 @@ import {
 } from "@mui/joy";
 
 const roleOptions = [
+  { value: "viewer", label: "Viewer" },
   { value: "member", label: "Member" },
   { value: "admin", label: "Admin" },
   { value: "owner", label: "Owner" },

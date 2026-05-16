@@ -1,7 +1,7 @@
 const { getDb } = require("../config/database");
 
-const findByEmail = async (email) => {
-  return getDb()("users")
+const findByEmail = async (email, trx = getDb()) => {
+  return trx("users")
     .select(
       "id",
       "first_name",
@@ -17,8 +17,8 @@ const findByEmail = async (email) => {
     .first();
 };
 
-const findById = async (id) => {
-  return getDb()("users")
+const findById = async (id, trx = getDb()) => {
+  return trx("users")
     .select(
       "id",
       "first_name",

@@ -569,7 +569,7 @@ const inviteWorkspaceUser = async (workspaceId, payload, userId) => {
   const { firstName, lastName } = splitInviteeName(name);
 
   return getDb().transaction(async (trx) => {
-    let invitedUser = await userRepository.findByEmail(email);
+    let invitedUser = await userRepository.findByEmail(email, trx);
     let temporaryPassword = null;
 
     if (!invitedUser) {
@@ -586,7 +586,7 @@ const inviteWorkspaceUser = async (workspaceId, payload, userId) => {
         trx
       );
 
-      invitedUser = await userRepository.findById(invitedUserId);
+      invitedUser = await userRepository.findById(invitedUserId, trx);
     }
 
     const existingMembership = await workspaceUserRepository.findByWorkspaceIdAndUserId(
@@ -662,33 +662,9 @@ const updateWorkspaceUser = async (workspaceId, workspaceUserId, payload, curren
     throw new AppError("You cannot change your own workspace owner role.", 400);
   }
 
-  const { name, email, phone, role } = validateUpdateWorkspaceUserPayload(payload);
-  const { firstName, lastName } = splitInviteeName(name);
-
-  const targetUser = await userRepository.findById(normalizedWorkspaceUserId);
-
-  if (!targetUser) {
-    throw new AppError("Workspace user not found.", 404);
-  }
-
-  const existingUserWithEmail = await userRepository.findByEmail(email);
-
-  if (existingUserWithEmail && Number(existingUserWithEmail.id) !== normalizedWorkspaceUserId) {
-    throw new AppError("An account with this email already exists.", 409);
-  }
+  const { role } = validateUpdateWorkspaceUserPayload(payload);
 
   return getDb().transaction(async (trx) => {
-    await userRepository.updateById(
-      normalizedWorkspaceUserId,
-      {
-        firstName,
-        lastName,
-        email,
-        phone,
-      },
-      trx
-    );
-
     await workspaceUserRepository.updateByWorkspaceIdAndUserId(
       normalizedWorkspaceId,
       normalizedWorkspaceUserId,
