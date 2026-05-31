@@ -2,7 +2,11 @@ const asyncHandler = require("../middlewares/async-handler.middleware");
 const projectService = require("../services/project.service");
 
 const createProject = asyncHandler(async (request, response) => {
-  const project = await projectService.createProject(request.body, request.user.sub);
+  const project = await projectService.createProject(
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
 
   response.status(201).json({
     message: "Project created successfully.",

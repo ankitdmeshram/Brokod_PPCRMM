@@ -7,6 +7,7 @@ const {
   requireActiveWorkspaceUserByProjectSlug,
   requireActiveWorkspaceUserFromBody,
   requireActiveWorkspaceUserFromQueryWhenPresent,
+  requireWorkspaceOwnerAdminOrMember,
 } = require("../middlewares/workspace-access.middleware");
 
 const router = Router();
@@ -275,7 +276,13 @@ const router = Router();
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/", requireAuth, requireActiveWorkspaceUserFromQueryWhenPresent, projectController.getProjects);
-router.post("/", requireAuth, requireActiveWorkspaceUserFromBody, projectController.createProject);
+router.post(
+  "/",
+  requireAuth,
+  requireActiveWorkspaceUserFromBody,
+  requireWorkspaceOwnerAdminOrMember,
+  projectController.createProject
+);
 router.get(
   "/slug/:projectSlug",
   requireAuth,

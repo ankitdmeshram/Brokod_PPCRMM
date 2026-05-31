@@ -74,6 +74,19 @@ const findBySlug = async (slug, workspaceId = null, trx = getDb()) => {
   return query.first();
 };
 
+const findBySlugIncludingDeleted = async (slug, workspaceId = null, trx = getDb()) => {
+  const query = trx("projects")
+    .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
+    .select(projectSelectColumns)
+    .where("projects.slug", slug);
+
+  if (workspaceId !== null && workspaceId !== undefined) {
+    query.andWhere("projects.workspace_id", workspaceId);
+  }
+
+  return query.first();
+};
+
 const findBySlugForUser = async (slug, userId, workspaceId = null, trx = getDb()) => {
   const query = trx("projects")
     .joinRaw(
@@ -84,6 +97,8 @@ const findBySlugForUser = async (slug, userId, workspaceId = null, trx = getDb()
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(
       ...projectSelectColumns,
+      "workspace_users.role as workspace_membership_role",
+      "workspace_users.status as workspace_membership_status",
       "project_membership.role as membership_role",
       "project_membership.status as membership_status"
     )
@@ -93,7 +108,8 @@ const findBySlugForUser = async (slug, userId, workspaceId = null, trx = getDb()
     .andWhere((builder) => {
       builder
         .where("projects.access", "public")
-        .orWhereNotNull("project_membership.user_id");
+        .orWhereNotNull("project_membership.user_id")
+        .orWhereIn("workspace_users.role", ["owner", "admin"]);
     })
     .whereNull("projects.deleted_at");
 
@@ -156,13 +172,16 @@ const findAllByUserId = async (userId, filters = {}, trx = getDb()) => {
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(
       ...projectSelectColumns,
+      "workspace_users.role as workspace_membership_role",
+      "workspace_users.status as workspace_membership_status",
       "project_membership.role as membership_role",
       "project_membership.status as membership_status"
     )
     .where((builder) => {
       builder
         .where("projects.access", "public")
-        .orWhereNotNull("project_membership.user_id");
+        .orWhereNotNull("project_membership.user_id")
+        .orWhereIn("workspace_users.role", ["owner", "admin"]);
     })
     .andWhere("workspace_users.user_id", userId)
     .andWhere("workspace_users.status", "active")
@@ -205,7 +224,8 @@ const countAllByUserId = async (userId, filters = {}, trx = getDb()) => {
     .where((builder) => {
       builder
         .where("projects.access", "public")
-        .orWhereNotNull("project_membership.user_id");
+        .orWhereNotNull("project_membership.user_id")
+        .orWhereIn("workspace_users.role", ["owner", "admin"]);
     })
     .andWhere("workspace_users.user_id", userId)
     .andWhere("workspace_users.status", "active")
@@ -229,6 +249,8 @@ const findByIdForUser = async (projectId, userId, trx = getDb()) => {
     .leftJoin("workspaces", "workspaces.id", "projects.workspace_id")
     .select(
       ...projectSelectColumns,
+      "workspace_users.role as workspace_membership_role",
+      "workspace_users.status as workspace_membership_status",
       "project_membership.role as membership_role",
       "project_membership.status as membership_status"
     )
@@ -238,7 +260,8 @@ const findByIdForUser = async (projectId, userId, trx = getDb()) => {
     .andWhere((builder) => {
       builder
         .where("projects.access", "public")
-        .orWhereNotNull("project_membership.user_id");
+        .orWhereNotNull("project_membership.user_id")
+        .orWhereIn("workspace_users.role", ["owner", "admin"]);
     })
     .whereNull("projects.deleted_at")
     .first();
@@ -302,6 +325,7 @@ module.exports = {
   findById,
   findByIdForUser,
   findBySlug,
+  findBySlugIncludingDeleted,
   findBySlugForUser,
   softDeleteById,
   updateById,

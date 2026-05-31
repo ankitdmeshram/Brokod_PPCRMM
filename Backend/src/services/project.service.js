@@ -40,10 +40,78 @@ const mapProject = (project) => ({
   deletedBy: project.deleted_by ?? project.deletedBy ?? null,
   membershipRole: project.membership_role ?? project.membershipRole ?? null,
   membershipStatus: project.membership_status ?? project.membershipStatus ?? null,
+  workspaceMembershipRole:
+    project.workspace_membership_role ?? project.workspaceMembershipRole ?? null,
+  workspaceMembershipStatus:
+    project.workspace_membership_status ?? project.workspaceMembershipStatus ?? null,
 });
 
 const isSuperAdmin = (role = "") =>
   String(role).trim().toLowerCase() === "super-admin";
+
+const canCreateWorkspaceProject = async (workspaceId, userId, userRole = "") => {
+  if (isSuperAdmin(userRole)) {
+    return true;
+  }
+
+  const workspaceMembership = await workspaceUserRepository.findByWorkspaceIdAndUserId(
+    workspaceId,
+    userId
+  );
+
+  if (!workspaceMembership) {
+    return false;
+  }
+
+  if (String(workspaceMembership.status || "").trim().toLowerCase() !== "active") {
+    return false;
+  }
+
+  const workspaceRole = String(workspaceMembership.role || "")
+    .trim()
+    .toLowerCase();
+
+  if (workspaceRole === "owner" || workspaceRole === "admin" || workspaceRole === "member") {
+    return true;
+  }
+
+  return false;
+};
+
+const hasWorkspaceProjectAccess = (project = {}) => {
+  const workspaceRole = String(
+    project.workspace_membership_role ?? project.workspaceMembershipRole ?? ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return workspaceRole === "owner" || workspaceRole === "admin";
+};
+
+const hasWorkspaceProjectEditAccess = (project = {}) => {
+  const workspaceRole = String(
+    project.workspace_membership_role ?? project.workspaceMembershipRole ?? ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return workspaceRole === "owner" || workspaceRole === "admin" || workspaceRole === "member";
+};
+
+const canManageProject = (project = {}, userRole = "") =>
+  isSuperAdmin(userRole) ||
+  String(project.membership_role ?? project.membershipRole ?? "")
+    .trim()
+    .toLowerCase() === "owner" ||
+  hasWorkspaceProjectAccess(project);
+
+const canUpdateOrDeleteProject = (project = {}, userRole = "") =>
+  isSuperAdmin(userRole) ||
+  hasWorkspaceProjectAccess(project) ||
+  (String(project.membership_role ?? project.membershipRole ?? "")
+    .trim()
+    .toLowerCase() === "owner" &&
+    hasWorkspaceProjectEditAccess(project));
 
 const splitInviteeName = (name = "") => {
   const parts = String(name || "")
@@ -71,7 +139,7 @@ const buildUniqueProjectSlug = async (
   let timestampSeed = Date.now();
 
   while (true) {
-    const existingProject = await projectRepository.findBySlug(
+    const existingProject = await projectRepository.findBySlugIncludingDeleted(
       candidateSlug,
       workspaceId,
       trx
@@ -105,7 +173,7 @@ const mapProjectUser = (projectUser) => ({
   },
 });
 
-const createProject = async (payload, userId) => {
+const createProject = async (payload, userId, userRole = "") => {
   const { workspaceId, projectName, description, status, access, startDate, endDate, tags } =
     validateCreateProjectPayload(payload);
 
@@ -113,6 +181,15 @@ const createProject = async (payload, userId) => {
 
   if (!workspace) {
     throw new AppError("Workspace not found.", 404);
+  }
+
+  const hasCreateAccess = await canCreateWorkspaceProject(workspaceId, userId, userRole);
+
+  if (!hasCreateAccess) {
+    throw new AppError(
+      "Only workspace owners, admins, or members can create a project in this workspace.",
+      403
+    );
   }
 
   const project = await getDb().transaction(async (trx) => {
@@ -296,8 +373,11 @@ const addProjectUser = async (projectId, payload, userId, userRole = "") => {
     throw new AppError("Project not found.", 404);
   }
 
-  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
-    throw new AppError("Only the project owner can manage project users.", 403);
+  if (!canManageProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only the project owner or a workspace owner/admin can manage project users.",
+      403
+    );
   }
 
   const validatedPayload = validateAddProjectUserPayload(payload);
@@ -432,8 +512,11 @@ const updateProjectUser = async (projectId, projectUserId, payload, userId, user
     throw new AppError("Project not found.", 404);
   }
 
-  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
-    throw new AppError("Only the project owner can manage project users.", 403);
+  if (!canManageProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only the project owner or a workspace owner/admin can manage project users.",
+      403
+    );
   }
 
   const existingProjectUser = await projectUserRepository.findByProjectIdAndUserId(
@@ -500,8 +583,11 @@ const deleteProjectUser = async (projectId, projectUserId, userId, userRole = ""
     throw new AppError("Project not found.", 404);
   }
 
-  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
-    throw new AppError("Only the project owner can manage project users.", 403);
+  if (!canManageProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only the project owner or a workspace owner/admin can manage project users.",
+      403
+    );
   }
 
   const existingProjectUser = await projectUserRepository.findByProjectIdAndUserId(
@@ -542,8 +628,11 @@ const updateProject = async (projectId, payload, userId, userRole = "") => {
     throw new AppError("Project not found.", 404);
   }
 
-  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
-    throw new AppError("Only the project owner can update this project.", 403);
+  if (!canUpdateOrDeleteProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only workspace owners/admins or project owners with non-viewer workspace access can update this project.",
+      403
+    );
   }
 
   const updates = validateUpdateProjectPayload(payload, existingProject);
@@ -600,8 +689,11 @@ const deleteProject = async (projectId, userId, userRole = "") => {
     throw new AppError("Project not found.", 404);
   }
 
-  if (!isSuperAdmin(userRole) && existingProject.membership_role !== "owner") {
-    throw new AppError("Only the project owner can delete this project.", 403);
+  if (!canUpdateOrDeleteProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only workspace owners/admins or project owners with non-viewer workspace access can delete this project.",
+      403
+    );
   }
 
   await projectRepository.softDeleteById(normalizedProjectId, userId);

@@ -61,6 +61,16 @@ export default function ProjectUsersMain({
   const { authSession } = useAuthContext();
   const navigate = useNavigate();
   const currentUserId = authSession?.user?.id ? Number(authSession.user.id) : null;
+  const workspaceMembershipRole = String(workspace?.membershipRole || "")
+    .trim()
+    .toLowerCase();
+  const isWorkspaceOwnerOrAdmin =
+    workspaceMembershipRole === "owner" || workspaceMembershipRole === "admin";
+  const isProjectOwner =
+    String(project?.membershipRole || "")
+      .trim()
+      .toLowerCase() === "owner";
+  const canManageProjectUsers = isWorkspaceOwnerOrAdmin || isProjectOwner;
   const [users, setUsers] = useState([]);
   const [workspaceUsers, setWorkspaceUsers] = useState([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -471,6 +481,7 @@ export default function ProjectUsersMain({
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ width: { xs: "100%", lg: "auto" } }}>
             <Button
               startDecorator={<PlusIcon />}
+              disabled={!canManageProjectUsers}
               onClick={() => setIsAddUserModalOpen(true)}
               sx={{
                 whiteSpace: "nowrap",
@@ -634,6 +645,7 @@ export default function ProjectUsersMain({
                           <IconButton
                             variant="plain"
                             sx={{ color: "#3155ff" }}
+                            disabled={!canManageProjectUsers}
                             onClick={() => handleOpenEditUserModal(projectUser)}
                           >
                             <EditIcon />
@@ -642,6 +654,7 @@ export default function ProjectUsersMain({
                             variant="plain"
                             color="danger"
                             disabled={
+                              !canManageProjectUsers ||
                               deletingProjectUserIds.includes(userId) ||
                               isCurrentUser ||
                               isOwner

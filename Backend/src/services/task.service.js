@@ -20,6 +20,23 @@ const {
 const isSuperAdmin = (role = "") =>
   String(role).trim().toLowerCase() === "super-admin";
 
+const hasWorkspaceProjectAccess = (project = {}) => {
+  const workspaceRole = String(
+    project.workspace_membership_role ?? project.workspaceMembershipRole ?? ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return workspaceRole === "owner" || workspaceRole === "admin";
+};
+
+const canManageProjectTasks = (project = {}, userRole = "") =>
+  isSuperAdmin(userRole) ||
+  String(project.membership_role ?? project.membershipRole ?? "")
+    .trim()
+    .toLowerCase() === "owner" ||
+  hasWorkspaceProjectAccess(project);
+
 const sanitizeFileNamePart = (value, fallback) => {
   const normalized = String(value || "")
     .trim()
@@ -733,12 +750,14 @@ const updateTaskComment = async (taskId, commentId, payload, userId, userRole = 
   }
 
   if (!isSuperAdmin(userRole)) {
-    const isOwner = String(project.membership_role || "").toLowerCase() === "owner";
     const isCommentCreator =
       Number(existingComment.created_by ?? existingComment.createdBy) === Number(userId);
 
-    if (!isOwner && !isCommentCreator) {
-      throw new AppError("Only the comment creator or project owner can update this comment.", 403);
+    if (!canManageProjectTasks(project, userRole) && !isCommentCreator) {
+      throw new AppError(
+        "Only the comment creator, project owner, or workspace owner/admin can update this comment.",
+        403
+      );
     }
   }
 
@@ -779,11 +798,13 @@ const updateTask = async (taskId, payload, userId, userRole = "") => {
   }
 
   if (!isSuperAdmin(userRole)) {
-    const isOwner = String(project.membership_role || "").toLowerCase() === "owner";
     const isCreator = Number(task.created_by ?? task.createdBy) === Number(userId);
 
-    if (!isOwner && !isCreator) {
-      throw new AppError("Only the task creator or project owner can update this task.", 403);
+    if (!canManageProjectTasks(project, userRole) && !isCreator) {
+      throw new AppError(
+        "Only the task creator, project owner, or workspace owner/admin can update this task.",
+        403
+      );
     }
   }
 
@@ -834,11 +855,13 @@ const deleteTask = async (taskId, userId, userRole = "") => {
     throw new AppError("Task not found.", 404);
   }
 
-  const isOwner = String(project.membership_role || "").toLowerCase() === "owner";
   const isCreator = Number(task.created_by ?? task.createdBy) === Number(userId);
 
-  if (!isOwner && !isCreator) {
-    throw new AppError("Only the task creator or project owner can delete this task.", 403);
+  if (!canManageProjectTasks(project, userRole) && !isCreator) {
+    throw new AppError(
+      "Only the task creator, project owner, or workspace owner/admin can delete this task.",
+      403
+    );
   }
 
   await taskRepository.softDeleteById(normalizedTaskId, userId);

@@ -1,4 +1,6 @@
 import { Button, Sheet, Stack, Typography } from "@mui/joy";
+import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../../router/authRoutes";
 import { ArrowIcon, WorkspaceIcon } from "./WorkspaceIcons";
 
 export default function WorkspaceSidebar({
@@ -65,6 +67,8 @@ export default function WorkspaceSidebar({
           ) : null}
 
           <Button
+            component={RouterLink}
+            to={APP_ROUTES.workspace}
             variant="soft"
             onClick={onItemClick}
             startDecorator={isCollapsed ? null : <WorkspaceIcon />}
@@ -78,6 +82,7 @@ export default function WorkspaceSidebar({
               minWidth: isCollapsed ? "36px" : "auto",
               width: isCollapsed ? "36px" : "100%",
               alignSelf: isCollapsed ? "center" : "stretch",
+              textDecoration: "none",
               "& .MuiButton-startDecorator": {
                 mr: 1,
               },

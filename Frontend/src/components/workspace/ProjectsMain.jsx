@@ -137,6 +137,19 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
 
   const currentUserId = Number(authSession?.user?.id);
   const isSuperAdminView = mode === "super-admin";
+  const workspaceMembershipRole = String(workspace?.membershipRole || "")
+    .trim()
+    .toLowerCase();
+  const isWorkspaceOwnerOrAdmin =
+    workspaceMembershipRole === "owner" || workspaceMembershipRole === "admin";
+  const hasNonViewerWorkspaceAccess =
+    workspaceMembershipRole === "owner" ||
+    workspaceMembershipRole === "admin" ||
+    workspaceMembershipRole === "member";
+  const canCreateFromWorkspaceRole =
+    workspaceMembershipRole === "owner" ||
+    workspaceMembershipRole === "admin" ||
+    workspaceMembershipRole === "member";
   const currentUserName = useMemo(
     () => `${authSession?.user?.firstName || ""} ${authSession?.user?.lastName || ""}`.trim(),
     [authSession?.user?.firstName, authSession?.user?.lastName]
@@ -224,6 +237,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
     () => new Map(projects.map((project) => [project.id, project])),
     [projects]
   );
+  const canCreateProjectInWorkspace = canCreateFromWorkspaceRole;
 
   const projectRows = useMemo(
     () =>
@@ -246,8 +260,20 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
         workspaceName:
           project.workspaceName ||
           (project.workspaceId ? `Workspace #${project.workspaceId}` : "-"),
+        canManageProject:
+          isWorkspaceOwnerOrAdmin ||
+          (hasNonViewerWorkspaceAccess &&
+            String(project.membershipRole || "")
+              .trim()
+              .toLowerCase() === "owner"),
       })),
-    [currentUserId, currentUserName, projects]
+    [
+      currentUserId,
+      currentUserName,
+      hasNonViewerWorkspaceAccess,
+      isWorkspaceOwnerOrAdmin,
+      projects,
+    ]
   );
 
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -360,6 +386,14 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
 
     if (!workspace?.id) {
       await showErrorAlert("Workspace missing", "Please reload the workspace and try again.");
+      return;
+    }
+
+    if (!canCreateProjectInWorkspace) {
+      await showErrorAlert(
+        "Access denied",
+        "Only workspace owners, admins, or members can create projects here."
+      );
       return;
     }
 
@@ -570,7 +604,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
               {!isSuperAdminView ? (
                 <Button
                   startDecorator={<PlusIcon />}
-                  disabled={!workspace?.id}
+                  disabled={!workspace?.id || isLoadingProjects || !canCreateProjectInWorkspace}
                   onClick={() => setIsCreateModalOpen(true)}
                   sx={{
                     minHeight: "38px",
@@ -811,6 +845,7 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
                           <IconButton
                             variant="plain"
                             sx={{ color: "#3155ff" }}
+                            disabled={!project.canManageProject}
                             onClick={() => handleOpenEditModal(project.projectId)}
                           >
                             <EditIcon />
@@ -818,7 +853,10 @@ export default function ProjectsMain({ workspace, workspaceTitle, mode = "worksp
                           <IconButton
                             variant="plain"
                             color="danger"
-                            disabled={deletingProjectId === project.projectId}
+                            disabled={
+                              deletingProjectId === project.projectId ||
+                              !project.canManageProject
+                            }
                             onClick={() => handleDeleteProject(project)}
                           >
                             <DeleteIcon />
