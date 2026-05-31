@@ -1,8 +1,7 @@
 import { Box, Sheet } from "@mui/joy";
+import teamIllustrationSrc from "../../assets/team-illustration.svg";
 
 export default function QuotePanel() {
-  const teamIllustrationSrc = `${import.meta.env.BASE_URL}Team.svg`;
-
   return (
     <Sheet
       sx={{
