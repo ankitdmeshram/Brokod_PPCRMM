@@ -86,12 +86,15 @@ const signin = async (payload) => {
 
   const token = jwt.sign(
     {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
+      sub: String(user.id),
     },
     env.jwtSecret,
-    { expiresIn: "7d" }
+    {
+      algorithm: "HS256",
+      audience: env.jwtAudience,
+      expiresIn: "7d",
+      issuer: env.jwtIssuer,
+    }
   );
 
   return {

@@ -5,6 +5,8 @@ const env = {
   port: Number(process.env.PORT) || 5050,
   frontendDomain: process.env.FRONTEND_DOMAIN || "",
   jwtSecret: process.env.JWT_SECRET || "",
+  jwtIssuer: process.env.JWT_ISSUER || "brokod-ppcrmm",
+  jwtAudience: process.env.JWT_AUDIENCE || "brokod-ppcrmm-api",
   dbHost: process.env.DB_HOST || "localhost",
   dbUser: process.env.DB_USER || "root",
   dbPassword: process.env.DB_PASS || "",

@@ -16,13 +16,24 @@ const requireAuth = async (request, _response, next) => {
   let payload;
 
   try {
-    payload = jwt.verify(token, env.jwtSecret);
+    payload = jwt.verify(token, env.jwtSecret, {
+      algorithms: ["HS256"],
+      audience: env.jwtAudience,
+      issuer: env.jwtIssuer,
+    });
   } catch (_error) {
     next(new AppError("Invalid or expired token.", 401));
     return;
   }
 
-  const user = await userRepository.findById(payload.sub);
+  const userId = Number(payload.sub);
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    next(new AppError("Invalid or expired token.", 401));
+    return;
+  }
+
+  const user = await userRepository.findById(userId);
 
   if (!user) {
     next(new AppError("User not found.", 404));
@@ -34,7 +45,12 @@ const requireAuth = async (request, _response, next) => {
     return;
   }
 
-  request.user = payload;
+  // Authorization must use current database values, not potentially stale JWT claims.
+  request.user = {
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+  };
   next();
 };
 
