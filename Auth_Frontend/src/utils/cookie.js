@@ -1,6 +1,5 @@
 const DEFAULT_PATH = "/";
 
-
 export function setCookie(name, value, options = {}) {
   const {
     days,

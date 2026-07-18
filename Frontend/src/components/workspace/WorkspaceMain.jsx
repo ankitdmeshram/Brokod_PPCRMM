@@ -18,7 +18,7 @@ import {
   fetchWorkspaces,
   updateWorkspace,
 } from "../../services/workspace.service";
-import { buildWorkspaceProjectsRoute } from "../../router/authRoutes";
+import { buildWorkspaceApplicationsRoute } from "../../router/authRoutes";
 import CreateWorkspaceModal from "./CreateWorkspaceModal";
 import EditWorkspaceModal from "./EditWorkspaceModal";
 import DeleteWorkspaceModal from "./DeleteWorkspaceModal";
@@ -66,7 +66,7 @@ export default function WorkspaceMain() {
       return;
     }
 
-    navigate(buildWorkspaceProjectsRoute(workspace.slug), {
+    navigate(buildWorkspaceApplicationsRoute(workspace.slug), {
       state: {
         workspace,
       },

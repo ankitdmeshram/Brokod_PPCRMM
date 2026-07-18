@@ -19,6 +19,7 @@ import {
   APP_ROUTES,
   buildTaskDetailsRoute,
   buildProjectSectionRoute,
+  buildWorkspaceApplicationsRoute,
   buildWorkspaceProjectsRoute,
 } from "../router/authRoutes";
 import { showAccessDeniedAlert, showErrorAlert } from "../services/alert.service";
@@ -560,6 +561,7 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
       sidebar={
         <ProjectsSidebar
           items={sidebarItems}
+          backToApplicationsRoute={buildWorkspaceApplicationsRoute(workspaceSlug)}
           backToProjectsRoute={buildWorkspaceProjectsRoute(workspaceSlug)}
           showBackToWorkspace={false}
         />

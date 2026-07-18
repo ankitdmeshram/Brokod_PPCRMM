@@ -26,8 +26,11 @@ export const slugifyRouteSegment = (value = "") =>
 export const buildWorkspaceProjectsRoute = (workspaceSlug) =>
   `/workspace/${workspaceSlug}/projects`;
 
+export const buildWorkspaceApplicationsRoute = (workspaceSlug) =>
+  `/workspace/${workspaceSlug}/applications`;
+
 export const buildWorkspaceOverviewRoute = (workspaceSlug) =>
-  `/workspace/${workspaceSlug}/overview`;
+  `/workspace/${workspaceSlug}/projects/overview`;
 
 export const buildWorkspaceUsersRoute = (workspaceSlug) =>
   `/workspace/${workspaceSlug}/users`;

@@ -22,6 +22,7 @@ export default function ProjectsSidebar({
   isMobile = false,
   sectionLabel = "",
   items = navItems,
+  backToApplicationsRoute = "",
   backToProjectsRoute = "",
   backToProjectsLabel = "Back to Projects",
   showBackToWorkspace = true,
@@ -157,6 +158,37 @@ export default function ProjectsSidebar({
         </Stack>
 
         <Stack spacing={1} sx={{ mt: "auto", width: "100%" }}>
+          {backToApplicationsRoute ? (
+            renderSidebarAction(
+              <Button
+                {...buildNavigationProps(backToApplicationsRoute)}
+                variant="plain"
+                startDecorator={isCollapsed ? null : <SidebarBackIcon />}
+                sx={{
+                  justifyContent: isCollapsed ? "center" : "flex-start",
+                  minHeight: "36px",
+                  color: "var(--color-font-secondary)",
+                  px: isCollapsed ? 0.875 : 1.35,
+                  minWidth: isCollapsed ? "36px" : "auto",
+                  width: isCollapsed ? "36px" : "100%",
+                  alignSelf: isCollapsed ? "center" : "stretch",
+                  textDecoration: "none",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                  "& .MuiButton-startDecorator": { mr: 1 },
+                  "& .MuiButton-label": {
+                    flex: isCollapsed ? "0 0 auto" : 1,
+                    textAlign: "left",
+                  },
+                  "&:hover": { backgroundColor: "rgba(255,255,255,0.16)" },
+                }}
+              >
+                {isCollapsed ? <SidebarBackIcon /> : "Back to Applications"}
+              </Button>,
+              "Back to Applications"
+            )
+          ) : null}
+
           {backToProjectsRoute ? (
             renderSidebarAction(
               <Button

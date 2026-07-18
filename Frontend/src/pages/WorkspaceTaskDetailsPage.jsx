@@ -33,6 +33,7 @@ import {
   APP_ROUTES,
   buildTaskDetailsRoute,
   buildProjectSectionRoute,
+  buildWorkspaceApplicationsRoute,
   buildWorkspaceProjectsRoute,
 } from "../router/authRoutes";
 import {
@@ -1929,6 +1930,7 @@ export default function WorkspaceTaskDetailsPage() {
       sidebar={
         <ProjectsSidebar
           items={sidebarItems}
+          backToApplicationsRoute={buildWorkspaceApplicationsRoute(workspaceSlug)}
           backToProjectsRoute={buildProjectSectionRoute(workspaceSlug, projectSlug, "tasks")}
           backToProjectsLabel="Back to Tasks"
           showBackToWorkspace={false}

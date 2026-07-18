@@ -18,3 +18,4 @@ export { default as TasksIcon } from "@mui/icons-material/ChecklistOutlined";
 export { default as NotificationIcon } from "@mui/icons-material/NotificationsOutlined";
 export { default as SettingsIcon } from "@mui/icons-material/SettingsOutlined";
 export { default as UsersIcon } from "@mui/icons-material/GroupOutlined";
+export { default as ApplicationsIcon } from "@mui/icons-material/AppsOutlined";

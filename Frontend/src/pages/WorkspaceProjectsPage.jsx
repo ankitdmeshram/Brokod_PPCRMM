@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
 import ProjectsMain from "../components/workspace/ProjectsMain";
 import {
+  ApplicationsIcon,
   FolderIcon,
   GridIcon,
   NotificationIcon,
@@ -13,6 +14,7 @@ import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import { useAuthContext } from "../context/AuthContext";
 import {
   APP_ROUTES,
+  buildWorkspaceApplicationsRoute,
   buildWorkspaceOverviewRoute,
   buildWorkspaceProjectsRoute,
   buildWorkspaceNotificationsRoute,
@@ -23,6 +25,7 @@ import { showAccessDeniedAlert, showErrorAlert } from "../services/alert.service
 import WorkspaceUsersMain from "../components/workspace/WorkspaceUsersMain";
 import { Box, Typography } from "@mui/joy";
 import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotificationsMain";
+import ApplicationsMain from "../components/workspace/ApplicationsMain";
 
 const formatWorkspaceTitle = (workspaceName = "") =>
   workspaceName
@@ -57,42 +60,59 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
         .trim()
         .toLowerCase()
     );
-  const sidebarItems = useMemo(
-    () =>
-      [
-        {
-          key: "overview",
-          icon: <GridIcon />,
-          label: "Overview",
-          to: buildWorkspaceOverviewRoute(workspaceSlug),
-          active: section === "overview",
-        },
-        {
-          key: "projects",
-          icon: <FolderIcon />,
-          label: "Projects",
-          to: buildWorkspaceProjectsRoute(workspaceSlug),
-          active: section === "projects",
-        },
-        canViewWorkspaceUsers
-          ? {
-              key: "users",
-              icon: <UsersIcon />,
-              label: "Users",
-              to: buildWorkspaceUsersRoute(workspaceSlug),
-              active: section === "users",
-            }
-          : null,
-        {
-          key: "notifications",
-          icon: <NotificationIcon />,
-          label: "Notifications",
-          to: buildWorkspaceNotificationsRoute(workspaceSlug),
-          active: section === "notifications",
-        },
-      ].filter(Boolean),
-    [canViewWorkspaceUsers, section, workspaceSlug]
-  );
+  const sidebarItems = useMemo(() => {
+    const applicationsItem = {
+      key: "applications",
+      icon: <ApplicationsIcon />,
+      label: "Applications",
+      to: buildWorkspaceApplicationsRoute(workspaceSlug),
+      active: section === "applications",
+    };
+    const usersItem = canViewWorkspaceUsers
+      ? {
+          key: "users",
+          icon: <UsersIcon />,
+          label: "Users",
+          to: buildWorkspaceUsersRoute(workspaceSlug),
+          active: section === "users",
+        }
+      : null;
+    const notificationsItem = {
+      key: "notifications",
+      icon: <NotificationIcon />,
+      label: "Notifications",
+      to: buildWorkspaceNotificationsRoute(workspaceSlug),
+      active: section === "notifications",
+    };
+
+    if (section === "applications") {
+      return [applicationsItem, usersItem, notificationsItem].filter(Boolean);
+    }
+
+    return [
+      ["users", "notifications"].includes(section) ? applicationsItem : null,
+      !["users", "notifications"].includes(section)
+        ? {
+            key: "overview",
+            icon: <GridIcon />,
+            label: "Overview",
+            to: buildWorkspaceOverviewRoute(workspaceSlug),
+            active: section === "overview",
+          }
+        : null,
+      !["users", "notifications"].includes(section)
+        ? {
+            key: "projects",
+            icon: <FolderIcon />,
+            label: "Projects",
+            to: buildWorkspaceProjectsRoute(workspaceSlug),
+            active: section === "projects",
+          }
+        : null,
+      !["overview", "projects"].includes(section) ? usersItem : null,
+      !["overview", "projects"].includes(section) ? notificationsItem : null,
+    ].filter(Boolean);
+  }, [canViewWorkspaceUsers, section, workspaceSlug]);
 
   useEffect(() => {
     const resolveWorkspace = async () => {
@@ -148,6 +168,11 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
         <ProjectsSidebar
           sectionLabel={workspaceTitle}
           items={sidebarItems}
+          backToApplicationsRoute={
+            ["overview", "projects"].includes(section)
+              ? buildWorkspaceApplicationsRoute(workspaceSlug)
+              : ""
+          }
           showBackToWorkspace
         />
       }
@@ -161,7 +186,9 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
       userRole={userRole}
       currentYear={currentYear}
     >
-      {section === "overview" ? (
+      {section === "applications" ? (
+        <ApplicationsMain workspace={workspace} />
+      ) : section === "overview" ? (
         <WorkspaceOverviewMain workspace={workspace} workspaceTitle={workspaceTitle} />
       ) : section === "users" ? (
         <Box
