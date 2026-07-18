@@ -4,6 +4,7 @@ This repo now includes a Docker setup with a single `nginx` entrypoint for all a
 
 - `nginx`: single entrypoint on `http://localhost:5000`
 - `web`: Next.js landing pages on `/`
+- `Auth_Frontend`: React/Vite authentication app on `/auth`
 - `Frontend`: React/Vite app on `/projects`
 - `Backend`: Node/Express API on `/api`
 - `db`: MySQL 8.4 on `localhost:3307` and the internal Docker network
@@ -33,7 +34,8 @@ docker compose down -v
 
 ## Notes
 
-- Nginx handles all public routes and forwards `/`, `/projects`, and `/api` to the right container.
+- Nginx handles all public routes and forwards `/`, `/auth`, `/projects`, and `/api` to the right container.
+- Sign in and sign up are served by the standalone auth app at `/auth/signin` and `/auth/signup`.
 - The React app runs with Vite in Docker dev mode on `/projects`, including HMR through nginx.
 - The Next.js `web` app runs in Docker dev mode with polling enabled so changes in `./web` reflect immediately on Windows bind mounts too.
 - The React app uses same-origin API calls, so `VITE_API_DOMAIN` can stay empty in Docker.

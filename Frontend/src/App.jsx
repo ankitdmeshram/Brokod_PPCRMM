@@ -1,17 +1,15 @@
 import { CssVarsProvider } from "@mui/joy";
 import CssBaseline from "@mui/joy/CssBaseline";
 import { Navigate, Route, Routes } from "react-router-dom";
-import AuthRedirect from "./components/auth/AuthRedirect";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
-import AuthPage from "./pages/AuthPage";
 import SuperAdminProjectsPage from "./pages/SuperAdminProjectsPage";
 import ProfilePage from "./pages/ProfilePage";
 import WorkspaceTaskDetailsPage from "./pages/WorkspaceTaskDetailsPage";
 import WorkspaceProjectTasksPage from "./pages/WorkspaceProjectTasksPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import WorkspaceProjectsPage from "./pages/WorkspaceProjectsPage";
-import { APP_ROUTES, AUTH_ROUTES, SUPER_ADMIN_ROUTES } from "./router/authRoutes";
+import { APP_ROUTES, SUPER_ADMIN_ROUTES } from "./router/authRoutes";
 import { joyTheme } from "./theme/joyTheme";
 
 export default function App() {
@@ -20,22 +18,6 @@ export default function App() {
       <CssBaseline />
       <AuthProvider>
         <Routes>
-          <Route
-            path={AUTH_ROUTES.signIn}
-            element={
-              <AuthRedirect>
-                <AuthPage mode="signin" />
-              </AuthRedirect>
-            }
-          />
-          <Route
-            path={AUTH_ROUTES.signUp}
-            element={
-              <AuthRedirect>
-                <AuthPage mode="signup" />
-              </AuthRedirect>
-            }
-          />
           <Route
             path={APP_ROUTES.myAccount}
             element={
@@ -164,7 +146,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to={AUTH_ROUTES.signIn} replace />} />
+          <Route path="*" element={<Navigate to={APP_ROUTES.workspace} replace />} />
         </Routes>
       </AuthProvider>
     </CssVarsProvider>

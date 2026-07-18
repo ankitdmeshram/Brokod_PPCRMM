@@ -58,6 +58,21 @@ services:
     expose:
       - "80"
 
+  auth-frontend:
+    build:
+      context: ./Auth_Frontend
+      target: runner
+      args:
+        VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
+        VITE_BASE_PATH: /auth/
+        VITE_PRODUCT_APP_PATH: /projects/workspace
+    container_name: BROKOD_AUTH_FRONTEND
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "80"
+
   web:
     build:
       context: ./web
@@ -77,6 +92,7 @@ services:
     depends_on:
       - web
       - frontend
+      - auth-frontend
       - backend
     ports:
       - "${APP_PORT:-80}:80"

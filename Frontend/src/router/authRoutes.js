@@ -1,6 +1,6 @@
 export const AUTH_ROUTES = {
-  signIn: "/signin",
-  signUp: "/signup",
+  signIn: "/auth/signin",
+  signUp: "/auth/signup",
 };
 
 export const APP_ROUTES = {

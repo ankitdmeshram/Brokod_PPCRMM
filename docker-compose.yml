@@ -70,6 +70,28 @@ services:
     expose:
       - "5173"
 
+  auth-frontend:
+    build:
+      context: ./Auth_Frontend
+      target: dev
+    container_name: BROKOD_AUTH_FRONTEND
+    restart: unless-stopped
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5174"
+    depends_on:
+      - backend
+    environment:
+      VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
+      VITE_BASE_PATH: /auth/
+      VITE_PRODUCT_APP_PATH: /projects/workspace
+      VITE_PROXY_TARGET: http://backend:5000
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./Auth_Frontend:/app
+      - auth_frontend_node_modules:/app/node_modules
+    expose:
+      - "5174"
+
   web:
     build:
       context: ./web
@@ -97,6 +119,7 @@ services:
     depends_on:
       - web
       - frontend
+      - auth-frontend
       - backend
     ports:
       - "${APP_PORT:-5000}:80"
@@ -107,5 +130,6 @@ volumes:
   mysql_data:
   backend_node_modules:
   frontend_node_modules:
+  auth_frontend_node_modules:
   web_node_modules:
   web_next:

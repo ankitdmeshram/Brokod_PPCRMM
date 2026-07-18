@@ -10,30 +10,6 @@ async function parseApiResponse(response) {
   return data;
 }
 
-export async function signupUser(payload) {
-  const response = await fetch(`${AUTH_API_BASE}/signup`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  return parseApiResponse(response);
-}
-
-export async function signinUser(payload) {
-  const response = await fetch(`${AUTH_API_BASE}/signin`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  return parseApiResponse(response);
-}
-
 export async function fetchCurrentUser(token) {
   const response = await fetch(`${AUTH_API_BASE}/me`, {
     method: "GET",
