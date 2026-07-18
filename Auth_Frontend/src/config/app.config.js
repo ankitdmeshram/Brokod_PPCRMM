@@ -3,7 +3,7 @@ export const API_DOMAIN = import.meta.env.VITE_API_DOMAIN || "";
 export const AUTH_API_BASE = `${API_DOMAIN}/api/auth`;
 export const AUTH_STORAGE_KEY = "ppcrmm_auth_session";
 export const PRODUCT_APP_PATH =
-  import.meta.env.VITE_PRODUCT_APP_PATH || "/projects/workspace";
+  import.meta.env.VITE_PRODUCT_APP_PATH || "/workspace";
 
 export const AUTH_ROUTES = {
   signIn: "/signin",
@@ -13,7 +13,7 @@ export const AUTH_ROUTES = {
 export function getSafeProductRedirect() {
   const requestedPath = new URLSearchParams(window.location.search).get("redirect");
 
-  if (requestedPath?.startsWith("/projects/")) {
+  if (/^\/(workspace|super-admin|my-account)(?:[/?#]|$)/.test(requestedPath || "")) {
     return requestedPath;
   }
 

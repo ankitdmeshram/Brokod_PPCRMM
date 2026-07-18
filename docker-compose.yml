@@ -60,7 +60,7 @@ services:
       - backend
     environment:
       VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
-      VITE_BASE_PATH: ${VITE_BASE_PATH:-/}
+      VITE_BASE_PATH: /
       VITE_PROXY_TARGET: http://backend:5000
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
@@ -82,7 +82,7 @@ services:
     environment:
       VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
       VITE_BASE_PATH: /auth/
-      VITE_PRODUCT_APP_PATH: /projects/workspace
+      VITE_PRODUCT_APP_PATH: /workspace
       VITE_PROXY_TARGET: http://backend:5000
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"

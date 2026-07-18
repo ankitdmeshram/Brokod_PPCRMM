@@ -50,7 +50,7 @@ services:
       target: runner
       args:
         VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
-        VITE_BASE_PATH: ${VITE_BASE_PATH:-/}
+        VITE_BASE_PATH: /
     container_name: BROKOD_FRONTEND
     restart: unless-stopped
     depends_on:
@@ -65,7 +65,7 @@ services:
       args:
         VITE_API_DOMAIN: ${VITE_API_DOMAIN:-}
         VITE_BASE_PATH: /auth/
-        VITE_PRODUCT_APP_PATH: /projects/workspace
+        VITE_PRODUCT_APP_PATH: /workspace
     container_name: BROKOD_AUTH_FRONTEND
     restart: unless-stopped
     depends_on:

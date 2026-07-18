@@ -7,7 +7,7 @@ Standalone React/Vite application for Brokod Projects authentication.
 - Direct local development: `npm install && npm run dev -- --port 5174`
 
 The app stores the existing `ppcrmm_auth_session` cookie at `/`, then redirects
-to the product application under `/projects`. Both applications must be served
+to the product application under `/workspace`. Both applications must be served
 from the same origin for this session handoff to work.
 
 ## Source structure
