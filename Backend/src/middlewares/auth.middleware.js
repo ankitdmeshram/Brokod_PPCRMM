@@ -50,6 +50,7 @@ const requireAuth = async (request, _response, next) => {
     sub: user.id,
     email: user.email,
     role: user.role,
+    sessionId: payload.jti || null,
   };
   next();
 };

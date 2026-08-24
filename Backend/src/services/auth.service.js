@@ -1,7 +1,14 @@
+const crypto = require("crypto");
 const userRepository = require("../repositories/user.repository");
 const jwt = require("jsonwebtoken");
 
 const env = require("../config/env");
+const { getDb } = require("../config/database");
+const {
+  AUTH_TRAIL_EVENT_TYPES,
+  AUTH_TRAIL_OUTCOMES,
+  saveAuthTrail,
+} = require("./auth-trail.service");
 const {
   validateSigninPayload,
   validateSignupPayload,
@@ -25,11 +32,54 @@ const mapUser = (user) => ({
   lastLogin: user.last_login ?? user.lastLogin ?? null,
 });
 
-const signup = async (payload) => {
-  const { firstName, lastName, email, phone, password } = validateSignupPayload(payload);
+const saveAuthenticationTrail = (
+  eventType,
+  trailContext,
+  { userId = null, email, outcome, failureReason = null, sessionId = null },
+  trx
+) =>
+  saveAuthTrail(
+    {
+      userId,
+      attemptedEmail: email,
+      eventType,
+      outcome,
+      failureReason,
+      ipAddress: trailContext.ipAddress,
+      userAgent: trailContext.userAgent,
+      requestId: trailContext.requestId,
+      sessionId,
+    },
+    trx
+  );
+
+const signup = async (payload, trailContext = {}) => {
+  const saveSignupTrail = (details, trx) =>
+    saveAuthenticationTrail(AUTH_TRAIL_EVENT_TYPES.SIGNUP, trailContext, details, trx);
+
+  let signupPayload;
+
+  try {
+    signupPayload = validateSignupPayload(payload);
+  } catch (error) {
+    await saveSignupTrail({
+      email: payload?.email,
+      outcome: AUTH_TRAIL_OUTCOMES.FAILURE,
+      failureReason: "invalid_payload",
+    });
+    throw error;
+  }
+
+  const { firstName, lastName, email, phone, password } = signupPayload;
   const existingUser = await userRepository.findByEmail(email);
 
   if (existingUser) {
+    await saveSignupTrail({
+      userId: existingUser.id,
+      email,
+      outcome: AUTH_TRAIL_OUTCOMES.FAILURE,
+      failureReason: "email_already_exists",
+    });
     throw new AppError("An account with this email already exists.", 409);
   }
 
@@ -37,15 +87,36 @@ const signup = async (payload) => {
   let userId;
 
   try {
-    userId = await userRepository.create({
-      firstName,
-      lastName,
-      email,
-      phone,
-      password: hashedPassword,
+    await getDb().transaction(async (trx) => {
+      userId = await userRepository.create(
+        {
+          firstName,
+          lastName,
+          email,
+          phone,
+          password: hashedPassword,
+        },
+        trx
+      );
+
+      await saveSignupTrail(
+        {
+          userId,
+          email,
+          outcome: AUTH_TRAIL_OUTCOMES.SUCCESS,
+        },
+        trx
+      );
     });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
+      const duplicateUser = await userRepository.findByEmail(email);
+      await saveSignupTrail({
+        userId: duplicateUser?.id,
+        email,
+        outcome: AUTH_TRAIL_OUTCOMES.FAILURE,
+        failureReason: "email_already_exists",
+      });
       throw new AppError("An account with this email already exists.", 409);
     }
 
@@ -64,25 +135,58 @@ const signup = async (payload) => {
   });
 };
 
-const signin = async (payload) => {
-  const { email, password } = validateSigninPayload(payload);
+const signin = async (payload, trailContext = {}) => {
+  const saveSigninTrail = (details, trx) =>
+    saveAuthenticationTrail(AUTH_TRAIL_EVENT_TYPES.SIGNIN, trailContext, details, trx);
+
+  let credentials;
+
+  try {
+    credentials = validateSigninPayload(payload);
+  } catch (error) {
+    await saveSigninTrail({
+      email: payload?.email,
+      outcome: AUTH_TRAIL_OUTCOMES.FAILURE,
+      failureReason: "invalid_payload",
+    });
+    throw error;
+  }
+
+  const { email, password } = credentials;
   const user = await userRepository.findByEmail(email);
 
   if (!user) {
+    await saveSigninTrail({
+      email,
+      outcome: AUTH_TRAIL_OUTCOMES.FAILURE,
+      failureReason: "invalid_credentials",
+    });
     throw new AppError("Invalid email or password.", 401);
   }
 
   if (!user.is_active) {
+    await saveSigninTrail({
+      userId: user.id,
+      email,
+      outcome: AUTH_TRAIL_OUTCOMES.FAILURE,
+      failureReason: "inactive_user",
+    });
     throw new AppError("Your account is inactive. Please contact support.", 403);
   }
 
   const passwordMatches = await verifyPassword(password, user.password);
 
   if (!passwordMatches) {
+    await saveSigninTrail({
+      userId: user.id,
+      email,
+      outcome: AUTH_TRAIL_OUTCOMES.FAILURE,
+      failureReason: "invalid_credentials",
+    });
     throw new AppError("Invalid email or password.", 401);
   }
 
-  await userRepository.updateLastLogin(user.id);
+  const sessionId = crypto.randomUUID();
 
   const token = jwt.sign(
     {
@@ -94,8 +198,22 @@ const signin = async (payload) => {
       audience: env.jwtAudience,
       expiresIn: "7d",
       issuer: env.jwtIssuer,
+      jwtid: sessionId,
     }
   );
+
+  await getDb().transaction(async (trx) => {
+    await userRepository.updateLastLogin(user.id, trx);
+    await saveSigninTrail(
+      {
+        userId: user.id,
+        email,
+        outcome: AUTH_TRAIL_OUTCOMES.SUCCESS,
+        sessionId,
+      },
+      trx
+    );
+  });
 
   return {
     message: "Signin successful.",
@@ -104,6 +222,23 @@ const signin = async (payload) => {
       ...user,
       last_login: toUtcDate(),
     }),
+  };
+};
+
+const signout = async (user, trailContext = {}) => {
+  await saveAuthenticationTrail(
+    AUTH_TRAIL_EVENT_TYPES.SIGNOUT,
+    trailContext,
+    {
+      userId: user.sub,
+      email: user.email,
+      outcome: AUTH_TRAIL_OUTCOMES.SUCCESS,
+      sessionId: user.sessionId,
+    }
+  );
+
+  return {
+    message: "Signout successful.",
   };
 };
 
@@ -160,6 +295,7 @@ const updateCurrentUser = async (userId, payload) => {
 module.exports = {
   getCurrentUser,
   signin,
+  signout,
   signup,
   updateCurrentUser,
 };

@@ -19,6 +19,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import AppLayout from "../components/app/AppLayout";
+import AuthTrailsPanel from "../components/super-admin/AuthTrailsPanel";
 import EditUserModal from "../components/workspace/EditUserModal";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import { useAuthContext } from "../context/AuthContext";
@@ -37,6 +38,7 @@ import {
 } from "../services/user.service";
 import {
   GridIcon,
+  AuthTrailIcon,
   DeleteIcon,
   EditIcon,
   ExportIcon,
@@ -55,6 +57,10 @@ const sectionContent = {
     title: "Users",
     description:
       "The super admin users page is coming soon. This space will help you manage platform users, access, and account-level actions.",
+  },
+  authActivities: {
+    title: "Authentication Activities",
+    description: "Review authentication attempts, outcomes, sessions, and request metadata.",
   },
   backup: {
     title: "Backup",
@@ -842,6 +848,13 @@ export default function SuperAdminProjectsPage({ section = "overview" }) {
         active: location.pathname === SUPER_ADMIN_ROUTES.users,
       },
       {
+        key: "auth-activities",
+        icon: <AuthTrailIcon />,
+        label: "Auth Activities",
+        to: SUPER_ADMIN_ROUTES.authActivities,
+        active: location.pathname === SUPER_ADMIN_ROUTES.authActivities,
+      },
+      {
         key: "backup",
         icon: <ExportIcon />,
         label: "Backup",
@@ -896,6 +909,8 @@ export default function SuperAdminProjectsPage({ section = "overview" }) {
       >
         {section === "users" ? (
           <SuperAdminUsersPanel />
+        ) : section === "authActivities" ? (
+          <AuthTrailsPanel />
         ) : section === "backup" ? (
           <SuperAdminBackupPanel />
         ) : (

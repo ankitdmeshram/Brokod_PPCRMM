@@ -4,6 +4,7 @@ import { AUTH_STORAGE_KEY } from "../config/common";
 import { showErrorAlert, showSuccessAlert } from "../services/alert.service";
 import {
   fetchCurrentUser,
+  signoutUser,
   updateCurrentUserProfile,
 } from "../services/auth.service";
 import { getCookie, removeCookie, setCookie } from "../utils/cookie";
@@ -29,9 +30,17 @@ export function AuthProvider({ children }) {
   const [authSession, setAuthSession] = useState(readSavedSession);
   const authToken = authSession?.token;
 
-  const clearAuthSession = () => {
-    removeCookie(AUTH_STORAGE_KEY);
-    setAuthSession(null);
+  const clearAuthSession = async () => {
+    try {
+      if (authSession?.token) {
+        await signoutUser(authSession.token);
+      }
+    } catch {
+      // Local signout must still complete if the audit request cannot be recorded.
+    } finally {
+      removeCookie(AUTH_STORAGE_KEY);
+      setAuthSession(null);
+    }
   };
 
   const persistAuthSession = (nextSession) => {

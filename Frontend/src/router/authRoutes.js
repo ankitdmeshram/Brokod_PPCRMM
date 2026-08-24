@@ -12,6 +12,7 @@ export const APP_ROUTES = {
 export const SUPER_ADMIN_ROUTES = {
   overview: APP_ROUTES.superAdmin,
   users: `${APP_ROUTES.superAdmin}/users`,
+  authActivities: `${APP_ROUTES.superAdmin}/activities/auth`,
   backup: `${APP_ROUTES.superAdmin}/backup`,
   settings: `${APP_ROUTES.superAdmin}/settings`,
 };

@@ -1,5 +1,6 @@
 export const API_DOMAIN = import.meta.env.VITE_API_DOMAIN || "";
 export const AUTH_API_BASE = `${API_DOMAIN}/api/auth`;
+export const AUTH_TRAILS_API_URL = `${AUTH_API_BASE}/trails`;
 export const WORKSPACE_API_BASE = `${API_DOMAIN}/api/workspaces`;
 export const PROJECT_API_BASE = `${API_DOMAIN}/api/projects`;
 export const TASK_API_BASE = `${API_DOMAIN}/api/tasks`;

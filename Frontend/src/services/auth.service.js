@@ -21,6 +21,17 @@ export async function fetchCurrentUser(token) {
   return parseApiResponse(response);
 }
 
+export async function signoutUser(token) {
+  const response = await fetch(`${AUTH_API_BASE}/signout`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseApiResponse(response);
+}
+
 export async function updateCurrentUserProfile(payload, token) {
   const response = await fetch(`${AUTH_API_BASE}/me`, {
     method: "PATCH",

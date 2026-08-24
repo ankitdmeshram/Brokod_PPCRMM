@@ -108,11 +108,11 @@ const create = async ({ firstName, lastName, email, phone, password }, trx = get
   return result[0];
 };
 
-const updateLastLogin = async (userId) => {
-  await getDb()("users")
+const updateLastLogin = async (userId, trx = getDb()) => {
+  await trx("users")
     .where({ id: userId })
     .update({
-      last_login: getDb().fn.now(),
+      last_login: trx.fn.now(),
     });
 };
 

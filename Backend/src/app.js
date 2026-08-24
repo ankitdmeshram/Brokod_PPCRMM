@@ -9,6 +9,9 @@ const errorHandlerMiddleware = require("./middlewares/error-handler.middleware")
 
 const app = express();
 
+// Nginx is the single public entrypoint and forwards the original client IP.
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin: env.frontendDomain || true,

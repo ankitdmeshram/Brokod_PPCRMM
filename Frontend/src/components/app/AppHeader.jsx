@@ -48,7 +48,7 @@ export default function AppHeader({
   };
 
   const handleSignOut = () => {
-    clearAuthSession();
+    void clearAuthSession();
   };
 
   return (
