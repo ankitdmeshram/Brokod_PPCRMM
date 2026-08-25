@@ -1,6 +1,8 @@
 import ArrowDownwardRounded from "@mui/icons-material/ArrowDownwardRounded";
 import ArrowUpwardRounded from "@mui/icons-material/ArrowUpwardRounded";
 import ContentCopyRounded from "@mui/icons-material/ContentCopyRounded";
+import ViewKanbanRounded from "@mui/icons-material/ViewKanbanRounded";
+import ViewListRounded from "@mui/icons-material/ViewListRounded";
 import UnfoldMoreRounded from "@mui/icons-material/UnfoldMoreRounded";
 import { Box, Button, Checkbox, Chip, DialogContent, DialogTitle, Dropdown, FormControl, FormLabel, IconButton, Input, Menu, MenuButton, MenuItem, Modal, ModalClose, ModalDialog, Option, Select, Sheet, Stack, Table, Tooltip, Typography } from "@mui/joy";
 import { useTheme } from "@mui/joy/styles";
@@ -20,6 +22,7 @@ import {
   createTask,
   deleteTask,
   exportTasksJson,
+  fetchAllTasks,
   fetchTasks,
   importTasksJson,
   updateTask,
@@ -116,6 +119,7 @@ const taskViewQueryKeys = [
   "sortOrder",
   "page",
   "limit",
+  "view",
 ];
 
 const readTaskViewState = (searchParams) => {
@@ -163,6 +167,7 @@ const readTaskViewState = (searchParams) => {
   }
   const requestedPage = Number.parseInt(searchParams.get("page") || "1", 10);
   const requestedLimit = Number.parseInt(searchParams.get("limit") || "10", 10);
+  const requestedView = String(searchParams.get("view") || "list").trim().toLowerCase();
 
   return {
     search: String(searchParams.get("search") || "").trim(),
@@ -170,6 +175,7 @@ const readTaskViewState = (searchParams) => {
     sortRules,
     page: Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1,
     limit: taskPageSizes.includes(requestedLimit) ? requestedLimit : 10,
+    view: requestedView === "kanban" ? "kanban" : "list",
   };
 };
 
@@ -369,6 +375,232 @@ function OverflowTooltip({ title, children, maxLines = 1 }) {
   );
 }
 
+function TaskKanbanBoard({
+  tasks,
+  isLoading,
+  copiedTaskId,
+  savingTaskIds,
+  selectedTaskIds,
+  onCopyTaskId,
+  onMoveTask,
+  onOpenTask,
+  onToggleTask,
+}) {
+  const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [dragOverStatus, setDragOverStatus] = useState("");
+
+  if (isLoading) {
+    return (
+      <Stack alignItems="center" spacing={0.75} sx={{ py: 8 }}>
+        <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>Loading tasks...</Typography>
+      </Stack>
+    );
+  }
+
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${taskStatusFilterOptions.length}, minmax(280px, 1fr))`,
+        gap: 1.5,
+        p: 1.75,
+        minWidth: `${taskStatusFilterOptions.length * 280}px`,
+      }}
+    >
+      {taskStatusFilterOptions.map((statusOption) => {
+        const columnTasks = tasks.filter(
+          (task) => String(task.rawTask?.status || "").toLowerCase() === statusOption.value
+        );
+        const columnStyle = statusStyles[statusOption.label] || statusStyles.Todo;
+
+        return (
+          <Sheet
+            key={`kanban-column-${statusOption.value}`}
+            variant="soft"
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              setDragOverStatus(statusOption.value);
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                setDragOverStatus("");
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              const taskId = Number(event.dataTransfer.getData("text/plain") || draggedTaskId);
+              const task = tasks.find((currentTask) => currentTask.rawId === taskId);
+
+              setDraggedTaskId(null);
+              setDragOverStatus("");
+
+              if (task) {
+                onMoveTask(task, statusOption.value);
+              }
+            }}
+            sx={{
+              minWidth: 0,
+              minHeight: 420,
+              p: 1.25,
+              borderRadius: "12px",
+              backgroundColor:
+                dragOverStatus === statusOption.value ? "#eef2ff" : "#f6f8fc",
+              border:
+                dragOverStatus === statusOption.value
+                  ? "1px dashed #3155ff"
+                  : "1px solid #e5eaf5",
+              boxShadow:
+                dragOverStatus === statusOption.value
+                  ? "inset 0 0 0 2px rgba(49, 85, 255, 0.08)"
+                  : "none",
+              transition: "background-color 0.16s ease, border-color 0.16s ease",
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.25 }}>
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <Box
+                  sx={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: "50%",
+                    backgroundColor: columnStyle.color,
+                  }}
+                />
+                <Typography level="title-sm" sx={{ color: "#34415d", fontWeight: 700 }}>
+                  {statusOption.label}
+                </Typography>
+              </Stack>
+              <Chip size="sm" variant="soft" sx={{ fontWeight: 700, ...columnStyle }}>
+                {columnTasks.length}
+              </Chip>
+            </Stack>
+
+            <Stack spacing={1}>
+              {columnTasks.map((task) => {
+                const isSelected = selectedTaskIds.includes(task.rawId);
+
+                return (
+                  <Sheet
+                    key={`kanban-task-${task.rawId}`}
+                    variant="outlined"
+                    role="button"
+                    tabIndex={0}
+                    draggable={!savingTaskIds.includes(task.rawId)}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", String(task.rawId));
+                      setDraggedTaskId(task.rawId);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedTaskId(null);
+                      setDragOverStatus("");
+                    }}
+                    onClick={() => onOpenTask(task)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onOpenTask(task);
+                      }
+                    }}
+                    sx={{
+                      p: 1.25,
+                      borderRadius: "10px",
+                      borderColor: isSelected ? "#3155ff" : "#dfe4f1",
+                      backgroundColor: "#fff",
+                      cursor: savingTaskIds.includes(task.rawId) ? "wait" : "grab",
+                      opacity: draggedTaskId === task.rawId ? 0.45 : 1,
+                      boxShadow: isSelected
+                        ? "0 0 0 2px rgba(49, 85, 255, 0.12)"
+                        : "0 5px 14px rgba(83, 96, 135, 0.08)",
+                      transition: "transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease",
+                      "&:active": {
+                        cursor: savingTaskIds.includes(task.rawId) ? "wait" : "grabbing",
+                      },
+                      "&:hover": {
+                        transform: "translateY(-1px)",
+                        boxShadow: "0 8px 20px rgba(83, 96, 135, 0.14)",
+                      },
+                    }}
+                  >
+                    <Stack spacing={1}>
+                      <Stack direction="row" spacing={0.75} alignItems="center">
+                        <Checkbox
+                          size="sm"
+                          checked={isSelected}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => onToggleTask(task.rawId)}
+                          slotProps={{ input: { "aria-label": `Select task ${task.id}` } }}
+                        />
+                        <Typography level="body-xs" sx={{ color: "#3155ff", fontWeight: 700 }}>
+                          {task.id}
+                        </Typography>
+                        <Tooltip title={copiedTaskId === task.id ? "Copied!" : "Copy task ID"}>
+                          <IconButton
+                            size="sm"
+                            variant="plain"
+                            aria-label={`Copy task ID ${task.id}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onCopyTaskId(task.id);
+                            }}
+                            sx={{ ml: "auto", minWidth: 26, minHeight: 26, color: "#60708e" }}
+                          >
+                            <ContentCopyRounded sx={{ fontSize: "0.95rem" }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+
+                      <Typography level="title-sm" sx={{ color: "#2f3b55", fontWeight: 700 }}>
+                        <OverflowTooltip title={task.title} maxLines={2}>
+                          {task.title}
+                        </OverflowTooltip>
+                      </Typography>
+
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Chip
+                          size="sm"
+                          variant="soft"
+                          sx={{ borderRadius: "999px", fontWeight: 700, ...priorityStyles[task.priority] }}
+                        >
+                          {task.priority}
+                        </Chip>
+                        {task.dueDate ? (
+                          <Typography level="body-xs" sx={{ color: "#697795" }}>
+                            Due {formatDateLabel(task.dueDate)}
+                          </Typography>
+                        ) : null}
+                      </Stack>
+
+                      <Typography level="body-xs" sx={{ color: "#697795" }}>
+                        {task.assignedTo === "-" ? "Unassigned" : task.assignedTo}
+                      </Typography>
+                      {savingTaskIds.includes(task.rawId) ? (
+                        <Typography level="body-xs" sx={{ color: "#3155ff", fontWeight: 700 }}>
+                          Updating status...
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </Sheet>
+                );
+              })}
+
+              {columnTasks.length === 0 ? (
+                <Typography
+                  level="body-sm"
+                  sx={{ py: 3, textAlign: "center", color: "#98a3bd" }}
+                >
+                  No tasks
+                </Typography>
+              ) : null}
+            </Stack>
+          </Sheet>
+        );
+      })}
+    </Box>
+  );
+}
+
 export default function ProjectTasksMain({
   projectTitle = "Project",
   project = null,
@@ -394,6 +626,7 @@ export default function ProjectTasksMain({
   const [rowsPerPage, setRowsPerPage] = useState(initialTaskViewState.limit);
   const [sortRules, setSortRules] = useState(initialTaskViewState.sortRules);
   const [currentPage, setCurrentPage] = useState(initialTaskViewState.page);
+  const [taskView, setTaskView] = useState(initialTaskViewState.view);
   const [pagination, setPagination] = useState(initialPagination);
   const [tasks, setTasks] = useState([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -549,6 +782,12 @@ export default function ProjectTasksMain({
         nextSearchParams.set("limit", String(rowsPerPage));
       }
 
+      if (taskView === "kanban") {
+        nextSearchParams.set("view", "kanban");
+        nextSearchParams.delete("page");
+        nextSearchParams.delete("limit");
+      }
+
       return nextSearchParams;
     }, { replace: true });
   }, [
@@ -558,6 +797,7 @@ export default function ProjectTasksMain({
     rowsPerPage,
     setSearchParams,
     sortRules,
+    taskView,
   ]);
 
   useEffect(() => {
@@ -610,12 +850,30 @@ export default function ProjectTasksMain({
       setIsLoadingTasks(true);
 
       try {
-        const result = await fetchTasks(authSession.token, {
+        const filters = {
           projectId: project.id,
           workspaceId: workspace?.id,
           search: debouncedSearchValue,
           ...debouncedColumnFilters,
           sort: sortRules.map(({ field, order }) => `${field}:${order}`).join(","),
+        };
+
+        if (taskView === "kanban") {
+          const allTasks = await fetchAllTasks(authSession.token, filters);
+          const mappedTasks = allTasks.map((task) => mapApiTaskToTableRow(task));
+
+          setTasks(mappedTasks);
+          setPagination({
+            page: 1,
+            limit: Math.max(1, mappedTasks.length),
+            total: mappedTasks.length,
+            totalPages: 1,
+          });
+          return;
+        }
+
+        const result = await fetchTasks(authSession.token, {
+          ...filters,
           page: currentPage,
           limit: rowsPerPage,
         });
@@ -664,6 +922,7 @@ export default function ProjectTasksMain({
     reloadTasksKey,
     rowsPerPage,
     sortRules,
+    taskView,
     workspace?.id,
   ]);
 
@@ -952,6 +1211,83 @@ export default function ProjectTasksMain({
         },
       }
     );
+  };
+
+  const handleKanbanTaskMove = async (task, nextStatus) => {
+    const currentStatus = String(task?.rawTask?.status || "").toLowerCase();
+
+    if (
+      !task?.rawId ||
+      !authSession?.token ||
+      currentStatus === nextStatus ||
+      savingTaskIds.includes(task.rawId)
+    ) {
+      return;
+    }
+
+    const optimisticTask = {
+      ...task,
+      status: toTitleCase(nextStatus),
+      rawTask: {
+        ...task.rawTask,
+        status: nextStatus,
+      },
+    };
+
+    setTasks((currentTasks) =>
+      currentTasks.map((currentTask) =>
+        currentTask.rawId === task.rawId ? optimisticTask : currentTask
+      )
+    );
+    setSavingTaskIds((currentIds) => [...currentIds, task.rawId]);
+
+    try {
+      const result = await updateTask(
+        task.rawId,
+        {
+          title: task.rawTask?.title || task.title,
+          description: task.rawTask?.description || "",
+          status: nextStatus,
+          priority: task.rawTask?.priority || "medium",
+          taskType: task.rawTask?.taskType || "feature",
+          parentTaskId: task.rawTask?.parentTaskId ?? null,
+          assignedBy: task.rawTask?.assignedBy ?? null,
+          assignedTo: task.rawTask?.assignedTo ?? null,
+          startDate: task.rawTask?.startDate ?? null,
+          dueDate: task.rawTask?.dueDate ?? null,
+          completedAt: task.rawTask?.completedAt ?? null,
+          tags: Array.isArray(task.rawTask?.tags) ? task.rawTask.tags : [],
+        },
+        authSession.token
+      );
+      const updatedTask = result?.task;
+
+      if (updatedTask) {
+        const mappedTask = mapApiTaskToTableRow(updatedTask);
+
+        setTasks((currentTasks) =>
+          currentTasks.map((currentTask) =>
+            currentTask.rawId === task.rawId ? mappedTask : currentTask
+          )
+        );
+        setTaskDrafts((currentDrafts) => ({
+          ...currentDrafts,
+          [task.rawId]: buildEditableTaskValues(mappedTask),
+        }));
+      }
+    } catch (error) {
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.rawId === task.rawId ? task : currentTask
+        )
+      );
+      await showErrorAlert(
+        "Unable to move task",
+        error.message || "The task status could not be updated."
+      );
+    } finally {
+      setSavingTaskIds((currentIds) => currentIds.filter((taskId) => taskId !== task.rawId));
+    }
   };
 
   const handleCopyTaskId = async (taskId) => {
@@ -1383,6 +1719,48 @@ export default function ProjectTasksMain({
               >
                 Filters
               </Button>
+              <Stack
+                direction="row"
+                sx={{
+                  p: 0.35,
+                  border: "1px solid #dfe4f1",
+                  borderRadius: "10px",
+                  backgroundColor: "#f7f9fc",
+                }}
+              >
+                <Tooltip title="List view">
+                  <IconButton
+                    size="sm"
+                    variant={taskView === "list" ? "solid" : "plain"}
+                    color={taskView === "list" ? "primary" : "neutral"}
+                    aria-label="Show tasks in list view"
+                    aria-pressed={taskView === "list"}
+                    onClick={() => {
+                      setTaskView("list");
+                      setCurrentPage(1);
+                    }}
+                    sx={{ borderRadius: "7px" }}
+                  >
+                    <ViewListRounded />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Kanban board">
+                  <IconButton
+                    size="sm"
+                    variant={taskView === "kanban" ? "solid" : "plain"}
+                    color={taskView === "kanban" ? "primary" : "neutral"}
+                    aria-label="Show tasks in Kanban board view"
+                    aria-pressed={taskView === "kanban"}
+                    onClick={() => {
+                      setTaskView("kanban");
+                      setCurrentPage(1);
+                    }}
+                    sx={{ borderRadius: "7px" }}
+                  >
+                    <ViewKanbanRounded />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
               <input
                 ref={importFileInputRef}
                 type="file"
@@ -1893,8 +2271,38 @@ export default function ProjectTasksMain({
             </ModalDialog>
           </Modal>
 
+          {taskView === "kanban" ? (
+            <Box
+              sx={{
+                width: "100%",
+                maxWidth: "100%",
+                overflowX: "auto",
+                borderTop: "1px solid rgba(223, 228, 243, 0.9)",
+                scrollbarWidth: "thin",
+                scrollbarColor: "rgba(120, 130, 154, 0.65) transparent",
+              }}
+            >
+              <TaskKanbanBoard
+                tasks={tasks}
+                isLoading={isLoadingTasks}
+                copiedTaskId={copiedTaskId}
+                savingTaskIds={savingTaskIds}
+                selectedTaskIds={selectedTaskIds}
+                onCopyTaskId={(taskId) => {
+                  void handleCopyTaskId(taskId);
+                }}
+                onMoveTask={(task, status) => {
+                  void handleKanbanTaskMove(task, status);
+                }}
+                onOpenTask={handleShowTask}
+                onToggleTask={handleToggleTaskSelection}
+              />
+            </Box>
+          ) : null}
+
           <Box
             sx={{
+              display: taskView === "list" ? "block" : "none",
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
@@ -2480,6 +2888,7 @@ export default function ProjectTasksMain({
             justifyContent="space-between"
             alignItems={{ xs: "stretch", sm: "center" }}
             sx={{
+              display: taskView === "list" ? "flex" : "none",
               px: 2,
               py: 2,
               borderTop: "1px solid rgba(223, 228, 243, 0.9)",
