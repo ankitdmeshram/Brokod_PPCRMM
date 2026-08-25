@@ -90,6 +90,60 @@ const normalizeOptionalString = (value) => {
   return normalizedValue || "";
 };
 
+const normalizeTaskSortRules = ({ sort, sortBy, sortOrder }) => {
+  const normalizedSort = normalizeOptionalString(sort);
+  const legacySortBy = normalizeOptionalString(sortBy);
+  const legacySortOrder = normalizeOptionalString(sortOrder).toLowerCase();
+
+  if (!normalizedSort) {
+    if (legacySortBy && !allowedTaskSortFields.has(legacySortBy)) {
+      throw new AppError(
+        `sortBy must be one of: ${[...allowedTaskSortFields].join(", ")}.`,
+        400
+      );
+    }
+
+    if (legacySortBy && !allowedSortOrders.has(legacySortOrder)) {
+      throw new AppError("sortOrder must be either asc or desc when sortBy is provided.", 400);
+    }
+
+    if (!legacySortBy && legacySortOrder) {
+      throw new AppError("sortBy is required when sortOrder is provided.", 400);
+    }
+
+    return legacySortBy ? [{ field: legacySortBy, order: legacySortOrder }] : [];
+  }
+
+  const rules = normalizedSort.split(",").map((entry) => {
+    const [field, order, ...extraParts] = entry.split(":").map((part) => part.trim());
+
+    if (extraParts.length > 0 || !allowedTaskSortFields.has(field)) {
+      throw new AppError(
+        `sort fields must be one of: ${[...allowedTaskSortFields].join(", ")}.`,
+        400
+      );
+    }
+
+    const normalizedOrder = String(order || "").toLowerCase();
+
+    if (!allowedSortOrders.has(normalizedOrder)) {
+      throw new AppError("Each sort rule must use asc or desc, for example dueDate:asc.", 400);
+    }
+
+    return { field, order: normalizedOrder };
+  });
+
+  if (rules.length > allowedTaskSortFields.size) {
+    throw new AppError(`A maximum of ${allowedTaskSortFields.size} sort rules is allowed.`, 400);
+  }
+
+  if (new Set(rules.map((rule) => rule.field)).size !== rules.length) {
+    throw new AppError("Each task column may only appear once in sort.", 400);
+  }
+
+  return rules;
+};
+
 const normalizeOptionalInteger = (value) => {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -473,8 +527,11 @@ const validateGetTasksFilters = (filters = {}) => {
   const updatedAt = normalizeOptionalDateFilter(filters?.updatedAt, "updatedAt");
   const createdAt = normalizeOptionalDateFilter(filters?.createdAt, "createdAt");
   const advancedFilters = normalizeAdvancedFilters(filters?.advancedFilters);
-  const sortBy = normalizeOptionalString(filters?.sortBy);
-  const sortOrder = normalizeOptionalString(filters?.sortOrder).toLowerCase();
+  const sortRules = normalizeTaskSortRules({
+    sort: filters?.sort,
+    sortBy: filters?.sortBy,
+    sortOrder: filters?.sortOrder,
+  });
 
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new AppError("projectId is required and must be a valid integer.", 400);
@@ -500,21 +557,6 @@ const validateGetTasksFilters = (filters = {}) => {
     throw new AppError("priority must be one of: low, medium, high, critical.", 400);
   }
 
-  if (sortBy && !allowedTaskSortFields.has(sortBy)) {
-    throw new AppError(
-      `sortBy must be one of: ${[...allowedTaskSortFields].join(", ")}.`,
-      400
-    );
-  }
-
-  if (sortBy && !allowedSortOrders.has(sortOrder)) {
-    throw new AppError("sortOrder must be either asc or desc when sortBy is provided.", 400);
-  }
-
-  if (!sortBy && sortOrder) {
-    throw new AppError("sortBy is required when sortOrder is provided.", 400);
-  }
-
   return {
     projectId,
     workspaceId,
@@ -530,8 +572,7 @@ const validateGetTasksFilters = (filters = {}) => {
     updatedAt,
     createdAt,
     advancedFilters,
-    sortBy,
-    sortOrder,
+    sortRules,
     page,
     limit,
     offset: (page - 1) * limit,

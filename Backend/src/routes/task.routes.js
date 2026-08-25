@@ -59,14 +59,20 @@ const upload = multer({
  *           default: 10
  *         description: Number of tasks to return per page
  *       - in: query
+ *         name: sort
+ *         description: Ordered comma-separated sort rules, for example priority:desc,dueDate:asc.
+ *         schema:
+ *           type: string
+ *           example: priority:desc,dueDate:asc
+ *       - in: query
  *         name: sortBy
- *         description: Optional task-table column used for sorting.
+ *         description: Legacy single-column sort field. Use sort for multi-column sorting.
  *         schema:
  *           type: string
  *           enum: [id, title, status, priority, dueDate, assignedTo, assignedBy]
  *       - in: query
  *         name: sortOrder
- *         description: Required when sortBy is provided.
+ *         description: Legacy direction required when sortBy is provided.
  *         schema:
  *           type: string
  *           enum: [asc, desc]

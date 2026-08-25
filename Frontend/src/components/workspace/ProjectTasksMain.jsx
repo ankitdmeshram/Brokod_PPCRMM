@@ -87,6 +87,7 @@ const taskPageSizes = [5, 10, 25, 50];
 const taskViewQueryKeys = [
   "search",
   ...Object.keys(initialTaskColumnFilters),
+  "sort",
   "sortBy",
   "sortOrder",
   "page",
@@ -112,20 +113,37 @@ const readTaskViewState = (searchParams) => {
     filters.priority = "";
   }
 
-  const requestedSortBy = String(searchParams.get("sortBy") || "").trim();
-  const requestedSortOrder = String(searchParams.get("sortOrder") || "").trim().toLowerCase();
-  const sortBy = allowedSortFields.has(requestedSortBy) ? requestedSortBy : "";
-  const sortOrder = sortBy && ["asc", "desc"].includes(requestedSortOrder)
-    ? requestedSortOrder
-    : "";
+  const sortRules = [];
+  const requestedSort = String(searchParams.get("sort") || "").trim();
+
+  requestedSort.split(",").filter(Boolean).forEach((entry) => {
+    const [field, order, ...extraParts] = entry.split(":").map((part) => part.trim());
+
+    if (
+      extraParts.length === 0 &&
+      allowedSortFields.has(field) &&
+      ["asc", "desc"].includes(order) &&
+      !sortRules.some((rule) => rule.field === field)
+    ) {
+      sortRules.push({ field, order });
+    }
+  });
+
+  if (sortRules.length === 0) {
+    const requestedSortBy = String(searchParams.get("sortBy") || "").trim();
+    const requestedSortOrder = String(searchParams.get("sortOrder") || "").trim().toLowerCase();
+
+    if (allowedSortFields.has(requestedSortBy) && ["asc", "desc"].includes(requestedSortOrder)) {
+      sortRules.push({ field: requestedSortBy, order: requestedSortOrder });
+    }
+  }
   const requestedPage = Number.parseInt(searchParams.get("page") || "1", 10);
   const requestedLimit = Number.parseInt(searchParams.get("limit") || "10", 10);
 
   return {
     search: String(searchParams.get("search") || "").trim(),
     filters,
-    sortBy: sortOrder ? sortBy : "",
-    sortOrder,
+    sortRules,
     page: Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1,
     limit: taskPageSizes.includes(requestedLimit) ? requestedLimit : 10,
   };
@@ -328,8 +346,7 @@ export default function ProjectTasksMain({
   const [draftColumnFilters, setDraftColumnFilters] = useState(initialTaskViewState.filters);
   const [debouncedColumnFilters, setDebouncedColumnFilters] = useState(initialTaskViewState.filters);
   const [rowsPerPage, setRowsPerPage] = useState(initialTaskViewState.limit);
-  const [sortBy, setSortBy] = useState(initialTaskViewState.sortBy);
-  const [sortOrder, setSortOrder] = useState(initialTaskViewState.sortOrder);
+  const [sortRules, setSortRules] = useState(initialTaskViewState.sortRules);
   const [currentPage, setCurrentPage] = useState(initialTaskViewState.page);
   const [pagination, setPagination] = useState(initialPagination);
   const [tasks, setTasks] = useState([]);
@@ -450,9 +467,11 @@ export default function ProjectTasksMain({
         }
       });
 
-      if (sortBy && sortOrder) {
-        nextSearchParams.set("sortBy", sortBy);
-        nextSearchParams.set("sortOrder", sortOrder);
+      if (sortRules.length > 0) {
+        nextSearchParams.set(
+          "sort",
+          sortRules.map(({ field, order }) => `${field}:${order}`).join(",")
+        );
       }
 
       if (currentPage > 1) {
@@ -471,8 +490,7 @@ export default function ProjectTasksMain({
     debouncedSearchValue,
     rowsPerPage,
     setSearchParams,
-    sortBy,
-    sortOrder,
+    sortRules,
   ]);
 
   useEffect(() => {
@@ -530,8 +548,7 @@ export default function ProjectTasksMain({
           workspaceId: workspace?.id,
           search: debouncedSearchValue,
           ...debouncedColumnFilters,
-          sortBy,
-          sortOrder,
+          sort: sortRules.map(({ field, order }) => `${field}:${order}`).join(","),
           page: currentPage,
           limit: rowsPerPage,
         });
@@ -579,8 +596,7 @@ export default function ProjectTasksMain({
     project?.id,
     reloadTasksKey,
     rowsPerPage,
-    sortBy,
-    sortOrder,
+    sortRules,
     workspace?.id,
   ]);
 
@@ -626,15 +642,21 @@ export default function ProjectTasksMain({
   };
 
   const handleSort = (column) => {
-    if (sortBy !== column) {
-      setSortBy(column);
-      setSortOrder("asc");
-    } else if (sortOrder === "asc") {
-      setSortOrder("desc");
-    } else {
-      setSortBy("");
-      setSortOrder("");
-    }
+    setSortRules((currentRules) => {
+      const existingRule = currentRules.find((rule) => rule.field === column);
+
+      if (!existingRule) {
+        return [...currentRules, { field: column, order: "asc" }];
+      }
+
+      if (existingRule.order === "asc") {
+        return currentRules.map((rule) =>
+          rule.field === column ? { ...rule, order: "desc" } : rule
+        );
+      }
+
+      return currentRules.filter((rule) => rule.field !== column);
+    });
 
     setCurrentPage(1);
   };
@@ -1408,9 +1430,11 @@ export default function ProjectTasksMain({
               <thead>
                 <tr>
                   {sortableTaskColumns.map((column) => {
-                    const isActiveSort = sortBy === column.key;
+                    const sortIndex = sortRules.findIndex((rule) => rule.field === column.key);
+                    const activeSortRule = sortRules[sortIndex];
+                    const isActiveSort = sortIndex >= 0;
                     const SortIcon = isActiveSort
-                      ? sortOrder === "asc"
+                      ? activeSortRule.order === "asc"
                         ? ArrowUpwardRounded
                         : ArrowDownwardRounded
                       : UnfoldMoreRounded;
@@ -1421,7 +1445,7 @@ export default function ProjectTasksMain({
                         style={column.style}
                         aria-sort={
                           isActiveSort
-                            ? sortOrder === "asc"
+                            ? activeSortRule.order === "asc"
                               ? "ascending"
                               : "descending"
                             : "none"
@@ -1431,15 +1455,40 @@ export default function ProjectTasksMain({
                           variant="plain"
                           color="neutral"
                           endDecorator={
-                            <SortIcon
-                              sx={{
-                                fontSize: "1rem",
-                                color: isActiveSort ? "#3155ff" : "#98a3bd",
-                              }}
-                            />
+                            <Stack direction="row" spacing={0.35} alignItems="center">
+                              {isActiveSort ? (
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    width: 17,
+                                    height: 17,
+                                    borderRadius: "50%",
+                                    backgroundColor: "#3155ff",
+                                    color: "#fff",
+                                    fontSize: "0.65rem",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {sortIndex + 1}
+                                </Box>
+                              ) : null}
+                              <SortIcon
+                                sx={{
+                                  fontSize: "1rem",
+                                  color: isActiveSort ? "#3155ff" : "#98a3bd",
+                                }}
+                              />
+                            </Stack>
                           }
                           onClick={() => handleSort(column.key)}
-                          aria-label={`Sort by ${column.label}`}
+                          aria-label={
+                            isActiveSort
+                              ? `${column.label}, sort priority ${sortIndex + 1}, ${activeSortRule.order === "asc" ? "ascending" : "descending"}`
+                              : `Add ${column.label} as the next sort column`
+                          }
                           sx={{
                             minHeight: 28,
                             p: 0,

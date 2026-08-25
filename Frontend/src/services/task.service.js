@@ -26,6 +26,7 @@ function appendTaskQueryParams(query, filters = {}) {
     "tags",
     "updatedAt",
     "createdAt",
+    "sort",
     "sortBy",
     "sortOrder",
   ];

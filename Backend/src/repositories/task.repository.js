@@ -322,7 +322,7 @@ const getNextProjectTaskNumber = async (projectId, trx = getDb()) => {
 
 const findAll = async (filters = {}, trx = getDb()) => {
   const query = buildTaskBaseQuery(trx);
-  const sortOrder = filters.sortOrder === "asc" ? "asc" : "desc";
+  const sortRules = Array.isArray(filters.sortRules) ? filters.sortRules : [];
 
   applyTaskFilters(query, filters);
   applyAdvancedTaskFilters(query, filters.advancedFilters);
@@ -335,21 +335,25 @@ const findAll = async (filters = {}, trx = getDb()) => {
     query.offset(filters.offset);
   }
 
-  if (filters.sortBy === "assignedTo") {
-    query.orderByRaw(
-      `LOWER(TRIM(CONCAT(COALESCE(assigned_to_user.first_name, ''), ' ', COALESCE(assigned_to_user.last_name, '')))) ${sortOrder}`
-    );
-  } else if (filters.sortBy === "assignedBy") {
-    query.orderByRaw(
-      `LOWER(TRIM(CONCAT(COALESCE(assigned_by_user.first_name, ''), ' ', COALESCE(assigned_by_user.last_name, '')))) ${sortOrder}`
-    );
-  } else if (taskSortColumns[filters.sortBy]) {
-    query.orderBy(taskSortColumns[filters.sortBy], sortOrder);
-  } else {
+  sortRules.forEach(({ field, order }) => {
+    if (field === "assignedTo") {
+      query.orderByRaw(
+        `LOWER(TRIM(CONCAT(COALESCE(assigned_to_user.first_name, ''), ' ', COALESCE(assigned_to_user.last_name, '')))) ${order}`
+      );
+    } else if (field === "assignedBy") {
+      query.orderByRaw(
+        `LOWER(TRIM(CONCAT(COALESCE(assigned_by_user.first_name, ''), ' ', COALESCE(assigned_by_user.last_name, '')))) ${order}`
+      );
+    } else {
+      query.orderBy(taskSortColumns[field], order);
+    }
+  });
+
+  if (sortRules.length === 0) {
     query.orderBy("tasks.created_at", "desc");
   }
 
-  if (filters.sortBy !== "id") {
+  if (!sortRules.some(({ field }) => field === "id")) {
     query.orderBy("tasks.id", "desc");
   }
 
