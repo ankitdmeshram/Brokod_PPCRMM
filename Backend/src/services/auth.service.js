@@ -15,6 +15,7 @@ const {
   validateUpdateProfilePayload,
 } = require("../validators/auth.validator");
 const AppError = require("../utils/app-error");
+const { invalidateUserCache } = require("../utils/auth-user-cache");
 const { hashPassword, verifyPassword } = require("../utils/password");
 const { toUtcDate } = require("../utils/time");
 
@@ -287,6 +288,7 @@ const updateCurrentUser = async (userId, payload) => {
     phone,
     timeZone,
   });
+  invalidateUserCache(normalizedUserId);
 
   const updatedUser = await userRepository.findById(normalizedUserId);
   return mapUser(updatedUser);

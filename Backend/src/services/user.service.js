@@ -1,6 +1,7 @@
 const { getDb } = require("../config/database");
 const AppError = require("../utils/app-error");
 const userRepository = require("../repositories/user.repository");
+const { invalidateUserCache } = require("../utils/auth-user-cache");
 const { toUtcIsoString } = require("../utils/time");
 
 const mapUser = (user) => ({
@@ -129,6 +130,7 @@ const updateUser = async (userId, payload, currentUserId) => {
     phone,
     role,
   });
+  invalidateUserCache(normalizedUserId);
 
   const updatedUser = await userRepository.findById(normalizedUserId);
   return mapUser(updatedUser);
@@ -158,6 +160,7 @@ const updateUserStatus = async (userId, payload, currentUserId) => {
   await userRepository.updateById(normalizedUserId, {
     isActive: Boolean(payload.isActive),
   });
+  invalidateUserCache(normalizedUserId);
 
   const updatedUser = await userRepository.findById(normalizedUserId);
   return mapUser(updatedUser);
@@ -181,6 +184,7 @@ const deleteUser = async (userId, currentUserId) => {
   }
 
   await userRepository.deleteById(normalizedUserId);
+  invalidateUserCache(normalizedUserId);
 };
 
 module.exports = {

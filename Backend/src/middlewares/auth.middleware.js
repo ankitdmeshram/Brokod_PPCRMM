@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 
 const env = require("../config/env");
 const AppError = require("../utils/app-error");
-const userRepository = require("../repositories/user.repository");
+const { getCachedUserById } = require("../utils/auth-user-cache");
 
 const requireAuth = async (request, _response, next) => {
   const authorizationHeader = request.headers.authorization || "";
@@ -33,7 +33,7 @@ const requireAuth = async (request, _response, next) => {
     return;
   }
 
-  const user = await userRepository.findById(userId);
+  const user = await getCachedUserById(userId);
 
   if (!user) {
     next(new AppError("User not found.", 404));
