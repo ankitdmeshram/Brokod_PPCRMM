@@ -1,5 +1,8 @@
+import ArrowDownwardRounded from "@mui/icons-material/ArrowDownwardRounded";
+import ArrowUpwardRounded from "@mui/icons-material/ArrowUpwardRounded";
 import KeyboardArrowLeftRounded from "@mui/icons-material/KeyboardArrowLeftRounded";
 import KeyboardArrowRightRounded from "@mui/icons-material/KeyboardArrowRightRounded";
+import UnfoldMoreRounded from "@mui/icons-material/UnfoldMoreRounded";
 import {
   Box,
   Button,
@@ -64,6 +67,20 @@ const dateFilters = [
   { key: "createdTo", label: "Created to" },
 ];
 
+const tableColumns = [
+  { key: "id", label: "ID" },
+  { key: "userId", label: "User ID" },
+  { key: "attemptedEmail", label: "Attempted email" },
+  { key: "eventType", label: "Event" },
+  { key: "outcome", label: "Outcome" },
+  { key: "failureReason", label: "Failure reason" },
+  { key: "ipAddress", label: "IP address" },
+  { key: "userAgent", label: "User agent" },
+  { key: "requestId", label: "Request ID" },
+  { key: "sessionId", label: "Session ID" },
+  { key: "createdAt", label: "Created at" },
+];
+
 const compactText = (value, maxLength = 34) => {
   const text = String(value || "");
   return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text || "—";
@@ -95,6 +112,8 @@ export default function AuthTrailsPanel() {
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,6 +147,8 @@ export default function AuthTrailsPanel() {
         const result = await fetchAuthTrails(authSession.token, {
           search: debouncedSearch,
           ...appliedFilters,
+          sortBy,
+          sortOrder,
           page: currentPage,
           limit: rowsPerPage,
         });
@@ -170,6 +191,8 @@ export default function AuthTrailsPanel() {
     debouncedSearch,
     refreshVersion,
     rowsPerPage,
+    sortBy,
+    sortOrder,
   ]);
 
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -212,6 +235,20 @@ export default function AuthTrailsPanel() {
   const closeFilterModal = () => {
     setDraftFilters({ ...appliedFilters });
     setIsFilterModalOpen(false);
+  };
+
+  const handleSort = (column) => {
+    if (sortBy !== column) {
+      setSortBy(column);
+      setSortOrder("asc");
+    } else if (sortOrder === "asc") {
+      setSortOrder("desc");
+    } else {
+      setSortBy("");
+      setSortOrder("");
+    }
+
+    setCurrentPage(1);
   };
 
   return (
@@ -408,17 +445,55 @@ export default function AuthTrailsPanel() {
           >
             <thead>
               <tr>
-                <th>ID</th>
-                <th>User ID</th>
-                <th>Attempted email</th>
-                <th>Event</th>
-                <th>Outcome</th>
-                <th>Failure reason</th>
-                <th>IP address</th>
-                <th>User agent</th>
-                <th>Request ID</th>
-                <th>Session ID</th>
-                <th>Created at</th>
+                {tableColumns.map((column) => {
+                  const isActiveSort = sortBy === column.key;
+                  const SortIcon = isActiveSort
+                    ? sortOrder === "asc"
+                      ? ArrowUpwardRounded
+                      : ArrowDownwardRounded
+                    : UnfoldMoreRounded;
+
+                  return (
+                    <th
+                      key={column.key}
+                      aria-sort={
+                        isActiveSort
+                          ? sortOrder === "asc"
+                            ? "ascending"
+                            : "descending"
+                          : "none"
+                      }
+                    >
+                      <Button
+                        variant="plain"
+                        color="neutral"
+                        endDecorator={
+                          <SortIcon
+                            sx={{
+                              fontSize: "1rem",
+                              color: isActiveSort ? "#3155ff" : "#98a3bd",
+                            }}
+                          />
+                        }
+                        onClick={() => handleSort(column.key)}
+                        aria-label={`Sort by ${column.label}`}
+                        sx={{
+                          minHeight: 28,
+                          p: 0,
+                          color: isActiveSort ? "#3155ff" : "inherit",
+                          font: "inherit",
+                          fontWeight: "inherit",
+                          letterSpacing: "inherit",
+                          textTransform: "inherit",
+                          whiteSpace: "nowrap",
+                          "&:hover": { backgroundColor: "transparent", color: "#3155ff" },
+                        }}
+                      >
+                        {column.label}
+                      </Button>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>

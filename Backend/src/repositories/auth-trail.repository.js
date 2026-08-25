@@ -14,6 +14,20 @@ const authTrailColumns = [
   "created_at",
 ];
 
+const sortColumns = {
+  id: "id",
+  userId: "user_id",
+  attemptedEmail: "attempted_email",
+  eventType: "event_type",
+  outcome: "outcome",
+  failureReason: "failure_reason",
+  ipAddress: "ip_address",
+  userAgent: "user_agent",
+  requestId: "request_id",
+  sessionId: "session_id",
+  createdAt: "created_at",
+};
+
 const applyFilters = (query, filters = {}) => {
   if (filters.search) {
     query.andWhere((builder) => {
@@ -100,7 +114,13 @@ const findAll = async (filters = {}, trx = getDb()) => {
   applyFilters(query, filters);
 
   query.limit(filters.limit).offset(filters.offset);
-  return query.orderBy("created_at", "desc").orderBy("id", "desc");
+  query.orderBy(sortColumns[filters.sortBy], filters.sortOrder);
+
+  if (filters.sortBy !== "id") {
+    query.orderBy("id", "desc");
+  }
+
+  return query;
 };
 
 const countAll = async (filters = {}, trx = getDb()) => {

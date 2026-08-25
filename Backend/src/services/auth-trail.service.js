@@ -15,6 +15,20 @@ const AUTH_TRAIL_OUTCOMES = Object.freeze({
 
 const validEventTypes = new Set(Object.values(AUTH_TRAIL_EVENT_TYPES));
 const validOutcomes = new Set(Object.values(AUTH_TRAIL_OUTCOMES));
+const validSortFields = new Set([
+  "id",
+  "userId",
+  "attemptedEmail",
+  "eventType",
+  "outcome",
+  "failureReason",
+  "ipAddress",
+  "userAgent",
+  "requestId",
+  "sessionId",
+  "createdAt",
+]);
+const validSortOrders = new Set(["asc", "desc"]);
 
 const normalizeOptionalString = (value, maxLength, { lowercase = false } = {}) => {
   if (value === null || value === undefined) {
@@ -122,6 +136,10 @@ const getAuthTrails = async (filters = {}) => {
   const outcome = normalizeFilterString(filters.outcome, "outcome", 20, {
     lowercase: true,
   });
+  const sortBy = normalizeFilterString(filters.sortBy ?? "createdAt", "sortBy", 50);
+  const sortOrder = normalizeFilterString(filters.sortOrder ?? "desc", "sortOrder", 4, {
+    lowercase: true,
+  });
 
   if (eventType && !validEventTypes.has(eventType)) {
     throw new AppError(
@@ -132,6 +150,14 @@ const getAuthTrails = async (filters = {}) => {
 
   if (outcome && !validOutcomes.has(outcome)) {
     throw new AppError(`outcome must be one of: ${[...validOutcomes].join(", ")}.`, 400);
+  }
+
+  if (!validSortFields.has(sortBy)) {
+    throw new AppError(`sortBy must be one of: ${[...validSortFields].join(", ")}.`, 400);
+  }
+
+  if (!validSortOrders.has(sortOrder)) {
+    throw new AppError("sortOrder must be either asc or desc.", 400);
   }
 
   const createdAt = normalizeDateFilter(filters.createdAt, "createdAt");
@@ -165,6 +191,8 @@ const getAuthTrails = async (filters = {}) => {
     createdAt,
     createdFrom,
     createdTo,
+    sortBy,
+    sortOrder,
     limit,
     offset: (page - 1) * limit,
   };

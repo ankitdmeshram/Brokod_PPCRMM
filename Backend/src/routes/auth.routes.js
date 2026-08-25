@@ -155,6 +155,19 @@ const router = Router();
  *         name: limit
  *         schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
  *       - in: query
+ *         name: sortBy
+ *         description: Column used to sort the result set.
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *           enum: [id, userId, attemptedEmail, eventType, outcome, failureReason, ipAddress, userAgent, requestId, sessionId, createdAt]
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           default: desc
+ *           enum: [asc, desc]
+ *       - in: query
  *         name: search
  *         description: Partial attempted-email search; a numeric value also matches user ID.
  *         schema: { type: string }
