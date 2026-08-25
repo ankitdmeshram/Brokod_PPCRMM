@@ -1,7 +1,8 @@
 import ArrowDownwardRounded from "@mui/icons-material/ArrowDownwardRounded";
 import ArrowUpwardRounded from "@mui/icons-material/ArrowUpwardRounded";
+import ContentCopyRounded from "@mui/icons-material/ContentCopyRounded";
 import UnfoldMoreRounded from "@mui/icons-material/UnfoldMoreRounded";
-import { Box, Button, Chip, DialogContent, DialogTitle, Dropdown, FormControl, FormLabel, IconButton, Input, Menu, MenuButton, MenuItem, Modal, ModalClose, ModalDialog, Option, Select, Sheet, Stack, Table, Tooltip, Typography } from "@mui/joy";
+import { Box, Button, Checkbox, Chip, DialogContent, DialogTitle, Dropdown, FormControl, FormLabel, IconButton, Input, Menu, MenuButton, MenuItem, Modal, ModalClose, ModalDialog, Option, Select, Sheet, Stack, Table, Tooltip, Typography } from "@mui/joy";
 import { useTheme } from "@mui/joy/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +16,7 @@ import {
 import { fetchProjectUsers } from "../../services/project.service";
 import { fetchAllWorkspaceUsers } from "../../services/workspace.service";
 import {
+  bulkUpdateTasks,
   createTask,
   deleteTask,
   exportTasksJson,
@@ -52,6 +54,28 @@ const taskPriorityFilterOptions = [
   { value: "high", label: "High" },
   { value: "critical", label: "Critical" },
 ];
+
+const taskTypeOptions = [
+  { value: "feature", label: "Feature" },
+  { value: "bug", label: "Bug" },
+  { value: "improvement", label: "Improvement" },
+  { value: "research", label: "Research" },
+];
+
+const initialBulkEditValues = {
+  title: "",
+  description: "",
+  status: "",
+  priority: "",
+  taskType: "",
+  assignedTo: "",
+  assignedBy: "",
+  parentTaskId: "",
+  startDate: "",
+  dueDate: "",
+  completedAt: "",
+  tags: "",
+};
 
 const initialPagination = {
   page: 1,
@@ -203,6 +227,28 @@ const toTitleCase = (value = "") =>
     .join(" ");
 
 const formatTaskCode = (taskNumber) => `TSK-${taskNumber}`;
+
+const copyTextToClipboard = async (text) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error("Clipboard access is unavailable.");
+  }
+};
 
 const statusStyles = {
   Todo: { backgroundColor: "#eef2ff", color: "#3155ff" },
@@ -362,9 +408,19 @@ export default function ProjectTasksMain({
   const [workspaceUsers, setWorkspaceUsers] = useState([]);
   const [taskDrafts, setTaskDrafts] = useState({});
   const [savingTaskIds, setSavingTaskIds] = useState([]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [bulkEditValues, setBulkEditValues] = useState(initialBulkEditValues);
+  const [bulkEditedFields, setBulkEditedFields] = useState([]);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [hoveredCellKey, setHoveredCellKey] = useState("");
+  const [editingDueDateTaskId, setEditingDueDateTaskId] = useState(null);
+  const [hoveredTaskRowId, setHoveredTaskRowId] = useState(null);
   const [editingTitleTaskId, setEditingTitleTaskId] = useState(null);
+  const [copiedTaskId, setCopiedTaskId] = useState("");
   const importFileInputRef = useRef(null);
+  const copiedTaskIdTimeoutRef = useRef(null);
   const hasMountedTaskViewRef = useRef(false);
   const showClearFilters = hasActiveTaskColumnFilters(columnFilters);
   const activeFilterCount = Object.values(columnFilters).filter(
@@ -411,6 +467,17 @@ export default function ProjectTasksMain({
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = totalTasks === 0 ? 0 : (safeCurrentPage - 1) * rowsPerPage;
   const pageEndIndex = totalTasks === 0 ? 0 : Math.min(pageStartIndex + tasks.length, totalTasks);
+  const visibleTaskIds = tasks.map((task) => task.rawId);
+  const selectedVisibleTaskCount = visibleTaskIds.filter((taskId) =>
+    selectedTaskIds.includes(taskId)
+  ).length;
+  const allVisibleTasksSelected =
+    visibleTaskIds.length > 0 && selectedVisibleTaskCount === visibleTaskIds.length;
+  const someVisibleTasksSelected =
+    selectedVisibleTaskCount > 0 && !allVisibleTasksSelected;
+  const hasBulkEditChanges = bulkEditedFields.some(
+    (field) => String(bulkEditValues[field] ?? "").trim() !== ""
+  );
 
   const paginationItems = useMemo(() => {
     if (totalPages <= 1) {
@@ -747,21 +814,22 @@ export default function ProjectTasksMain({
   };
 
   const handleInlineTaskChange = (taskId, field, value, options = {}) => {
-    let nextDraft = null;
+    const task = tasks.find((currentTask) => currentTask.rawId === taskId);
+    const baseDraft = taskDrafts[taskId] || (task ? buildEditableTaskValues(task) : {});
+    const nextDraft = {
+      ...baseDraft,
+      [field]: value,
+    };
 
-    setTaskDrafts((currentDrafts) => {
-      nextDraft = {
-        ...(currentDrafts[taskId] || {}),
+    setTaskDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [taskId]: {
+        ...(currentDrafts[taskId] || baseDraft),
         [field]: value,
-      };
+      },
+    }));
 
-      return {
-        ...currentDrafts,
-        [taskId]: nextDraft,
-      };
-    });
-
-    if (options.saveImmediately && nextDraft) {
+    if (options.saveImmediately) {
       void flushTaskAutosave(taskId, nextDraft);
     }
   };
@@ -774,7 +842,23 @@ export default function ProjectTasksMain({
     void flushTaskAutosave(taskId);
   };
 
+  const closeInlineDueDateEditor = (taskId) => {
+    setEditingDueDateTaskId(null);
+    setHoveredCellKey((currentKey) =>
+      currentKey === buildHoveredCellKey(taskId, "dueDate") ? "" : currentKey
+    );
+  };
+
+  const handleInlineDueDateChange = (taskId, value) => {
+    handleInlineTaskChange(taskId, "dueDate", value, { saveImmediately: true });
+    closeInlineDueDateEditor(taskId);
+  };
+
   const handleInlineCellMouseLeave = (taskId, field) => {
+    if (field === "dueDate" && editingDueDateTaskId === taskId) {
+      return;
+    }
+
     const cellKey = buildHoveredCellKey(taskId, field);
 
     setHoveredCellKey((currentKey) => (currentKey === cellKey ? "" : currentKey));
@@ -870,6 +954,188 @@ export default function ProjectTasksMain({
     );
   };
 
+  const handleCopyTaskId = async (taskId) => {
+    try {
+      await copyTextToClipboard(taskId);
+      setCopiedTaskId(taskId);
+
+      if (copiedTaskIdTimeoutRef.current) {
+        window.clearTimeout(copiedTaskIdTimeoutRef.current);
+      }
+
+      copiedTaskIdTimeoutRef.current = window.setTimeout(() => {
+        setCopiedTaskId("");
+        copiedTaskIdTimeoutRef.current = null;
+      }, 1500);
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to copy task ID",
+        error.message || "Clipboard access is unavailable."
+      );
+    }
+  };
+
+  useEffect(() => () => {
+    if (copiedTaskIdTimeoutRef.current) {
+      window.clearTimeout(copiedTaskIdTimeoutRef.current);
+    }
+  }, []);
+
+  const handleToggleTaskSelection = (taskId) => {
+    setSelectedTaskIds((currentIds) =>
+      currentIds.includes(taskId)
+        ? currentIds.filter((currentId) => currentId !== taskId)
+        : [...currentIds, taskId]
+    );
+  };
+
+  const handleToggleVisibleTasks = () => {
+    setSelectedTaskIds((currentIds) => {
+      if (allVisibleTasksSelected) {
+        return currentIds.filter((taskId) => !visibleTaskIds.includes(taskId));
+      }
+
+      return Array.from(new Set([...currentIds, ...visibleTaskIds]));
+    });
+  };
+
+  const handleBulkUpdate = async (updates, successLabel) => {
+    if (!authSession?.token || !project?.id || selectedTaskIds.length === 0 || isBulkUpdating) {
+      return false;
+    }
+
+    const taskIds = [...selectedTaskIds];
+    setIsBulkUpdating(true);
+
+    try {
+      const result = await bulkUpdateTasks(
+        {
+          projectId: Number(project.id),
+          taskIds,
+          updates,
+        },
+        authSession.token
+      );
+
+      setSelectedTaskIds([]);
+      setReloadTasksKey((currentValue) => currentValue + 1);
+
+      await showSuccessAlert(
+        "Tasks updated",
+        result?.message ||
+          `${taskIds.length} ${taskIds.length === 1 ? "task was" : "tasks were"} ${successLabel}.`
+      );
+      return true;
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to update selected tasks",
+        error.message || "Something went wrong while updating the selected tasks."
+      );
+      return false;
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
+  const handleBulkEditValueChange = (field, value) => {
+    setBulkEditValues((currentValues) => ({
+      ...currentValues,
+      [field]: value,
+    }));
+    setBulkEditedFields((currentFields) =>
+      currentFields.includes(field) ? currentFields : [...currentFields, field]
+    );
+  };
+
+  const handleApplyBulkEdit = async () => {
+    const updates = Object.entries(bulkEditValues).reduce((nextUpdates, [field, value]) => {
+      if (!bulkEditedFields.includes(field)) {
+        return nextUpdates;
+      }
+
+      const normalizedStringValue = String(value ?? "").trim();
+
+      if (!normalizedStringValue) {
+        return nextUpdates;
+      }
+
+      if (["assignedTo", "assignedBy", "parentTaskId"].includes(field)) {
+        nextUpdates[field] = value === "__clear__" ? null : Number(value);
+      } else if (field === "tags") {
+        nextUpdates[field] = normalizedStringValue
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean);
+      } else {
+        nextUpdates[field] = normalizedStringValue;
+      }
+
+      return nextUpdates;
+    }, {});
+
+    if (Object.keys(updates).length === 0) {
+      return;
+    }
+
+    const updated = await handleBulkUpdate(updates, "updated successfully");
+
+    if (!updated) {
+      return;
+    }
+
+    setBulkEditValues(initialBulkEditValues);
+    setBulkEditedFields([]);
+    setIsBulkEditModalOpen(false);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!authSession?.token || selectedTaskIds.length === 0 || isBulkDeleting) {
+      return;
+    }
+
+    const taskIds = [...selectedTaskIds];
+    const confirmation = await showConfirmAlert(
+      `Delete ${taskIds.length} selected ${taskIds.length === 1 ? "task" : "tasks"}?`,
+      "This action cannot be undone.",
+      {
+        confirmButtonText: "Delete Selected",
+        cancelButtonText: "Cancel",
+      }
+    );
+
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    setIsBulkDeleting(true);
+
+    try {
+      const results = await Promise.allSettled(
+        taskIds.map((taskId) => deleteTask(taskId, authSession.token))
+      );
+      const failedTaskIds = taskIds.filter((_, index) => results[index].status === "rejected");
+      const deletedCount = taskIds.length - failedTaskIds.length;
+
+      setSelectedTaskIds(failedTaskIds);
+      setReloadTasksKey((currentValue) => currentValue + 1);
+
+      if (failedTaskIds.length > 0) {
+        await showErrorAlert(
+          "Some tasks could not be deleted",
+          `${deletedCount} deleted and ${failedTaskIds.length} failed. Failed tasks remain selected.`
+        );
+        return;
+      }
+
+      await showSuccessAlert(
+        "Tasks deleted",
+        `${deletedCount} ${deletedCount === 1 ? "task was" : "tasks were"} deleted successfully.`
+      );
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   const handleDeleteTask = async (task) => {
     if (!authSession?.token) {
       await showErrorAlert("Signin required", "Please sign in again to delete a task.");
@@ -897,6 +1163,9 @@ export default function ProjectTasksMain({
       await showSuccessAlert(
         "Task deleted",
         result?.message || "The task has been deleted successfully."
+      );
+      setSelectedTaskIds((currentIds) =>
+        currentIds.filter((taskId) => taskId !== task.rawId)
       );
 
       const isOnlyRowOnPage = tasks.length === 1 && currentPage > 1;
@@ -1054,12 +1323,26 @@ export default function ProjectTasksMain({
             sx={{ px: 1.75, py: 1.9 }}
           >
             <Stack spacing={0.5}>
-              <Typography
-                level="title-lg"
-                sx={{ fontWeight: 700, color: "var(--color-font-primary)", fontSize: "1.08rem" }}
-              >
-                Tasks
-              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography
+                  level="title-lg"
+                  sx={{ fontWeight: 700, color: "var(--color-font-primary)", fontSize: "1.08rem" }}
+                >
+                  Tasks
+                </Typography>
+                {selectedTaskIds.length > 0 ? (
+                  <Chip
+                    size="sm"
+                    variant="soft"
+                    color="primary"
+                    role="status"
+                    aria-live="polite"
+                    sx={{ fontWeight: 700 }}
+                  >
+                    {selectedTaskIds.length} {selectedTaskIds.length === 1 ? "task" : "tasks"} selected
+                  </Chip>
+                ) : null}
+              </Stack>
               <Typography level="body-sm" sx={{ color: "#5c6d90", maxWidth: 620, fontSize: "0.82rem" }}>
                 Review task definitions, assignments, timelines, comments, and activity history for {projectTitle}.
               </Typography>
@@ -1176,6 +1459,273 @@ export default function ProjectTasksMain({
               </Dropdown>
             </Stack>
           </Stack>
+
+          {selectedTaskIds.length > 0 ? (
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1}
+              alignItems={{ xs: "stretch", md: "center" }}
+              sx={{
+                px: 1.75,
+                py: 1.25,
+                borderTop: "1px solid #e4e9f5",
+                backgroundColor: "#f7f9ff",
+              }}
+            >
+              <Typography level="body-sm" sx={{ color: "#3155ff", fontWeight: 700, mr: 0.5 }}>
+                Bulk Actions
+              </Typography>
+              <Select
+                size="sm"
+                value={null}
+                placeholder="Update Status"
+                disabled={isBulkUpdating || isBulkDeleting}
+                onChange={(_, value) => {
+                  if (value) {
+                    void handleBulkUpdate({ status: value }, `moved to ${toTitleCase(value)}`);
+                  }
+                }}
+                sx={{ minWidth: 150 }}
+              >
+                {taskStatusFilterOptions.map((option) => (
+                  <Option key={`bulk-status-${option.value}`} value={option.value}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
+              <Button
+                size="sm"
+                variant="soft"
+                color="danger"
+                startDecorator={<DeleteIcon />}
+                loading={isBulkDeleting}
+                disabled={isBulkUpdating}
+                onClick={() => {
+                  void handleBulkDelete();
+                }}
+              >
+                Delete Selected
+              </Button>
+              <Button
+                size="sm"
+                variant="outlined"
+                startDecorator={<EditIcon />}
+                disabled={isBulkUpdating || isBulkDeleting}
+                onClick={() => {
+                  setBulkEditValues(initialBulkEditValues);
+                  setBulkEditedFields([]);
+                  setIsBulkEditModalOpen(true);
+                }}
+              >
+                More Updates
+              </Button>
+            </Stack>
+          ) : null}
+
+          <Modal
+            open={isBulkEditModalOpen}
+            onClose={() => {
+              if (!isBulkUpdating) {
+                setIsBulkEditModalOpen(false);
+              }
+            }}
+          >
+            <ModalDialog
+              layout="center"
+              sx={{
+                width: "min(760px, calc(100vw - 32px))",
+                maxHeight: "calc(100vh - 48px)",
+                borderRadius: "14px",
+                p: 0,
+                overflow: "hidden",
+              }}
+            >
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                sx={{ px: { xs: 2, sm: 2.5 }, py: 2, pr: 6, borderBottom: "1px solid #e4e9f5" }}
+              >
+                <EditIcon sx={{ color: "#3155ff" }} />
+                <DialogTitle sx={{ p: 0, color: "#1f2a44" }}>
+                  Update {selectedTaskIds.length} selected {selectedTaskIds.length === 1 ? "task" : "tasks"}
+                </DialogTitle>
+                <ModalClose disabled={isBulkUpdating} />
+              </Stack>
+
+              <DialogContent sx={{ px: { xs: 2, sm: 2.5 }, py: 2.25, overflow: "auto" }}>
+                <Stack spacing={2}>
+                  <Typography level="body-sm" sx={{ color: "#60708e" }}>
+                    Enter values only for the fields you want to change. Empty fields will remain unchanged.
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                      gap: 1.5,
+                    }}
+                  >
+                    <FormControl sx={{ gridColumn: { sm: "1 / -1" } }}>
+                      <FormLabel>Task name</FormLabel>
+                      <Input
+                        value={bulkEditValues.title}
+                        onChange={(event) => handleBulkEditValueChange("title", event.target.value)}
+                        placeholder="Leave empty to keep existing names"
+                        slotProps={{ input: { maxLength: 500 } }}
+                      />
+                    </FormControl>
+                    <FormControl sx={{ gridColumn: { sm: "1 / -1" } }}>
+                      <FormLabel>Description</FormLabel>
+                      <Input
+                        value={bulkEditValues.description}
+                        onChange={(event) => handleBulkEditValueChange("description", event.target.value)}
+                        placeholder="Leave empty to keep existing descriptions"
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Status</FormLabel>
+                      <Select
+                        value={bulkEditValues.status || null}
+                        placeholder="No change"
+                        onChange={(_, value) => handleBulkEditValueChange("status", value || "")}
+                      >
+                        {taskStatusFilterOptions.map((option) => (
+                          <Option key={`bulk-edit-status-${option.value}`} value={option.value}>
+                            {option.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Priority</FormLabel>
+                      <Select
+                        value={bulkEditValues.priority || null}
+                        placeholder="No change"
+                        onChange={(_, value) => handleBulkEditValueChange("priority", value || "")}
+                      >
+                        {taskPriorityFilterOptions.map((option) => (
+                          <Option key={`bulk-edit-priority-${option.value}`} value={option.value}>
+                            {option.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Task type</FormLabel>
+                      <Select
+                        value={bulkEditValues.taskType || null}
+                        placeholder="No change"
+                        onChange={(_, value) => handleBulkEditValueChange("taskType", value || "")}
+                      >
+                        {taskTypeOptions.map((option) => (
+                          <Option key={`bulk-edit-type-${option.value}`} value={option.value}>
+                            {option.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Assignee</FormLabel>
+                      <Select
+                        value={bulkEditValues.assignedTo || null}
+                        placeholder="No change"
+                        onChange={(_, value) => handleBulkEditValueChange("assignedTo", value || "")}
+                      >
+                        <Option value="__clear__">Clear assignment</Option>
+                        {assigneeOptions.map((option) => (
+                          <Option key={`bulk-edit-assignee-${option.id}`} value={String(option.id)}>
+                            {option.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Assigned by</FormLabel>
+                      <Select
+                        value={bulkEditValues.assignedBy || null}
+                        placeholder="No change"
+                        onChange={(_, value) => handleBulkEditValueChange("assignedBy", value || "")}
+                      >
+                        <Option value="__clear__">Clear assignment</Option>
+                        {assigneeOptions.map((option) => (
+                          <Option key={`bulk-edit-assigner-${option.id}`} value={String(option.id)}>
+                            {option.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Parent task ID</FormLabel>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={bulkEditValues.parentTaskId}
+                        onChange={(event) => handleBulkEditValueChange("parentTaskId", event.target.value)}
+                        placeholder="No change"
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Start date</FormLabel>
+                      <Input
+                        type="date"
+                        value={bulkEditValues.startDate}
+                        onChange={(event) => handleBulkEditValueChange("startDate", event.target.value)}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Due date</FormLabel>
+                      <Input
+                        type="date"
+                        value={bulkEditValues.dueDate}
+                        onChange={(event) => handleBulkEditValueChange("dueDate", event.target.value)}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Completed date</FormLabel>
+                      <Input
+                        type="date"
+                        value={bulkEditValues.completedAt}
+                        onChange={(event) => handleBulkEditValueChange("completedAt", event.target.value)}
+                      />
+                    </FormControl>
+                    <FormControl sx={{ gridColumn: { sm: "1 / -1" } }}>
+                      <FormLabel>Tags</FormLabel>
+                      <Input
+                        value={bulkEditValues.tags}
+                        onChange={(event) => handleBulkEditValueChange("tags", event.target.value)}
+                        placeholder="Comma-separated tags; leave empty for no change"
+                      />
+                    </FormControl>
+                  </Box>
+                </Stack>
+              </DialogContent>
+
+              <Stack
+                direction="row"
+                spacing={1}
+                justifyContent="flex-end"
+                sx={{ px: { xs: 2, sm: 2.5 }, py: 1.75, borderTop: "1px solid #e4e9f5" }}
+              >
+                <Button
+                  variant="plain"
+                  color="neutral"
+                  disabled={isBulkUpdating}
+                  onClick={() => setIsBulkEditModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  loading={isBulkUpdating}
+                  disabled={!hasBulkEditChanges}
+                  onClick={() => {
+                    void handleApplyBulkEdit();
+                  }}
+                >
+                  Update Selected
+                </Button>
+              </Stack>
+            </ModalDialog>
+          </Modal>
 
           <Modal open={isFilterModalOpen} onClose={handleCloseFilterModal}>
             <ModalDialog
@@ -1379,7 +1929,13 @@ export default function ProjectTasksMain({
                 },
                 "& thead th:nth-of-type(2)": {
                   position: { xs: "static", md: "sticky" },
-                  left: { md: "102px" },
+                  left: { md: "48px" },
+                  zIndex: { md: 3 },
+                  backgroundColor: "#fff",
+                },
+                "& thead th:nth-of-type(3)": {
+                  position: { xs: "static", md: "sticky" },
+                  left: { md: "150px" },
                   zIndex: { md: 3 },
                   backgroundColor: "#fff",
                   boxShadow: { md: "inset -1px 0 0 rgba(223, 228, 243, 0.95)" },
@@ -1401,7 +1957,13 @@ export default function ProjectTasksMain({
                 },
                 "& tbody td:nth-of-type(2)": {
                   position: { xs: "static", md: "sticky" },
-                  left: { md: "102px" },
+                  left: { md: "48px" },
+                  zIndex: { md: 2 },
+                  backgroundColor: "#fff",
+                },
+                "& tbody td:nth-of-type(3)": {
+                  position: { xs: "static", md: "sticky" },
+                  left: { md: "150px" },
                   zIndex: { md: 2 },
                   backgroundColor: "#fff",
                   boxShadow: { md: "inset -1px 0 0 rgba(236, 240, 249, 0.95)" },
@@ -1419,16 +1981,26 @@ export default function ProjectTasksMain({
                 "& tbody tr:hover td": {
                   backgroundColor: "#f7f9ff",
                 },
-                "& tbody tr:nth-of-type(even) td:nth-of-type(1), & tbody tr:nth-of-type(even) td:nth-of-type(2)": {
+                "& tbody tr:nth-of-type(even) td:nth-of-type(1), & tbody tr:nth-of-type(even) td:nth-of-type(2), & tbody tr:nth-of-type(even) td:nth-of-type(3)": {
                   backgroundColor: "#fcfdff",
                 },
-                "& tbody tr:hover td:nth-of-type(1), & tbody tr:hover td:nth-of-type(2)": {
+                "& tbody tr:hover td:nth-of-type(1), & tbody tr:hover td:nth-of-type(2), & tbody tr:hover td:nth-of-type(3)": {
                   backgroundColor: "#f7f9ff",
                 },
               }}
             >
               <thead>
                 <tr>
+                  <th style={{ width: "48px", minWidth: "48px" }}>
+                    <Checkbox
+                      size="sm"
+                      checked={allVisibleTasksSelected}
+                      indeterminate={someVisibleTasksSelected}
+                      disabled={tasks.length === 0 || isLoadingTasks}
+                      onChange={handleToggleVisibleTasks}
+                      slotProps={{ input: { "aria-label": "Select all tasks on this page" } }}
+                    />
+                  </th>
                   {sortableTaskColumns.map((column) => {
                     const sortIndex = sortRules.findIndex((rule) => rule.field === column.key);
                     const activeSortRule = sortRules[sortIndex];
@@ -1515,7 +2087,7 @@ export default function ProjectTasksMain({
               <tbody>
                 {isLoadingTasks ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           Loading tasks...
@@ -1525,11 +2097,53 @@ export default function ProjectTasksMain({
                   </tr>
                 ) : null}
                 {!isLoadingTasks && tasks.map((task) => (
-                  <tr key={task.id}>
+                  <tr
+                    key={task.id}
+                    onMouseEnter={() => setHoveredTaskRowId(task.rawId)}
+                    onMouseLeave={() => setHoveredTaskRowId(null)}
+                  >
                     <td>
-                      <Typography sx={{ color: "#3155ff", fontWeight: 700 }}>
-                        {task.id}
-                      </Typography>
+                      <Checkbox
+                        size="sm"
+                        checked={selectedTaskIds.includes(task.rawId)}
+                        onChange={() => handleToggleTaskSelection(task.rawId)}
+                        slotProps={{ input: { "aria-label": `Select task ${task.id}` } }}
+                      />
+                    </td>
+                    <td>
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        <Typography sx={{ color: "#3155ff", fontWeight: 700 }}>
+                          {task.id}
+                        </Typography>
+                        <Tooltip title={copiedTaskId === task.id ? "Copied!" : "Copy task ID"}>
+                          <IconButton
+                            size="sm"
+                            variant="plain"
+                            aria-label={
+                              copiedTaskId === task.id
+                                ? `${task.id} copied`
+                                : `Copy task ID ${task.id}`
+                            }
+                            onClick={() => {
+                              void handleCopyTaskId(task.id);
+                            }}
+                            sx={{
+                              minHeight: 26,
+                              minWidth: 26,
+                              p: 0.5,
+                              color: "#3155ff",
+                              opacity:
+                                hoveredTaskRowId === task.rawId || copiedTaskId === task.id ? 1 : 0,
+                              transition: "opacity 0.18s ease",
+                              "&:focus-visible": {
+                                opacity: 1,
+                              },
+                            }}
+                          >
+                            <ContentCopyRounded sx={{ fontSize: "1rem" }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
                     </td>
                     <td
                       onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "taskName"))}
@@ -1729,23 +2343,24 @@ export default function ProjectTasksMain({
                     <td
                       onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "dueDate"))}
                       onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "dueDate")}
-                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
                     >
-                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "dueDate") ? (
+                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "dueDate") ||
+                      editingDueDateTaskId === task.rawId ? (
                         <Input
                           size="sm"
                           type="date"
                           value={taskDrafts[task.rawId]?.dueDate ?? task.dueDate ?? ""}
+                          onFocus={() => setEditingDueDateTaskId(task.rawId)}
                           onChange={(event) =>
-                            handleInlineTaskChange(task.rawId, "dueDate", event.target.value, {
-                              saveImmediately: true,
-                            })
+                            handleInlineDueDateChange(task.rawId, event.target.value)
                           }
-                          onBlur={() => handleInlineTaskBlur(task.rawId)}
+                          onBlur={() => {
+                            closeInlineDueDateEditor(task.rawId);
+                          }}
                           sx={{ "--Input-minHeight": "34px", fontSize: "0.82rem" }}
                         />
                       ) : (
-                        formatDateLabel(task.dueDate)
+                        formatDateLabel(taskDrafts[task.rawId]?.dueDate ?? task.dueDate)
                       )}
                     </td>
                     <td
@@ -1843,7 +2458,7 @@ export default function ProjectTasksMain({
                 ))}
                 {!isLoadingTasks && tasks.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           No tasks found

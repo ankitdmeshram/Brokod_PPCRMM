@@ -185,6 +185,19 @@ export async function updateTask(taskId, payload, token) {
   return parseApiResponse(response);
 }
 
+export async function bulkUpdateTasks(payload, token) {
+  const response = await fetch(`${TASK_API_BASE}/bulk`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
 export async function deleteTask(taskId, token) {
   const response = await fetch(`${TASK_API_BASE}/${taskId}`, {
     method: "DELETE",

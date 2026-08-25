@@ -381,6 +381,12 @@ router.post(
   requireActiveWorkspaceUserByProjectId,
   taskController.importTasks
 );
+router.patch(
+  "/bulk",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  taskController.bulkUpdateTasks
+);
 router.post("/", requireAuth, requireActiveWorkspaceUserByProjectId, taskController.createTask);
 router.get(
   "/slug/:taskSlug",

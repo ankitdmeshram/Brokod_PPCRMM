@@ -8,6 +8,7 @@ const workspaceRepository = require("../repositories/workspace.repository");
 const AppError = require("../utils/app-error");
 const { toUtcIsoString } = require("../utils/time");
 const {
+  validateBulkUpdateTasksPayload,
   validateCreateTaskCommentPayload,
   validateCreateTaskPayload,
   validateExportTasksFilters,
@@ -109,12 +110,12 @@ const mapTaskComment = (comment) => ({
   updatedAt: comment.updated_at ?? comment.updatedAt ?? null,
 });
 
-const assertUserExists = async (userId, label) => {
+const assertUserExists = async (userId, label, trx = getDb()) => {
   if (userId === null || userId === undefined) {
     return;
   }
 
-  const user = await userRepository.findById(userId);
+  const user = await userRepository.findById(userId, trx);
 
   if (!user) {
     throw new AppError(`${label} user not found.`, 404);
@@ -778,6 +779,91 @@ const updateTaskComment = async (taskId, commentId, payload, userId, userRole = 
   return mapTaskComment(updatedComment);
 };
 
+const bulkUpdateTasks = async (payload, userId, userRole = "") => {
+  const { projectId, taskIds, updates } = validateBulkUpdateTasksPayload(payload);
+  const hasUpdate = (field) => Object.prototype.hasOwnProperty.call(updates, field);
+
+  return getDb().transaction(async (trx) => {
+    const project = isSuperAdmin(userRole)
+      ? await projectRepository.findById(projectId, trx)
+      : await projectRepository.findByIdForUser(projectId, userId, trx);
+
+    if (!project) {
+      throw new AppError("Project not found.", 404);
+    }
+
+    const updatedTasks = [];
+
+    for (const taskId of taskIds) {
+      const task = await taskRepository.findById(taskId, trx);
+
+      if (!task || Number(task.project_id ?? task.projectId) !== projectId) {
+        throw new AppError(`Task ${taskId} was not found in this project.`, 404);
+      }
+
+      if (!isSuperAdmin(userRole)) {
+        const isCreator = Number(task.created_by ?? task.createdBy) === Number(userId);
+
+        if (!canManageProjectTasks(project, userRole) && !isCreator) {
+          throw new AppError(
+            "Only the task creator, project owner, or workspace owner/admin can update selected tasks.",
+            403
+          );
+        }
+      }
+
+      const currentTask = mapTask(task);
+      const normalizedUpdates = validateUpdateTaskPayload({
+        title: hasUpdate("title") ? updates.title : currentTask.title,
+        description: hasUpdate("description") ? updates.description : currentTask.description,
+        status: hasUpdate("status") ? updates.status : currentTask.status,
+        priority: hasUpdate("priority") ? updates.priority : currentTask.priority,
+        taskType: hasUpdate("taskType") ? updates.taskType : currentTask.taskType,
+        parentTaskId: hasUpdate("parentTaskId")
+          ? updates.parentTaskId
+          : currentTask.parentTaskId,
+        assignedBy: hasUpdate("assignedBy") ? updates.assignedBy : currentTask.assignedBy,
+        assignedTo: hasUpdate("assignedTo") ? updates.assignedTo : currentTask.assignedTo,
+        startDate: hasUpdate("startDate") ? updates.startDate : currentTask.startDate,
+        dueDate: hasUpdate("dueDate") ? updates.dueDate : currentTask.dueDate,
+        completedAt: hasUpdate("completedAt")
+          ? updates.completedAt
+          : currentTask.completedAt,
+        tags: hasUpdate("tags") ? updates.tags : currentTask.tags,
+      });
+
+      await Promise.all([
+        assertUserExists(normalizedUpdates.assignedBy, "assignedBy", trx),
+        assertUserExists(normalizedUpdates.assignedTo, "assignedTo", trx),
+      ]);
+
+      const parentTaskId = await assertParentTaskValid(
+        normalizedUpdates.parentTaskId,
+        {
+          projectId,
+          workspaceId: Number(task.workspace_id ?? task.workspaceId),
+          currentTaskId: taskId,
+        },
+        trx
+      );
+
+      await taskRepository.updateById(
+        taskId,
+        {
+          ...normalizedUpdates,
+          parentTaskId,
+          slug: task.slug,
+        },
+        trx
+      );
+
+      updatedTasks.push(mapTask(await taskRepository.findById(taskId, trx)));
+    }
+
+    return updatedTasks;
+  });
+};
+
 const updateTask = async (taskId, payload, userId, userRole = "") => {
   const normalizedTaskId = validateTaskId(taskId);
   const updates = validateUpdateTaskPayload(payload);
@@ -870,6 +956,7 @@ const deleteTask = async (taskId, userId, userRole = "") => {
 };
 
 module.exports = {
+  bulkUpdateTasks,
   createTaskComment,
   createTask,
   deleteTask,

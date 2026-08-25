@@ -187,6 +187,20 @@ const updateTask = asyncHandler(async (request, response) => {
   });
 });
 
+const bulkUpdateTasks = asyncHandler(async (request, response) => {
+  const tasks = await taskService.bulkUpdateTasks(
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    message: `${tasks.length} task${tasks.length === 1 ? "" : "s"} updated successfully.`,
+    count: tasks.length,
+    tasks,
+  });
+});
+
 const deleteTask = asyncHandler(async (request, response) => {
   await taskService.deleteTask(
     request.params.taskId,
@@ -200,6 +214,7 @@ const deleteTask = asyncHandler(async (request, response) => {
 });
 
 module.exports = {
+  bulkUpdateTasks,
   createTaskComment,
   createTask,
   deleteTask,

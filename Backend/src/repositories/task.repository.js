@@ -101,12 +101,17 @@ const applyTaskFilters = (query, filters = {}) => {
   }
 
   if (filters.search) {
-    const likeSearch = `%${filters.search}%`;
+    const rawSearch = String(filters.search).trim();
+    const likeSearch = `%${rawSearch}%`;
+    const taskCodeMatch = rawSearch.match(/^tsk-\s*(.+)$/i);
+    const likeProjectTaskNumber = taskCodeMatch
+      ? `%${taskCodeMatch[1].trim()}%`
+      : likeSearch;
 
     query.andWhere((builder) => {
       builder
         .whereRaw("CAST(tasks.id AS CHAR) like ?", [likeSearch])
-        .orWhereRaw("CAST(tasks.project_task_number AS CHAR) like ?", [likeSearch])
+        .orWhereRaw("CAST(tasks.project_task_number AS CHAR) like ?", [likeProjectTaskNumber])
         .orWhereRaw("CAST(tasks.project_id AS CHAR) like ?", [likeSearch])
         .orWhereRaw("CAST(tasks.workspace_id AS CHAR) like ?", [likeSearch])
         .orWhere("tasks.title", "like", likeSearch)

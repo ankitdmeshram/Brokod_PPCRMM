@@ -19,6 +19,21 @@ const allowedTaskSortFields = new Set([
 const allowedSortOrders = new Set(["asc", "desc"]);
 const MAX_TASK_TITLE_LENGTH = 500;
 const MAX_TASK_COMMENT_LENGTH = 10000;
+const MAX_BULK_TASKS = 500;
+const bulkEditableTaskFields = new Set([
+  "title",
+  "description",
+  "status",
+  "priority",
+  "taskType",
+  "parentTaskId",
+  "assignedBy",
+  "assignedTo",
+  "startDate",
+  "dueDate",
+  "completedAt",
+  "tags",
+]);
 
 const advancedTaskFilterFields = {
   id: { type: "number" },
@@ -416,10 +431,6 @@ const validateCreateTaskPayload = (payload) => {
     throw new AppError("assignedTo must be a valid integer when provided.", 400);
   }
 
-  if (startDate && dueDate && compareUtc(dueDate, startDate) < 0) {
-    throw new AppError("dueDate cannot be earlier than startDate.", 400);
-  }
-
   if (startDate && completedAt && compareUtc(completedAt, startDate) < 0) {
     throw new AppError("completedAt cannot be earlier than startDate.", 400);
   }
@@ -490,14 +501,6 @@ const validateUpdateTaskPayload = (payload) => {
 
   if (
     normalizedPayload.startDate &&
-    normalizedPayload.dueDate &&
-    compareUtc(normalizedPayload.dueDate, normalizedPayload.startDate) < 0
-  ) {
-    throw new AppError("dueDate cannot be earlier than startDate.", 400);
-  }
-
-  if (
-    normalizedPayload.startDate &&
     normalizedPayload.completedAt &&
     compareUtc(normalizedPayload.completedAt, normalizedPayload.startDate) < 0
   ) {
@@ -505,6 +508,44 @@ const validateUpdateTaskPayload = (payload) => {
   }
 
   return normalizedPayload;
+};
+
+const validateBulkUpdateTasksPayload = (payload = {}) => {
+  const projectId = Number(payload?.projectId);
+  const taskIds = Array.isArray(payload?.taskIds)
+    ? [...new Set(payload.taskIds.map(Number))]
+    : [];
+  const updates = payload?.updates;
+
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    throw new AppError("projectId is required and must be a valid integer.", 400);
+  }
+
+  if (
+    taskIds.length === 0 ||
+    taskIds.length > MAX_BULK_TASKS ||
+    taskIds.some((taskId) => !Number.isInteger(taskId) || taskId <= 0)
+  ) {
+    throw new AppError(`taskIds must contain between 1 and ${MAX_BULK_TASKS} valid task ids.`, 400);
+  }
+
+  if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+    throw new AppError("updates must be an object.", 400);
+  }
+
+  const updateFields = Object.keys(updates);
+
+  if (updateFields.length === 0) {
+    throw new AppError("Please provide at least one task field to update.", 400);
+  }
+
+  const unsupportedField = updateFields.find((field) => !bulkEditableTaskFields.has(field));
+
+  if (unsupportedField) {
+    throw new AppError(`${unsupportedField} cannot be updated in bulk.`, 400);
+  }
+
+  return { projectId, taskIds, updates };
 };
 
 const validateGetTasksFilters = (filters = {}) => {
@@ -698,6 +739,7 @@ const validateCreateTaskCommentPayload = (payload = {}) => {
 };
 
 module.exports = {
+  validateBulkUpdateTasksPayload,
   validateCreateTaskCommentPayload,
   validateCreateTaskPayload,
   validateExportTasksFilters,
