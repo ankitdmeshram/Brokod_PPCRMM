@@ -16,7 +16,7 @@ import {
   showErrorAlert,
   showSuccessAlert,
 } from "../../services/alert.service";
-import { fetchProjectUsers } from "../../services/project.service";
+import { fetchProjectUsers, updateProjectTaskColumns } from "../../services/project.service";
 import { fetchAllWorkspaceUsers } from "../../services/workspace.service";
 import {
   bulkUpdateTasks,
@@ -43,6 +43,7 @@ import {
   MenuIcon,
   PlusIcon,
   SearchIcon,
+  ViewColumnIcon,
 } from "./WorkspaceIcons";
 
 const taskStatusFilterOptions = [
@@ -111,6 +112,44 @@ const sortableTaskColumns = [
   { key: "assignedTo", label: "Assignee", style: { width: "160px", minWidth: "160px" } },
   { key: "assignedBy", label: "Assigned By", style: { width: "160px", minWidth: "160px" } },
 ];
+
+// ID and Task Name anchor the sticky columns and always stay put; only the
+// columns after them can be hidden or reordered from Manage Columns.
+const pinnedTaskColumnKeys = ["id", "title"];
+const manageableTaskColumnKeys = sortableTaskColumns
+  .map((column) => column.key)
+  .filter((key) => !pinnedTaskColumnKeys.includes(key));
+
+const buildDefaultTaskColumnSettings = () =>
+  manageableTaskColumnKeys.map((key) => ({ key, visible: true }));
+
+const normalizeTaskColumnSettings = (rawColumns) => {
+  if (!Array.isArray(rawColumns) || rawColumns.length === 0) {
+    return buildDefaultTaskColumnSettings();
+  }
+
+  const seenKeys = new Set();
+  const normalized = [];
+
+  rawColumns.forEach((column) => {
+    const key = String(column?.key || "");
+
+    if (!manageableTaskColumnKeys.includes(key) || seenKeys.has(key)) {
+      return;
+    }
+
+    seenKeys.add(key);
+    normalized.push({ key, visible: column?.visible !== false });
+  });
+
+  manageableTaskColumnKeys.forEach((key) => {
+    if (!seenKeys.has(key)) {
+      normalized.push({ key, visible: true });
+    }
+  });
+
+  return normalized;
+};
 
 const taskPageSizes = [5, 10, 25, 50];
 const taskViewQueryKeys = [
@@ -617,7 +656,7 @@ function TaskKanbanBoard({
                           onChange={() => onToggleTask(task.rawId)}
                           slotProps={{ input: { "aria-label": `Select task ${task.id}` } }}
                         />
-                        <Typography level="body-xs" sx={{ color: "#3155ff", fontWeight: 700 }}>
+                        <Typography level="body-xs" sx={{ color: "#3155ff", fontWeight: 700, textWrapMode: "nowrap" }}>
                           {task.id}
                         </Typography>
                         <Tooltip title={copiedTaskId === task.id ? "Copied!" : "Copy task ID"}>
@@ -739,6 +778,14 @@ export default function ProjectTasksMain({
   const [copiedTaskId, setCopiedTaskId] = useState("");
   const [draggedRowTaskId, setDraggedRowTaskId] = useState(null);
   const [rowDropTarget, setRowDropTarget] = useState(null);
+  const [taskColumnSettings, setTaskColumnSettings] = useState(() =>
+    normalizeTaskColumnSettings(project?.taskListColumns)
+  );
+  const [isManageColumnsModalOpen, setIsManageColumnsModalOpen] = useState(false);
+  const [draftColumnSettings, setDraftColumnSettings] = useState([]);
+  const [isSavingColumnSettings, setIsSavingColumnSettings] = useState(false);
+  const [draggedColumnKey, setDraggedColumnKey] = useState(null);
+  const [columnDropTarget, setColumnDropTarget] = useState(null);
   const importFileInputRef = useRef(null);
   const copiedTaskIdTimeoutRef = useRef(null);
   const hasMountedTaskViewRef = useRef(false);
@@ -760,6 +807,29 @@ export default function ProjectTasksMain({
     `${String(currentUser?.firstName || "").trim()} ${String(currentUser?.lastName || "").trim()}`.trim() ||
     currentUser?.email ||
     "Current User";
+  const workspaceMembershipRole = String(workspace?.membershipRole || "")
+    .trim()
+    .toLowerCase();
+  const isWorkspaceOwnerOrAdmin =
+    workspaceMembershipRole === "owner" || workspaceMembershipRole === "admin";
+  const isProjectOwner =
+    String(project?.membershipRole || "")
+      .trim()
+      .toLowerCase() === "owner";
+  const canManageTaskColumns = isWorkspaceOwnerOrAdmin || isProjectOwner;
+
+  const orderedVisibleTaskColumns = useMemo(() => {
+    const pinnedColumns = sortableTaskColumns.filter((column) =>
+      pinnedTaskColumnKeys.includes(column.key)
+    );
+    const visibleManageableColumns = taskColumnSettings
+      .filter((setting) => setting.visible)
+      .map((setting) => sortableTaskColumns.find((column) => column.key === setting.key))
+      .filter(Boolean);
+
+    return [...pinnedColumns, ...visibleManageableColumns];
+  }, [taskColumnSettings]);
+  const taskTableColumnCount = orderedVisibleTaskColumns.length + 2;
 
   const initialTaskFormValues = useMemo(
     () =>
@@ -825,6 +895,10 @@ export default function ProjectTasksMain({
 
     return () => window.clearTimeout(timeoutId);
   }, [searchValue]);
+
+  useEffect(() => {
+    setTaskColumnSettings(normalizeTaskColumnSettings(project?.taskListColumns));
+  }, [project?.taskListColumns]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1824,6 +1898,277 @@ export default function ProjectTasksMain({
     }
   };
 
+  const handleOpenManageColumnsModal = () => {
+    setDraftColumnSettings(taskColumnSettings.map((column) => ({ ...column })));
+    setDraggedColumnKey(null);
+    setColumnDropTarget(null);
+    setIsManageColumnsModalOpen(true);
+  };
+
+  const handleCloseManageColumnsModal = () => {
+    if (isSavingColumnSettings) {
+      return;
+    }
+
+    setIsManageColumnsModalOpen(false);
+  };
+
+  const handleToggleColumnVisible = (key) => {
+    setDraftColumnSettings((currentSettings) =>
+      currentSettings.map((column) =>
+        column.key === key ? { ...column, visible: !column.visible } : column
+      )
+    );
+  };
+
+  const handleColumnDragEnd = () => {
+    setDraggedColumnKey(null);
+    setColumnDropTarget(null);
+  };
+
+  const handleColumnDrop = (targetKey, placeAfter) => {
+    setDraftColumnSettings((currentSettings) => {
+      const draggedIndex = currentSettings.findIndex((column) => column.key === draggedColumnKey);
+
+      if (draggedIndex === -1 || draggedColumnKey === targetKey) {
+        return currentSettings;
+      }
+
+      const nextSettings = [...currentSettings];
+      const [draggedColumn] = nextSettings.splice(draggedIndex, 1);
+      let targetIndex = nextSettings.findIndex((column) => column.key === targetKey);
+
+      if (targetIndex === -1) {
+        return currentSettings;
+      }
+
+      if (placeAfter) {
+        targetIndex += 1;
+      }
+
+      nextSettings.splice(targetIndex, 0, draggedColumn);
+      return nextSettings;
+    });
+
+    handleColumnDragEnd();
+  };
+
+  const handleResetColumnDefaults = () => {
+    setDraftColumnSettings(buildDefaultTaskColumnSettings());
+  };
+
+  const handleSaveColumnSettings = async () => {
+    if (!authSession?.token || !project?.id) {
+      return;
+    }
+
+    if (!draftColumnSettings.some((column) => column.visible)) {
+      await showErrorAlert(
+        "At least one column required",
+        "Please keep at least one column visible."
+      );
+      return;
+    }
+
+    setIsSavingColumnSettings(true);
+
+    try {
+      const result = await updateProjectTaskColumns(
+        project.id,
+        { columns: draftColumnSettings },
+        authSession.token
+      );
+
+      setTaskColumnSettings(normalizeTaskColumnSettings(result?.project?.taskListColumns));
+      setIsManageColumnsModalOpen(false);
+      await showSuccessAlert(
+        "Columns updated",
+        result?.message || "The task list columns have been updated successfully."
+      );
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to update columns",
+        error.message || "Something went wrong while saving column settings."
+      );
+    } finally {
+      setIsSavingColumnSettings(false);
+    }
+  };
+
+  const renderTaskColumnCell = (task, columnKey) => {
+    switch (columnKey) {
+      case "status":
+        return (
+          <td
+            key="status"
+            onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "status"))}
+            onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "status")}
+            onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+          >
+            {hoveredCellKey === buildHoveredCellKey(task.rawId, "status") ? (
+              <Select
+                size="sm"
+                value={taskDrafts[task.rawId]?.status ?? task.rawTask?.status ?? "todo"}
+                onChange={(_, value) =>
+                  handleInlineTaskChange(task.rawId, "status", value || "todo", {
+                    saveImmediately: true,
+                  })
+                }
+                onClose={() => handleInlineTaskBlur(task.rawId)}
+                sx={{ minHeight: "34px", fontSize: "0.85rem" }}
+              >
+                {taskStatusFilterOptions.map((option) => (
+                  <Option key={`inline-status-${task.rawId}-${option.value}`} value={option.value}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
+            ) : (
+              <Chip
+                size="sm"
+                variant="soft"
+                sx={{ borderRadius: "999px", fontWeight: 700, ...statusStyles[task.status] }}
+              >
+                {task.status}
+              </Chip>
+            )}
+          </td>
+        );
+      case "priority":
+        return (
+          <td
+            key="priority"
+            onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "priority"))}
+            onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "priority")}
+            onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+          >
+            {hoveredCellKey === buildHoveredCellKey(task.rawId, "priority") ? (
+              <Select
+                size="sm"
+                value={taskDrafts[task.rawId]?.priority ?? task.rawTask?.priority ?? "medium"}
+                onChange={(_, value) =>
+                  handleInlineTaskChange(task.rawId, "priority", value || "medium", {
+                    saveImmediately: true,
+                  })
+                }
+                onClose={() => handleInlineTaskBlur(task.rawId)}
+                sx={{ minHeight: "34px", fontSize: "0.85rem" }}
+              >
+                {taskPriorityFilterOptions.map((option) => (
+                  <Option key={`inline-priority-${task.rawId}-${option.value}`} value={option.value}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
+            ) : (
+              <Chip
+                size="sm"
+                variant="soft"
+                sx={{ borderRadius: "999px", fontWeight: 700, ...priorityStyles[task.priority] }}
+              >
+                {task.priority}
+              </Chip>
+            )}
+          </td>
+        );
+      case "dueDate":
+        return (
+          <td
+            key="dueDate"
+            onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "dueDate"))}
+            onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "dueDate")}
+          >
+            {hoveredCellKey === buildHoveredCellKey(task.rawId, "dueDate") ||
+            editingDueDateTaskId === task.rawId ? (
+              <Input
+                size="sm"
+                type="date"
+                value={taskDrafts[task.rawId]?.dueDate ?? task.dueDate ?? ""}
+                onFocus={() => setEditingDueDateTaskId(task.rawId)}
+                onChange={(event) =>
+                  handleInlineDueDateChange(task.rawId, event.target.value)
+                }
+                onBlur={() => {
+                  closeInlineDueDateEditor(task.rawId);
+                }}
+                sx={{ "--Input-minHeight": "34px", fontSize: "0.82rem" }}
+              />
+            ) : (
+              formatDateLabel(taskDrafts[task.rawId]?.dueDate ?? task.dueDate)
+            )}
+          </td>
+        );
+      case "assignedTo":
+        return (
+          <td
+            key="assignedTo"
+            onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "assignedTo"))}
+            onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "assignedTo")}
+            onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+          >
+            {hoveredCellKey === buildHoveredCellKey(task.rawId, "assignedTo") ? (
+              <Select
+                size="sm"
+                value={taskDrafts[task.rawId]?.assignedTo ?? ""}
+                onChange={(_, value) =>
+                  handleInlineTaskChange(task.rawId, "assignedTo", value || "", {
+                    saveImmediately: true,
+                  })
+                }
+                onClose={() => handleInlineTaskBlur(task.rawId)}
+                placeholder="Assignee"
+                sx={{ minHeight: "34px", fontSize: "0.82rem" }}
+              >
+                <Option value="">Unassigned</Option>
+                {assigneeOptions.map((option) => (
+                  <Option key={`inline-assigned-to-${task.rawId}-${option.id}`} value={String(option.id)}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
+            ) : (
+              task.assignedTo
+            )}
+          </td>
+        );
+      case "assignedBy":
+        return (
+          <td
+            key="assignedBy"
+            onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "assignedBy"))}
+            onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "assignedBy")}
+            onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+          >
+            {hoveredCellKey === buildHoveredCellKey(task.rawId, "assignedBy") ? (
+              <Select
+                size="sm"
+                value={taskDrafts[task.rawId]?.assignedBy ?? ""}
+                onChange={(_, value) =>
+                  handleInlineTaskChange(task.rawId, "assignedBy", value || "", {
+                    saveImmediately: true,
+                  })
+                }
+                onClose={() => handleInlineTaskBlur(task.rawId)}
+                placeholder="Assigned by"
+                sx={{ minHeight: "34px", fontSize: "0.82rem" }}
+              >
+                <Option value="">Not set</Option>
+                {assigneeOptions.map((option) => (
+                  <Option key={`inline-assigned-by-${task.rawId}-${option.id}`} value={String(option.id)}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
+            ) : (
+              task.assignedBy
+            )}
+          </td>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -2050,6 +2395,15 @@ export default function ProjectTasksMain({
                     <ExportIcon />
                     {isExportingTasks ? "Exporting..." : "Export Tasks"}
                   </MenuItem>
+                  {canManageTaskColumns ? (
+                    <MenuItem
+                      onClick={handleOpenManageColumnsModal}
+                      sx={{ gap: 1, borderRadius: "8px" }}
+                    >
+                      <ViewColumnIcon />
+                      Manage Columns
+                    </MenuItem>
+                  ) : null}
                 </Menu>
               </Dropdown>
             </Stack>
@@ -2652,7 +3006,7 @@ export default function ProjectTasksMain({
                       />
                     </Stack>
                   </th>
-                  {sortableTaskColumns.map((column) => {
+                  {orderedVisibleTaskColumns.map((column) => {
                     const sortIndex = sortRules.findIndex((rule) => rule.field === column.key);
                     const activeSortRule = sortRules[sortIndex];
                     const isActiveSort = sortIndex >= 0;
@@ -2738,7 +3092,7 @@ export default function ProjectTasksMain({
               <tbody>
                 {isLoadingTasks ? (
                   <tr>
-                    <td colSpan={9}>
+                    <td colSpan={taskTableColumnCount}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           Loading tasks...
@@ -2846,7 +3200,7 @@ export default function ProjectTasksMain({
                     </td>
                     <td>
                       <Stack direction="row" spacing={0.5} alignItems="center">
-                        <Typography sx={{ color: "#3155ff", fontWeight: 700 }}>
+                        <Typography sx={{ color: "#3155ff", fontWeight: 700, textWrapMode: "nowrap" }}>
                           {task.id}
                         </Typography>
                         <Tooltip title={copiedTaskId === task.id ? "Copied!" : "Copy task ID"}>
@@ -3008,153 +3362,9 @@ export default function ProjectTasksMain({
                         </Stack>
                       )}
                     </td>
-                    <td
-                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "status"))}
-                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "status")}
-                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
-                    >
-                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "status") ? (
-                        <Select
-                          size="sm"
-                          value={taskDrafts[task.rawId]?.status ?? task.rawTask?.status ?? "todo"}
-                          onChange={(_, value) =>
-                            handleInlineTaskChange(task.rawId, "status", value || "todo", {
-                              saveImmediately: true,
-                            })
-                          }
-                          onClose={() => handleInlineTaskBlur(task.rawId)}
-                          sx={{ minHeight: "34px", fontSize: "0.85rem" }}
-                        >
-                          {taskStatusFilterOptions.map((option) => (
-                            <Option key={`inline-status-${task.rawId}-${option.value}`} value={option.value}>
-                              {option.label}
-                            </Option>
-                          ))}
-                        </Select>
-                      ) : (
-                        <Chip
-                          size="sm"
-                          variant="soft"
-                          sx={{ borderRadius: "999px", fontWeight: 700, ...statusStyles[task.status] }}
-                        >
-                          {task.status}
-                        </Chip>
-                      )}
-                    </td>
-                    <td
-                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "priority"))}
-                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "priority")}
-                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
-                    >
-                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "priority") ? (
-                        <Select
-                          size="sm"
-                          value={taskDrafts[task.rawId]?.priority ?? task.rawTask?.priority ?? "medium"}
-                          onChange={(_, value) =>
-                            handleInlineTaskChange(task.rawId, "priority", value || "medium", {
-                              saveImmediately: true,
-                            })
-                          }
-                          onClose={() => handleInlineTaskBlur(task.rawId)}
-                          sx={{ minHeight: "34px", fontSize: "0.85rem" }}
-                        >
-                          {taskPriorityFilterOptions.map((option) => (
-                            <Option key={`inline-priority-${task.rawId}-${option.value}`} value={option.value}>
-                              {option.label}
-                            </Option>
-                          ))}
-                        </Select>
-                      ) : (
-                        <Chip
-                          size="sm"
-                          variant="soft"
-                          sx={{ borderRadius: "999px", fontWeight: 700, ...priorityStyles[task.priority] }}
-                        >
-                          {task.priority}
-                        </Chip>
-                      )}
-                    </td>
-                    <td
-                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "dueDate"))}
-                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "dueDate")}
-                    >
-                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "dueDate") ||
-                      editingDueDateTaskId === task.rawId ? (
-                        <Input
-                          size="sm"
-                          type="date"
-                          value={taskDrafts[task.rawId]?.dueDate ?? task.dueDate ?? ""}
-                          onFocus={() => setEditingDueDateTaskId(task.rawId)}
-                          onChange={(event) =>
-                            handleInlineDueDateChange(task.rawId, event.target.value)
-                          }
-                          onBlur={() => {
-                            closeInlineDueDateEditor(task.rawId);
-                          }}
-                          sx={{ "--Input-minHeight": "34px", fontSize: "0.82rem" }}
-                        />
-                      ) : (
-                        formatDateLabel(taskDrafts[task.rawId]?.dueDate ?? task.dueDate)
-                      )}
-                    </td>
-                    <td
-                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "assignedTo"))}
-                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "assignedTo")}
-                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
-                    >
-                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "assignedTo") ? (
-                        <Select
-                          size="sm"
-                          value={taskDrafts[task.rawId]?.assignedTo ?? ""}
-                          onChange={(_, value) =>
-                            handleInlineTaskChange(task.rawId, "assignedTo", value || "", {
-                              saveImmediately: true,
-                            })
-                          }
-                          onClose={() => handleInlineTaskBlur(task.rawId)}
-                          placeholder="Assignee"
-                          sx={{ minHeight: "34px", fontSize: "0.82rem" }}
-                        >
-                          <Option value="">Unassigned</Option>
-                          {assigneeOptions.map((option) => (
-                            <Option key={`inline-assigned-to-${task.rawId}-${option.id}`} value={String(option.id)}>
-                              {option.label}
-                            </Option>
-                          ))}
-                        </Select>
-                      ) : (
-                        task.assignedTo
-                      )}
-                    </td>
-                    <td
-                      onMouseEnter={() => setHoveredCellKey(buildHoveredCellKey(task.rawId, "assignedBy"))}
-                      onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, "assignedBy")}
-                      onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
-                    >
-                      {hoveredCellKey === buildHoveredCellKey(task.rawId, "assignedBy") ? (
-                        <Select
-                          size="sm"
-                          value={taskDrafts[task.rawId]?.assignedBy ?? ""}
-                          onChange={(_, value) =>
-                            handleInlineTaskChange(task.rawId, "assignedBy", value || "", {
-                              saveImmediately: true,
-                            })
-                          }
-                          onClose={() => handleInlineTaskBlur(task.rawId)}
-                          placeholder="Assigned by"
-                          sx={{ minHeight: "34px", fontSize: "0.82rem" }}
-                        >
-                          <Option value="">Not set</Option>
-                          {assigneeOptions.map((option) => (
-                            <Option key={`inline-assigned-by-${task.rawId}-${option.id}`} value={String(option.id)}>
-                              {option.label}
-                            </Option>
-                          ))}
-                        </Select>
-                      ) : (
-                        task.assignedBy
-                      )}
-                    </td>
+                    {taskColumnSettings
+                      .filter((column) => column.visible)
+                      .map((column) => renderTaskColumnCell(task, column.key))}
                     <td>
                       <Stack direction="row" spacing={0.5} alignItems="center">
                         {savingTaskIds.includes(task.rawId) ? (
@@ -3193,7 +3403,7 @@ export default function ProjectTasksMain({
                 })}
                 {!isLoadingTasks && tasks.length === 0 ? (
                   <tr>
-                    <td colSpan={9}>
+                    <td colSpan={taskTableColumnCount}>
                       <Stack alignItems="center" spacing={0.75} sx={{ py: 5 }}>
                         <Typography sx={{ fontWeight: 700, color: "#1f2a44" }}>
                           No tasks found
@@ -3337,6 +3547,154 @@ export default function ProjectTasksMain({
         onClose={handleCloseCreateTaskModal}
         onSubmit={handleCreateTask}
       />
+
+      <Modal open={isManageColumnsModalOpen} onClose={handleCloseManageColumnsModal}>
+        <ModalDialog layout="center" sx={{ width: "100%", maxWidth: 440, borderRadius: "16px" }}>
+          <ModalClose onClick={handleCloseManageColumnsModal} />
+          <DialogTitle sx={{ fontWeight: 700 }}>Manage columns</DialogTitle>
+          <DialogContent>
+            <Typography level="body-sm" sx={{ color: "#60708e", mb: 1.5 }}>
+              Show, hide, or reorder the columns everyone sees on this project&apos;s task list.
+              ID and Task Name always stay visible.
+            </Typography>
+            <Stack spacing={0.75}>
+              {draftColumnSettings.map((column) => {
+                const columnDefinition = sortableTaskColumns.find(
+                  (definition) => definition.key === column.key
+                );
+                const isDraggedColumn = draggedColumnKey === column.key;
+                const isDropTarget =
+                  columnDropTarget?.key === column.key && !isDraggedColumn;
+                const dropEdge = isDropTarget
+                  ? columnDropTarget.placeAfter
+                    ? "after"
+                    : "before"
+                  : undefined;
+
+                return (
+                  <Stack
+                    key={column.key}
+                    data-column-row
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    onDragOver={(event) => {
+                      if (!draggedColumnKey || isDraggedColumn) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setColumnDropTarget({
+                        key: column.key,
+                        placeAfter: shouldDropAfter(event, event.currentTarget),
+                      });
+                    }}
+                    onDrop={(event) => {
+                      if (!draggedColumnKey) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      handleColumnDrop(column.key, shouldDropAfter(event, event.currentTarget));
+                    }}
+                    data-drop-edge={dropEdge}
+                    sx={{
+                      px: 1.25,
+                      py: 0.75,
+                      border: "1px solid #e4e9f5",
+                      borderRadius: "10px",
+                      backgroundColor: "#f7f9fc",
+                      opacity: isDraggedColumn ? 0.45 : 1,
+                      transition: "opacity 0.15s ease",
+                      "&[data-drop-edge='before']": {
+                        boxShadow: "inset 0 2px 0 0 #3155ff",
+                      },
+                      "&[data-drop-edge='after']": {
+                        boxShadow: "inset 0 -2px 0 0 #3155ff",
+                      },
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Tooltip title="Drag to reorder">
+                        <Box
+                          component="span"
+                          draggable
+                          aria-label={`Drag to reorder ${columnDefinition?.label || column.key}`}
+                          onDragStart={(event) => {
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", column.key);
+
+                            const rowElement = event.currentTarget.closest("[data-column-row]");
+
+                            if (rowElement) {
+                              event.dataTransfer.setDragImage(rowElement, 24, 16);
+                            }
+
+                            setDraggedColumnKey(column.key);
+                          }}
+                          onDragEnd={handleColumnDragEnd}
+                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            color: "#b3bcd2",
+                            cursor: "grab",
+                            "&:active": { cursor: "grabbing" },
+                            "&:hover": { color: "#3155ff" },
+                          }}
+                        >
+                          <DragIndicatorRounded sx={{ fontSize: "1.1rem" }} />
+                        </Box>
+                      </Tooltip>
+                      <Checkbox
+                        size="sm"
+                        label={columnDefinition?.label || column.key}
+                        checked={column.visible}
+                        onChange={() => handleToggleColumnVisible(column.key)}
+                      />
+                    </Stack>
+                  </Stack>
+                );
+              })}
+            </Stack>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ mt: 2.5 }}
+            >
+              <Button
+                variant="plain"
+                color="neutral"
+                disabled={isSavingColumnSettings}
+                onClick={handleResetColumnDefaults}
+                sx={{ px: 0.5 }}
+              >
+                Reset to default
+              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="plain"
+                  color="neutral"
+                  disabled={isSavingColumnSettings}
+                  onClick={handleCloseManageColumnsModal}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  loading={isSavingColumnSettings}
+                  onClick={() => {
+                    void handleSaveColumnSettings();
+                  }}
+                  sx={{ color: "var(--color-font-secondary)" }}
+                >
+                  Save changes
+                </Button>
+              </Stack>
+            </Stack>
+          </DialogContent>
+        </ModalDialog>
+      </Modal>
     </Box>
   );
 }

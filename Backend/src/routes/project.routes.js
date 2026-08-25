@@ -313,6 +313,12 @@ router.delete(
   requireActiveWorkspaceUserByProjectId,
   projectController.deleteProjectUser
 );
+router.patch(
+  "/:projectId/task-columns",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.updateProjectTaskColumns
+);
 router.get(
   "/:projectId",
   requireAuth,

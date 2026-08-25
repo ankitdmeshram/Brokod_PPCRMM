@@ -9,6 +9,13 @@ const allowedProjectUserInviteModes = new Set([
   "invite_user",
 ]);
 const allowedProjectUserStatuses = new Set(["active", "inactive"]);
+const allowedTaskListColumnKeys = [
+  "status",
+  "priority",
+  "dueDate",
+  "assignedTo",
+  "assignedBy",
+];
 
 const normalizeTags = (tags) => {
   if (Array.isArray(tags)) {
@@ -230,9 +237,61 @@ const validateUpdateProjectUserPayload = (payload) => {
   return updates;
 };
 
+// The id and title task columns are always shown and are not part of this
+// managed set, so the modal only ever needs to reorder/hide the rest.
+const validateUpdateTaskColumnsPayload = (payload = {}) => {
+  const columns = Array.isArray(payload?.columns) ? payload.columns : null;
+
+  if (!columns || columns.length !== allowedTaskListColumnKeys.length) {
+    throw new AppError(
+      `columns must include exactly these keys: ${allowedTaskListColumnKeys.join(", ")}.`,
+      400
+    );
+  }
+
+  const seenKeys = new Set();
+  let visibleCount = 0;
+
+  const normalizedColumns = columns.map((column, index) => {
+    const key = String(column?.key || "").trim();
+
+    if (!allowedTaskListColumnKeys.includes(key)) {
+      throw new AppError(`columns[${index}].key is not a supported task column.`, 400);
+    }
+
+    if (seenKeys.has(key)) {
+      throw new AppError(`columns[${index}].key is duplicated.`, 400);
+    }
+
+    seenKeys.add(key);
+
+    const visible = column?.visible !== false;
+
+    if (visible) {
+      visibleCount += 1;
+    }
+
+    return { key, visible };
+  });
+
+  if (seenKeys.size !== allowedTaskListColumnKeys.length) {
+    throw new AppError(
+      `columns must include exactly these keys: ${allowedTaskListColumnKeys.join(", ")}.`,
+      400
+    );
+  }
+
+  if (visibleCount === 0) {
+    throw new AppError("At least one column must remain visible.", 400);
+  }
+
+  return normalizedColumns;
+};
+
 module.exports = {
   validateAddProjectUserPayload,
   validateCreateProjectPayload,
   validateUpdateProjectUserPayload,
   validateUpdateProjectPayload,
+  validateUpdateTaskColumnsPayload,
 };

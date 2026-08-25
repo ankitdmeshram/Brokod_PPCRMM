@@ -147,6 +147,19 @@ export async function updateProject(projectId, payload, token) {
   return parseApiResponse(response);
 }
 
+export async function updateProjectTaskColumns(projectId, payload, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/task-columns`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
 export async function deleteProject(projectId, token) {
   const response = await fetch(`${PROJECT_API_BASE}/${projectId}`, {
     method: "DELETE",

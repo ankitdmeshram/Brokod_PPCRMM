@@ -12,6 +12,7 @@ const projectSelectColumns = [
   "projects.start_date",
   "projects.end_date",
   "projects.tags",
+  "projects.task_list_columns",
   "projects.created_at",
   "projects.created_by",
   "projects.updated_at",
@@ -304,6 +305,11 @@ const updateById = async (id, updates, trx = getDb()) => {
 
   if (updates.tags !== undefined) {
     mappedUpdates.tags = JSON.stringify(updates.tags);
+  }
+
+  if (updates.taskListColumns !== undefined) {
+    mappedUpdates.task_list_columns =
+      updates.taskListColumns === null ? null : JSON.stringify(updates.taskListColumns);
   }
 
   return trx("projects").where({ id }).whereNull("deleted_at").update(mappedUpdates);

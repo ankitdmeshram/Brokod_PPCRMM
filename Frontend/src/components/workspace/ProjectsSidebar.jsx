@@ -46,9 +46,9 @@ export default function ProjectsSidebar({
           },
         };
 
-  const renderSidebarAction = (content, tooltipTitle) =>
+  const renderSidebarAction = (content, tooltipTitle, key) =>
     isCollapsed ? (
-      <Tooltip title={tooltipTitle} placement="right" variant="soft">
+      <Tooltip key={key} title={tooltipTitle} placement="right" variant="soft">
         {content}
       </Tooltip>
     ) : (
@@ -152,7 +152,8 @@ export default function ProjectsSidebar({
               >
                 {isCollapsed ? item.icon : item.label}
               </Button>,
-              item.label
+              item.label,
+              item.key
             )
           )}
         </Stack>

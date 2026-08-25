@@ -123,6 +123,20 @@ const updateProject = asyncHandler(async (request, response) => {
   });
 });
 
+const updateProjectTaskColumns = asyncHandler(async (request, response) => {
+  const project = await projectService.updateProjectTaskColumns(
+    request.params.projectId,
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    message: "Task list columns updated successfully.",
+    project,
+  });
+});
+
 const deleteProject = asyncHandler(async (request, response) => {
   await projectService.deleteProject(
     request.params.projectId,
@@ -146,4 +160,5 @@ module.exports = {
   getProjectUsers,
   updateProjectUser,
   updateProject,
+  updateProjectTaskColumns,
 };

@@ -22,3 +22,4 @@ export { default as ApplicationsIcon } from "@mui/icons-material/AppsOutlined";
 export { default as AuthTrailIcon } from "@mui/icons-material/ManageHistoryOutlined";
 export { default as FilterIcon } from "@mui/icons-material/FilterAltOutlined";
 export { default as RefreshIcon } from "@mui/icons-material/RefreshOutlined";
+export { default as ViewColumnIcon } from "@mui/icons-material/ViewColumnOutlined";

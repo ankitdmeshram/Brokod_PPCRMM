@@ -12,6 +12,7 @@ const {
   validateCreateProjectPayload,
   validateUpdateProjectUserPayload,
   validateUpdateProjectPayload,
+  validateUpdateTaskColumnsPayload,
 } = require("../validators/project.validator");
 
 const mapProject = (project) => ({
@@ -33,6 +34,12 @@ const mapProject = (project) => ({
       : Array.isArray(project.tags)
         ? project.tags
         : [],
+  taskListColumns:
+    typeof project.task_list_columns === "string"
+      ? JSON.parse(project.task_list_columns || "null")
+      : Array.isArray(project.task_list_columns)
+        ? project.task_list_columns
+        : project.task_list_columns ?? project.taskListColumns ?? null,
   createdAt: project.created_at ?? project.createdAt ?? null,
   createdBy: project.created_by ?? project.createdBy,
   updatedAt: project.updated_at ?? project.updatedAt ?? null,
@@ -674,6 +681,39 @@ const updateProject = async (projectId, payload, userId, userRole = "") => {
   return mapProject(updatedProject);
 };
 
+const updateProjectTaskColumns = async (projectId, payload, userId, userRole = "") => {
+  const normalizedProjectId = Number(projectId);
+
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  if (!existingProject) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  if (!canManageProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only the project owner or a workspace owner/admin can manage task list columns.",
+      403
+    );
+  }
+
+  const columns = validateUpdateTaskColumnsPayload(payload);
+
+  await projectRepository.updateById(normalizedProjectId, { taskListColumns: columns });
+
+  const updatedProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  return mapProject(updatedProject);
+};
+
 const deleteProject = async (projectId, userId, userRole = "") => {
   const normalizedProjectId = Number(projectId);
 
@@ -710,4 +750,5 @@ module.exports = {
   getProjectUsers,
   updateProjectUser,
   updateProject,
+  updateProjectTaskColumns,
 };
