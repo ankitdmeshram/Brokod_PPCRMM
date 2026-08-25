@@ -26,6 +26,8 @@ function appendTaskQueryParams(query, filters = {}) {
     "tags",
     "updatedAt",
     "createdAt",
+    "sortBy",
+    "sortOrder",
   ];
 
   if (filters.projectId) {

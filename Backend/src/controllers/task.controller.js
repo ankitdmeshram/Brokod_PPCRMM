@@ -31,6 +31,8 @@ const getTasks = asyncHandler(async (request, response) => {
       updatedAt: request.query.updatedAt,
       createdAt: request.query.createdAt,
       advancedFilters: request.query.advancedFilters,
+      sortBy: request.query.sortBy,
+      sortOrder: request.query.sortOrder,
       page: request.query.page,
       limit: request.query.limit,
     },

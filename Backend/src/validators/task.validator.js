@@ -7,6 +7,16 @@ const allowedTaskTypes = new Set(["feature", "bug", "improvement", "research"]);
 const stringFilterOperators = new Set(["starts_with", "ends_with", "contains", "eq", "neq"]);
 const comparableFilterOperators = new Set(["eq", "neq", "gt", "lt", "gte", "lte"]);
 const booleanFilterOperators = new Set(["eq", "neq"]);
+const allowedTaskSortFields = new Set([
+  "id",
+  "title",
+  "status",
+  "priority",
+  "dueDate",
+  "assignedTo",
+  "assignedBy",
+]);
+const allowedSortOrders = new Set(["asc", "desc"]);
 const MAX_TASK_TITLE_LENGTH = 500;
 const MAX_TASK_COMMENT_LENGTH = 10000;
 
@@ -463,6 +473,8 @@ const validateGetTasksFilters = (filters = {}) => {
   const updatedAt = normalizeOptionalDateFilter(filters?.updatedAt, "updatedAt");
   const createdAt = normalizeOptionalDateFilter(filters?.createdAt, "createdAt");
   const advancedFilters = normalizeAdvancedFilters(filters?.advancedFilters);
+  const sortBy = normalizeOptionalString(filters?.sortBy);
+  const sortOrder = normalizeOptionalString(filters?.sortOrder).toLowerCase();
 
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new AppError("projectId is required and must be a valid integer.", 400);
@@ -488,6 +500,21 @@ const validateGetTasksFilters = (filters = {}) => {
     throw new AppError("priority must be one of: low, medium, high, critical.", 400);
   }
 
+  if (sortBy && !allowedTaskSortFields.has(sortBy)) {
+    throw new AppError(
+      `sortBy must be one of: ${[...allowedTaskSortFields].join(", ")}.`,
+      400
+    );
+  }
+
+  if (sortBy && !allowedSortOrders.has(sortOrder)) {
+    throw new AppError("sortOrder must be either asc or desc when sortBy is provided.", 400);
+  }
+
+  if (!sortBy && sortOrder) {
+    throw new AppError("sortBy is required when sortOrder is provided.", 400);
+  }
+
   return {
     projectId,
     workspaceId,
@@ -503,6 +530,8 @@ const validateGetTasksFilters = (filters = {}) => {
     updatedAt,
     createdAt,
     advancedFilters,
+    sortBy,
+    sortOrder,
     page,
     limit,
     offset: (page - 1) * limit,

@@ -47,6 +47,14 @@ const advancedTaskFilterColumns = {
   updatedAt: { column: "tasks.updated_at", type: "date" },
 };
 
+const taskSortColumns = {
+  id: "tasks.project_task_number",
+  title: "tasks.title",
+  status: "tasks.status",
+  priority: "tasks.priority",
+  dueDate: "tasks.due_date",
+};
+
 const buildTaskBaseQuery = (trx = getDb()) =>
   trx("tasks")
     .leftJoin({ parent_task: "tasks" }, "parent_task.id", "tasks.parent_task_id")
@@ -314,6 +322,7 @@ const getNextProjectTaskNumber = async (projectId, trx = getDb()) => {
 
 const findAll = async (filters = {}, trx = getDb()) => {
   const query = buildTaskBaseQuery(trx);
+  const sortOrder = filters.sortOrder === "asc" ? "asc" : "desc";
 
   applyTaskFilters(query, filters);
   applyAdvancedTaskFilters(query, filters.advancedFilters);
@@ -326,7 +335,25 @@ const findAll = async (filters = {}, trx = getDb()) => {
     query.offset(filters.offset);
   }
 
-  return query.orderBy("tasks.created_at", "desc");
+  if (filters.sortBy === "assignedTo") {
+    query.orderByRaw(
+      `LOWER(TRIM(CONCAT(COALESCE(assigned_to_user.first_name, ''), ' ', COALESCE(assigned_to_user.last_name, '')))) ${sortOrder}`
+    );
+  } else if (filters.sortBy === "assignedBy") {
+    query.orderByRaw(
+      `LOWER(TRIM(CONCAT(COALESCE(assigned_by_user.first_name, ''), ' ', COALESCE(assigned_by_user.last_name, '')))) ${sortOrder}`
+    );
+  } else if (taskSortColumns[filters.sortBy]) {
+    query.orderBy(taskSortColumns[filters.sortBy], sortOrder);
+  } else {
+    query.orderBy("tasks.created_at", "desc");
+  }
+
+  if (filters.sortBy !== "id") {
+    query.orderBy("tasks.id", "desc");
+  }
+
+  return query;
 };
 
 const countAll = async (filters = {}, trx = getDb()) => {

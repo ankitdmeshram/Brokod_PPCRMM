@@ -58,6 +58,18 @@ const upload = multer({
  *           maximum: 100
  *           default: 10
  *         description: Number of tasks to return per page
+ *       - in: query
+ *         name: sortBy
+ *         description: Optional task-table column used for sorting.
+ *         schema:
+ *           type: string
+ *           enum: [id, title, status, priority, dueDate, assignedTo, assignedBy]
+ *       - in: query
+ *         name: sortOrder
+ *         description: Required when sortBy is provided.
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
  *     responses:
  *       200:
  *         description: Tasks fetched successfully
