@@ -14,6 +14,7 @@ const {
   validateExportTasksFilters,
   validateGetTasksFilters,
   validateImportTasksPayload,
+  validateReorderTaskPayload,
   validateTaskId,
   validateUpdateTaskPayload,
 } = require("../validators/task.validator");
@@ -66,6 +67,8 @@ const mapTask = (task) => ({
   dueDate: task.due_date ?? task.dueDate ?? null,
   completedAt: task.completed_at ?? task.completedAt ?? null,
   taskType: task.task_type ?? task.taskType,
+  sortPosition:
+    task.sort_position ?? task.sortPosition ?? null,
   parentTaskTitle: task.parent_task_title ?? task.parentTaskTitle ?? null,
   parentTaskSlug: task.parent_task_slug ?? task.parentTaskSlug ?? null,
   parentTaskProjectTaskNumber:
@@ -920,6 +923,128 @@ const updateTask = async (taskId, payload, userId, userRole = "") => {
   return mapTask(updatedTask);
 };
 
+// Two ranks this close leave no integer between them for the next drop.
+const SORT_REBALANCE_THRESHOLD = 1;
+
+const reorderTask = async (taskId, payload, userId, userRole = "") => {
+  const normalizedTaskId = validateTaskId(taskId);
+  const { beforeTaskId, afterTaskId, status } = validateReorderTaskPayload(payload);
+
+  if (beforeTaskId === normalizedTaskId || afterTaskId === normalizedTaskId) {
+    throw new AppError("A task cannot be positioned relative to itself.", 400);
+  }
+
+  return getDb().transaction(async (trx) => {
+    const task = await taskRepository.findById(normalizedTaskId, trx);
+
+    if (!task) {
+      throw new AppError("Task not found.", 404);
+    }
+
+    const projectId = Number(task.project_id ?? task.projectId);
+    const project = isSuperAdmin(userRole)
+      ? await projectRepository.findById(projectId, trx)
+      : await projectRepository.findByIdForUser(projectId, userId, trx);
+
+    if (!project) {
+      throw new AppError("Task not found.", 404);
+    }
+
+    if (!isSuperAdmin(userRole)) {
+      const isCreator = Number(task.created_by ?? task.createdBy) === Number(userId);
+
+      if (!canManageProjectTasks(project, userRole) && !isCreator) {
+        throw new AppError(
+          "Only the task creator, project owner, or workspace owner/admin can reorder this task.",
+          403
+        );
+      }
+    }
+
+    const neighbourIds = [beforeTaskId, afterTaskId].filter(
+      (neighbourId) => neighbourId !== null
+    );
+
+    const readNeighbourPositions = async () => {
+      const rows = await taskRepository.lockTasksForSort(neighbourIds, trx);
+      const rowsById = new Map(rows.map((row) => [Number(row.id), row]));
+
+      return [
+        [beforeTaskId, "beforeTaskId"],
+        [afterTaskId, "afterTaskId"],
+      ].map(([neighbourId, label]) => {
+        if (neighbourId === null) {
+          return null;
+        }
+
+        const neighbour = rowsById.get(neighbourId);
+
+        if (!neighbour || Number(neighbour.project_id) !== projectId) {
+          throw new AppError(`${label} was not found in this project.`, 404);
+        }
+
+        return neighbour.sort_position === null || neighbour.sort_position === undefined
+          ? null
+          : Number(neighbour.sort_position);
+      });
+    };
+
+    const staleListError = new AppError(
+      "The task order changed since this list was loaded. Please refresh and try again.",
+      409
+    );
+
+    let [beforePosition, afterPosition] = await readNeighbourPositions();
+
+    // The neighbours arrived in the wrong order, so the client is working from a
+    // list that someone else has already reordered. Rebalancing cannot fix that.
+    if (beforePosition !== null && afterPosition !== null && beforePosition > afterPosition) {
+      throw staleListError;
+    }
+
+    const hasUnrankedNeighbour =
+      (beforeTaskId !== null && beforePosition === null) ||
+      (afterTaskId !== null && afterPosition === null);
+    const hasClosedGap =
+      beforePosition !== null &&
+      afterPosition !== null &&
+      afterPosition - beforePosition <= SORT_REBALANCE_THRESHOLD;
+
+    if (hasUnrankedNeighbour || hasClosedGap) {
+      await taskRepository.rebalanceProjectSortPositions(projectId, trx);
+      [beforePosition, afterPosition] = await readNeighbourPositions();
+    }
+
+    if (beforePosition !== null && afterPosition !== null && beforePosition >= afterPosition) {
+      throw staleListError;
+    }
+
+    let sortPosition;
+
+    if (beforePosition === null && afterPosition === null) {
+      // Nothing to interleave with — the task is alone in the visible list.
+      sortPosition =
+        task.sort_position === null || task.sort_position === undefined
+          ? await taskRepository.getTopSortPosition(projectId, trx)
+          : Number(task.sort_position);
+    } else if (beforePosition === null) {
+      sortPosition = afterPosition - taskRepository.SORT_POSITION_GAP;
+    } else if (afterPosition === null) {
+      sortPosition = beforePosition + taskRepository.SORT_POSITION_GAP;
+    } else {
+      sortPosition = Math.floor((beforePosition + afterPosition) / 2);
+    }
+
+    await taskRepository.updateSortPositionById(
+      normalizedTaskId,
+      { sortPosition, status },
+      trx
+    );
+
+    return mapTask(await taskRepository.findById(normalizedTaskId, trx));
+  });
+};
+
 const deleteTask = async (taskId, userId, userRole = "") => {
   const normalizedTaskId = validateTaskId(taskId);
 
@@ -966,6 +1091,7 @@ module.exports = {
   getTaskById,
   getTaskBySlug,
   getTasks,
+  reorderTask,
   updateTaskComment,
   updateTask,
 };

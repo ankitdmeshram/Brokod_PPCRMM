@@ -236,6 +236,79 @@ const upload = multer({
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ * /api/tasks/{taskId}/reorder:
+ *   patch:
+ *     tags:
+ *       - Tasks
+ *     summary: Move a task within the project's manual order
+ *     description: >
+ *       Places the task between the two supplied neighbours. Omit beforeTaskId to
+ *       move it to the top of the list, or afterTaskId to move it to the bottom.
+ *       The manual order only drives the task list when no column sort is applied.
+ *       Pass status to move a card across Kanban columns and rank it in one call.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               beforeTaskId:
+ *                 type: integer
+ *                 nullable: true
+ *                 description: Task that should sit directly above the moved task
+ *               afterTaskId:
+ *                 type: integer
+ *                 nullable: true
+ *                 description: Task that should sit directly below the moved task
+ *               status:
+ *                 type: string
+ *                 enum: [todo, in_progress, review, done, blocked]
+ *     responses:
+ *       200:
+ *         description: Task order updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UpdateTaskResponse'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Only the task creator or project owner can reorder the task
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Task or neighbour task not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       409:
+ *         description: The task order changed since the list was loaded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  * /api/tasks/{taskId}:
  *   get:
  *     tags:
@@ -411,6 +484,12 @@ router.patch(
   requireAuth,
   requireActiveWorkspaceUserByTaskId,
   taskController.updateTaskComment
+);
+router.patch(
+  "/:taskId/reorder",
+  requireAuth,
+  requireActiveWorkspaceUserByTaskId,
+  taskController.reorderTask
 );
 router.get("/:taskId", requireAuth, requireActiveWorkspaceUserByTaskId, taskController.getTaskById);
 router.patch(

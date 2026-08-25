@@ -1,6 +1,7 @@
 import ArrowDownwardRounded from "@mui/icons-material/ArrowDownwardRounded";
 import ArrowUpwardRounded from "@mui/icons-material/ArrowUpwardRounded";
 import ContentCopyRounded from "@mui/icons-material/ContentCopyRounded";
+import DragIndicatorRounded from "@mui/icons-material/DragIndicatorRounded";
 import ViewKanbanRounded from "@mui/icons-material/ViewKanbanRounded";
 import ViewListRounded from "@mui/icons-material/ViewListRounded";
 import UnfoldMoreRounded from "@mui/icons-material/UnfoldMoreRounded";
@@ -25,6 +26,7 @@ import {
   fetchAllTasks,
   fetchTasks,
   importTasksJson,
+  reorderTask,
   updateTask,
 } from "../../services/task.service";
 import {
@@ -273,6 +275,44 @@ const priorityStyles = {
 
 const buildHoveredCellKey = (taskId, field) => `${taskId}:${field}`;
 
+// Moves a task next to `targetTaskId` within the full task list, returning null
+// when the drop is a no-op. Kanban columns are a filtered view of this same
+// list, so positioning against the global array keeps a within-column drop
+// correct in both views: the moved task lands between its column neighbours
+// even when tasks from other columns sit between them in the global order.
+const moveTaskBeside = (currentTasks, taskId, targetTaskId, placeAfter) => {
+  if (taskId === targetTaskId) {
+    return null;
+  }
+
+  const fromIndex = currentTasks.findIndex((task) => task.rawId === taskId);
+  const targetIndex = currentTasks.findIndex((task) => task.rawId === targetTaskId);
+
+  if (fromIndex < 0 || targetIndex < 0) {
+    return null;
+  }
+
+  const nextTasks = [...currentTasks];
+  const [movedTask] = nextTasks.splice(fromIndex, 1);
+  const adjustedTargetIndex = nextTasks.findIndex((task) => task.rawId === targetTaskId);
+  const insertIndex = placeAfter ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+
+  if (insertIndex === fromIndex) {
+    return null;
+  }
+
+  nextTasks.splice(insertIndex, 0, movedTask);
+
+  return nextTasks;
+};
+
+// Half-way down the element decides whether the drop lands above or below it.
+const shouldDropAfter = (event, element) => {
+  const bounds = element.getBoundingClientRect();
+
+  return event.clientY - bounds.top > bounds.height / 2;
+};
+
 const buildUserLabel = (user = {}) =>
   `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim() ||
   user.email ||
@@ -378,16 +418,25 @@ function OverflowTooltip({ title, children, maxLines = 1 }) {
 function TaskKanbanBoard({
   tasks,
   isLoading,
+  isManualOrderActive,
   copiedTaskId,
   savingTaskIds,
   selectedTaskIds,
   onCopyTaskId,
   onMoveTask,
   onOpenTask,
+  onReorderTask,
   onToggleTask,
 }) {
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState("");
+  const [cardDropTarget, setCardDropTarget] = useState(null);
+
+  const clearDragState = () => {
+    setDraggedTaskId(null);
+    setDragOverStatus("");
+    setCardDropTarget(null);
+  };
 
   if (isLoading) {
     return (
@@ -425,6 +474,7 @@ function TaskKanbanBoard({
             onDragLeave={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget)) {
                 setDragOverStatus("");
+                setCardDropTarget(null);
               }
             }}
             onDrop={(event) => {
@@ -432,9 +482,10 @@ function TaskKanbanBoard({
               const taskId = Number(event.dataTransfer.getData("text/plain") || draggedTaskId);
               const task = tasks.find((currentTask) => currentTask.rawId === taskId);
 
-              setDraggedTaskId(null);
-              setDragOverStatus("");
+              clearDragState();
 
+              // Dropped on empty column space, so there is no card to rank
+              // against — treat it as a plain status change.
               if (task) {
                 onMoveTask(task, statusOption.value);
               }
@@ -479,6 +530,8 @@ function TaskKanbanBoard({
             <Stack spacing={1}>
               {columnTasks.map((task) => {
                 const isSelected = selectedTaskIds.includes(task.rawId);
+                const isDropTarget =
+                  cardDropTarget?.taskId === task.rawId && draggedTaskId !== task.rawId;
 
                 return (
                   <Sheet
@@ -492,9 +545,37 @@ function TaskKanbanBoard({
                       event.dataTransfer.setData("text/plain", String(task.rawId));
                       setDraggedTaskId(task.rawId);
                     }}
-                    onDragEnd={() => {
-                      setDraggedTaskId(null);
-                      setDragOverStatus("");
+                    onDragEnd={clearDragState}
+                    onDragOver={(event) => {
+                      if (!isManualOrderActive || draggedTaskId === null) {
+                        return;
+                      }
+
+                      // Claim the drop from the column so the card position,
+                      // not just the column, decides where the task lands.
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.dataTransfer.dropEffect = "move";
+                      setDragOverStatus(statusOption.value);
+                      setCardDropTarget({
+                        taskId: task.rawId,
+                        placeAfter: shouldDropAfter(event, event.currentTarget),
+                      });
+                    }}
+                    onDrop={(event) => {
+                      if (!isManualOrderActive || draggedTaskId === null) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const movedTaskId = Number(
+                        event.dataTransfer.getData("text/plain") || draggedTaskId
+                      );
+                      const placeAfter = shouldDropAfter(event, event.currentTarget);
+
+                      clearDragState();
+                      onReorderTask(movedTaskId, task, placeAfter);
                     }}
                     onClick={() => onOpenTask(task)}
                     onKeyDown={(event) => {
@@ -510,9 +591,13 @@ function TaskKanbanBoard({
                       backgroundColor: "#fff",
                       cursor: savingTaskIds.includes(task.rawId) ? "wait" : "grab",
                       opacity: draggedTaskId === task.rawId ? 0.45 : 1,
-                      boxShadow: isSelected
-                        ? "0 0 0 2px rgba(49, 85, 255, 0.12)"
-                        : "0 5px 14px rgba(83, 96, 135, 0.08)",
+                      boxShadow: isDropTarget
+                        ? cardDropTarget.placeAfter
+                          ? "inset 0 -3px 0 0 #3155ff"
+                          : "inset 0 3px 0 0 #3155ff"
+                        : isSelected
+                          ? "0 0 0 2px rgba(49, 85, 255, 0.12)"
+                          : "0 5px 14px rgba(83, 96, 135, 0.08)",
                       transition: "transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease",
                       "&:active": {
                         cursor: savingTaskIds.includes(task.rawId) ? "wait" : "grabbing",
@@ -652,9 +737,18 @@ export default function ProjectTasksMain({
   const [hoveredTaskRowId, setHoveredTaskRowId] = useState(null);
   const [editingTitleTaskId, setEditingTitleTaskId] = useState(null);
   const [copiedTaskId, setCopiedTaskId] = useState("");
+  const [draggedRowTaskId, setDraggedRowTaskId] = useState(null);
+  const [rowDropTarget, setRowDropTarget] = useState(null);
   const importFileInputRef = useRef(null);
   const copiedTaskIdTimeoutRef = useRef(null);
   const hasMountedTaskViewRef = useRef(false);
+  // The saved drag order is what the list falls back to when no column sort is
+  // applied, so manual reordering is only meaningful (and only offered) then.
+  const isManualOrderActive = sortRules.length === 0;
+  // The first column carries the drag handle alongside the checkbox, so the
+  // sticky offsets of the two columns pinned after it shift with it.
+  const selectColumnWidth = isManualOrderActive ? 78 : 48;
+  const titleColumnOffset = selectColumnWidth + 102;
   const showClearFilters = hasActiveTaskColumnFilters(columnFilters);
   const activeFilterCount = Object.values(columnFilters).filter(
     (value) => String(value || "").trim() !== ""
@@ -965,6 +1059,11 @@ export default function ProjectTasksMain({
     setDebouncedColumnFilters(nextFilters);
     setCurrentPage(1);
     setIsFilterModalOpen(false);
+  };
+
+  const handleClearSorting = () => {
+    setSortRules([]);
+    setCurrentPage(1);
   };
 
   const handleSort = (column) => {
@@ -1288,6 +1387,105 @@ export default function ProjectTasksMain({
     } finally {
       setSavingTaskIds((currentIds) => currentIds.filter((taskId) => taskId !== task.rawId));
     }
+  };
+
+  // Saves a drop by naming the two tasks it landed between. Sending neighbour
+  // ids rather than a row index keeps the server correct while the list is
+  // paginated or filtered, and lets it reject a drop computed from a list
+  // someone else has already reordered.
+  const handleTaskReorder = async ({ taskId, nextTasks, nextStatus = null }) => {
+    if (!authSession?.token || savingTaskIds.includes(taskId)) {
+      return;
+    }
+
+    const insertIndex = nextTasks.findIndex((task) => task.rawId === taskId);
+
+    if (insertIndex < 0) {
+      return;
+    }
+
+    const previousTasks = tasks;
+    const beforeTaskId = nextTasks[insertIndex - 1]?.rawId ?? null;
+    const afterTaskId = nextTasks[insertIndex + 1]?.rawId ?? null;
+
+    setTasks(nextTasks);
+    setSavingTaskIds((currentIds) => [...currentIds, taskId]);
+
+    try {
+      const result = await reorderTask(
+        taskId,
+        {
+          beforeTaskId,
+          afterTaskId,
+          ...(nextStatus ? { status: nextStatus } : {}),
+        },
+        authSession.token
+      );
+      const updatedTask = result?.task;
+
+      if (updatedTask) {
+        const mappedTask = mapApiTaskToTableRow(updatedTask);
+
+        setTasks((currentTasks) =>
+          currentTasks.map((currentTask) =>
+            currentTask.rawId === taskId ? mappedTask : currentTask
+          )
+        );
+        setTaskDrafts((currentDrafts) => ({
+          ...currentDrafts,
+          [taskId]: buildEditableTaskValues(mappedTask),
+        }));
+      }
+    } catch (error) {
+      setTasks(previousTasks);
+      await showErrorAlert(
+        "Unable to reorder tasks",
+        error.message || "The task order could not be saved."
+      );
+    } finally {
+      setSavingTaskIds((currentIds) => currentIds.filter((id) => id !== taskId));
+    }
+  };
+
+  const handleTaskDropBeside = async (taskId, targetTaskId, placeAfter) => {
+    const nextTasks = moveTaskBeside(tasks, taskId, targetTaskId, placeAfter);
+
+    if (!nextTasks) {
+      return;
+    }
+
+    await handleTaskReorder({ taskId, nextTasks });
+  };
+
+  // A Kanban card dropped onto another card both re-ranks it and, when the
+  // cards live in different columns, moves it across statuses in one request.
+  const handleKanbanCardDrop = async (taskId, targetTask, placeAfter) => {
+    const nextTasks = moveTaskBeside(tasks, taskId, targetTask?.rawId, placeAfter);
+
+    if (!nextTasks) {
+      return;
+    }
+
+    const targetStatus = String(targetTask?.rawTask?.status || "").toLowerCase();
+    const movedTask = nextTasks.find((task) => task.rawId === taskId);
+    const currentStatus = String(movedTask?.rawTask?.status || "").toLowerCase();
+    const nextStatus = targetStatus && targetStatus !== currentStatus ? targetStatus : null;
+
+    await handleTaskReorder({
+      taskId,
+      nextStatus,
+      nextTasks: nextStatus
+        ? nextTasks.map((task) =>
+          task.rawId === taskId
+            ? {
+              ...task,
+              status: toTitleCase(nextStatus),
+              rawTask: { ...task.rawTask, status: nextStatus },
+            }
+            : task
+        )
+        : nextTasks,
+    });
   };
 
   const handleCopyTaskId = async (taskId) => {
@@ -1719,6 +1917,25 @@ export default function ProjectTasksMain({
               >
                 Filters
               </Button>
+              {isManualOrderActive ? null : (
+                <Tooltip title="Column sorting overrides your saved drag order. Clear it to reorder tasks by hand again.">
+                  <Chip
+                    variant="soft"
+                    onClick={handleClearSorting}
+                    sx={{
+                      borderRadius: "10px",
+                      px: 1.25,
+                      minHeight: "34px",
+                      fontWeight: 700,
+                      whiteSpace: "nowrap",
+                      backgroundColor: "#fff4e8",
+                      color: "#b45309",
+                    }}
+                  >
+                    Custom order paused
+                  </Chip>
+                </Tooltip>
+              )}
               <Stack
                 direction="row"
                 sx={{
@@ -2285,6 +2502,7 @@ export default function ProjectTasksMain({
               <TaskKanbanBoard
                 tasks={tasks}
                 isLoading={isLoadingTasks}
+                isManualOrderActive={isManualOrderActive}
                 copiedTaskId={copiedTaskId}
                 savingTaskIds={savingTaskIds}
                 selectedTaskIds={selectedTaskIds}
@@ -2295,6 +2513,9 @@ export default function ProjectTasksMain({
                   void handleKanbanTaskMove(task, status);
                 }}
                 onOpenTask={handleShowTask}
+                onReorderTask={(taskId, targetTask, placeAfter) => {
+                  void handleKanbanCardDrop(taskId, targetTask, placeAfter);
+                }}
                 onToggleTask={handleToggleTaskSelection}
               />
             </Box>
@@ -2337,13 +2558,13 @@ export default function ProjectTasksMain({
                 },
                 "& thead th:nth-of-type(2)": {
                   position: { xs: "static", md: "sticky" },
-                  left: { md: "48px" },
+                  left: { md: `${selectColumnWidth}px` },
                   zIndex: { md: 3 },
                   backgroundColor: "#fff",
                 },
                 "& thead th:nth-of-type(3)": {
                   position: { xs: "static", md: "sticky" },
-                  left: { md: "150px" },
+                  left: { md: `${titleColumnOffset}px` },
                   zIndex: { md: 3 },
                   backgroundColor: "#fff",
                   boxShadow: { md: "inset -1px 0 0 rgba(223, 228, 243, 0.95)" },
@@ -2365,13 +2586,13 @@ export default function ProjectTasksMain({
                 },
                 "& tbody td:nth-of-type(2)": {
                   position: { xs: "static", md: "sticky" },
-                  left: { md: "48px" },
+                  left: { md: `${selectColumnWidth}px` },
                   zIndex: { md: 2 },
                   backgroundColor: "#fff",
                 },
                 "& tbody td:nth-of-type(3)": {
                   position: { xs: "static", md: "sticky" },
-                  left: { md: "150px" },
+                  left: { md: `${titleColumnOffset}px` },
                   zIndex: { md: 2 },
                   backgroundColor: "#fff",
                   boxShadow: { md: "inset -1px 0 0 rgba(236, 240, 249, 0.95)" },
@@ -2395,19 +2616,41 @@ export default function ProjectTasksMain({
                 "& tbody tr:hover td:nth-of-type(1), & tbody tr:hover td:nth-of-type(2), & tbody tr:hover td:nth-of-type(3)": {
                   backgroundColor: "#f7f9ff",
                 },
+                // Drawn on every cell rather than the row so the drop line runs
+                // the full width even though the table collapses its borders.
+                "& tbody tr[data-drop-edge='before'] td": {
+                  boxShadow: "inset 0 2px 0 0 #3155ff",
+                },
+                "& tbody tr[data-drop-edge='after'] td": {
+                  boxShadow: "inset 0 -2px 0 0 #3155ff",
+                },
               }}
             >
               <thead>
                 <tr>
-                  <th style={{ width: "48px", minWidth: "48px" }}>
-                    <Checkbox
-                      size="sm"
-                      checked={allVisibleTasksSelected}
-                      indeterminate={someVisibleTasksSelected}
-                      disabled={tasks.length === 0 || isLoadingTasks}
-                      onChange={handleToggleVisibleTasks}
-                      slotProps={{ input: { "aria-label": "Select all tasks on this page" } }}
-                    />
+                  <th
+                    style={{
+                      width: `${selectColumnWidth}px`,
+                      minWidth: `${selectColumnWidth}px`,
+                    }}
+                  >
+                    <Stack direction="row" spacing={0.25} alignItems="center">
+                      {isManualOrderActive ? (
+                        <Tooltip title="Drag the handles to set your own task order">
+                          <DragIndicatorRounded
+                            sx={{ fontSize: "1.05rem", color: "#b3bcd2" }}
+                          />
+                        </Tooltip>
+                      ) : null}
+                      <Checkbox
+                        size="sm"
+                        checked={allVisibleTasksSelected}
+                        indeterminate={someVisibleTasksSelected}
+                        disabled={tasks.length === 0 || isLoadingTasks}
+                        onChange={handleToggleVisibleTasks}
+                        slotProps={{ input: { "aria-label": "Select all tasks on this page" } }}
+                      />
+                    </Stack>
                   </th>
                   {sortableTaskColumns.map((column) => {
                     const sortIndex = sortRules.findIndex((rule) => rule.field === column.key);
@@ -2504,19 +2747,102 @@ export default function ProjectTasksMain({
                     </td>
                   </tr>
                 ) : null}
-                {!isLoadingTasks && tasks.map((task) => (
+                {!isLoadingTasks && tasks.map((task) => {
+                  const isDraggedRow = draggedRowTaskId === task.rawId;
+                  const isDropTarget =
+                    rowDropTarget?.taskId === task.rawId && !isDraggedRow;
+                  const dropEdge = isDropTarget
+                    ? rowDropTarget.placeAfter
+                      ? "after"
+                      : "before"
+                    : undefined;
+
+                  return (
                   <tr
                     key={task.id}
                     onMouseEnter={() => setHoveredTaskRowId(task.rawId)}
                     onMouseLeave={() => setHoveredTaskRowId(null)}
+                    onDragOver={(event) => {
+                      if (!isManualOrderActive || draggedRowTaskId === null) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setRowDropTarget({
+                        taskId: task.rawId,
+                        placeAfter: shouldDropAfter(event, event.currentTarget),
+                      });
+                    }}
+                    onDrop={(event) => {
+                      if (!isManualOrderActive || draggedRowTaskId === null) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      const movedTaskId = Number(
+                        event.dataTransfer.getData("text/plain") || draggedRowTaskId
+                      );
+                      const placeAfter = shouldDropAfter(event, event.currentTarget);
+
+                      setDraggedRowTaskId(null);
+                      setRowDropTarget(null);
+                      void handleTaskDropBeside(movedTaskId, task.rawId, placeAfter);
+                    }}
+                    data-drop-edge={dropEdge}
+                    style={{
+                      opacity: isDraggedRow ? 0.45 : 1,
+                    }}
                   >
                     <td>
-                      <Checkbox
-                        size="sm"
-                        checked={selectedTaskIds.includes(task.rawId)}
-                        onChange={() => handleToggleTaskSelection(task.rawId)}
-                        slotProps={{ input: { "aria-label": `Select task ${task.id}` } }}
-                      />
+                      <Stack direction="row" spacing={0.25} alignItems="center">
+                        {isManualOrderActive ? (
+                          <Tooltip title="Drag to reorder">
+                            <Box
+                              component="span"
+                              draggable={!savingTaskIds.includes(task.rawId)}
+                              aria-label={`Drag to reorder task ${task.id}`}
+                              onDragStart={(event) => {
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData("text/plain", String(task.rawId));
+
+                                // Drag the whole row, not just the handle glyph.
+                                const rowElement = event.currentTarget.closest("tr");
+
+                                if (rowElement) {
+                                  event.dataTransfer.setDragImage(rowElement, 24, 16);
+                                }
+
+                                setDraggedRowTaskId(task.rawId);
+                              }}
+                              onDragEnd={() => {
+                                setDraggedRowTaskId(null);
+                                setRowDropTarget(null);
+                              }}
+                              sx={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                color: "#b3bcd2",
+                                cursor: savingTaskIds.includes(task.rawId) ? "wait" : "grab",
+                                "&:active": {
+                                  cursor: savingTaskIds.includes(task.rawId)
+                                    ? "wait"
+                                    : "grabbing",
+                                },
+                                "&:hover": { color: "#3155ff" },
+                              }}
+                            >
+                              <DragIndicatorRounded sx={{ fontSize: "1.05rem" }} />
+                            </Box>
+                          </Tooltip>
+                        ) : null}
+                        <Checkbox
+                          size="sm"
+                          checked={selectedTaskIds.includes(task.rawId)}
+                          onChange={() => handleToggleTaskSelection(task.rawId)}
+                          slotProps={{ input: { "aria-label": `Select task ${task.id}` } }}
+                        />
+                      </Stack>
                     </td>
                     <td>
                       <Stack direction="row" spacing={0.5} alignItems="center">
@@ -2863,7 +3189,8 @@ export default function ProjectTasksMain({
                       </Stack>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {!isLoadingTasks && tasks.length === 0 ? (
                   <tr>
                     <td colSpan={9}>

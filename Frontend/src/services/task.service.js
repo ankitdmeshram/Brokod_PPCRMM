@@ -185,6 +185,19 @@ export async function updateTask(taskId, payload, token) {
   return parseApiResponse(response);
 }
 
+export async function reorderTask(taskId, payload, token) {
+  const response = await fetch(`${TASK_API_BASE}/${taskId}/reorder`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
 export async function bulkUpdateTasks(payload, token) {
   const response = await fetch(`${TASK_API_BASE}/bulk`, {
     method: "PATCH",

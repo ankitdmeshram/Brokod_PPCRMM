@@ -704,6 +704,44 @@ const validateImportTasksPayload = (payload = {}) => {
   };
 };
 
+// A drop is described by the two tasks it landed between, not by a numeric
+// index. Neighbour ids stay correct while the list is paginated or filtered,
+// and let the server resolve real ranks under a lock.
+const validateReorderTaskPayload = (payload = {}) => {
+  const normalizeNeighbourId = (value, label) => {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+
+    const normalizedValue = Number(value);
+
+    if (!Number.isInteger(normalizedValue) || normalizedValue <= 0) {
+      throw new AppError(`${label} must be a valid task id when provided.`, 400);
+    }
+
+    return normalizedValue;
+  };
+
+  const beforeTaskId = normalizeNeighbourId(payload?.beforeTaskId, "beforeTaskId");
+  const afterTaskId = normalizeNeighbourId(payload?.afterTaskId, "afterTaskId");
+
+  if (beforeTaskId !== null && beforeTaskId === afterTaskId) {
+    throw new AppError("beforeTaskId and afterTaskId must be different tasks.", 400);
+  }
+
+  const status = normalizeOptionalString(payload?.status).toLowerCase();
+
+  if (status && !allowedStatuses.has(status)) {
+    throw new AppError(`status must be one of: ${[...allowedStatuses].join(", ")}.`, 400);
+  }
+
+  return {
+    beforeTaskId,
+    afterTaskId,
+    status: status || null,
+  };
+};
+
 const validateTaskId = (taskId) => {
   const normalizedTaskId = Number(taskId);
 
@@ -745,6 +783,7 @@ module.exports = {
   validateExportTasksFilters,
   validateGetTasksFilters,
   validateImportTasksPayload,
+  validateReorderTaskPayload,
   validateTaskId,
   validateUpdateTaskPayload,
 };

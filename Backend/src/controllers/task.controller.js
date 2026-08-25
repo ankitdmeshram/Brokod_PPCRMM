@@ -201,6 +201,20 @@ const bulkUpdateTasks = asyncHandler(async (request, response) => {
   });
 });
 
+const reorderTask = asyncHandler(async (request, response) => {
+  const task = await taskService.reorderTask(
+    request.params.taskId,
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    message: "Task order updated successfully.",
+    task,
+  });
+});
+
 const deleteTask = asyncHandler(async (request, response) => {
   await taskService.deleteTask(
     request.params.taskId,
@@ -224,6 +238,7 @@ module.exports = {
   getTaskById,
   getTaskBySlug,
   getTasks,
+  reorderTask,
   updateTaskComment,
   updateTask,
 };

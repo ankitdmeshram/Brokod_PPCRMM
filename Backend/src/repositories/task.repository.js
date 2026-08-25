@@ -18,6 +18,7 @@ const taskSelectColumns = [
   "tasks.due_date",
   "tasks.completed_at",
   "tasks.task_type",
+  "tasks.sort_position",
   "tasks.tags",
   "tasks.created_at",
   "tasks.updated_at",
@@ -255,6 +256,83 @@ const applyAdvancedTaskFilters = (query, advancedFilters = []) => {
   return query;
 };
 
+// Manual ranks are spaced so a drop between two neighbours can take their
+// midpoint, letting a reorder write one row instead of renumbering the tail.
+const SORT_POSITION_GAP = 1000;
+
+const getTopSortPosition = async (projectId, trx = getDb()) => {
+  const result = await trx("tasks")
+    .min({ minPosition: "sort_position" })
+    .where("project_id", projectId)
+    .whereNull("deleted_at")
+    .first();
+
+  if (result?.minPosition === null || result?.minPosition === undefined) {
+    return SORT_POSITION_GAP;
+  }
+
+  return Number(result.minPosition) - SORT_POSITION_GAP;
+};
+
+const getBottomSortPosition = async (projectId, trx = getDb()) => {
+  const result = await trx("tasks")
+    .max({ maxPosition: "sort_position" })
+    .where("project_id", projectId)
+    .whereNull("deleted_at")
+    .first();
+
+  if (result?.maxPosition === null || result?.maxPosition === undefined) {
+    return SORT_POSITION_GAP;
+  }
+
+  return Number(result.maxPosition) + SORT_POSITION_GAP;
+};
+
+// Locks the rows a reorder reads so two concurrent drags into the same gap are
+// serialized instead of both computing the midpoint of stale ranks.
+const lockTasksForSort = async (taskIds = [], trx = getDb()) => {
+  if (taskIds.length === 0) {
+    return [];
+  }
+
+  return trx("tasks")
+    .select("id", "project_id", "sort_position")
+    .whereIn("id", taskIds)
+    .whereNull("deleted_at")
+    .forUpdate();
+};
+
+// Called only when a gap has closed. Respreads the project's ranks on multiples
+// of SORT_POSITION_GAP while preserving the order the user currently sees.
+const rebalanceProjectSortPositions = async (projectId, trx = getDb()) => {
+  await trx.raw(
+    `
+      UPDATE tasks AS target
+      JOIN (
+        SELECT
+          id,
+          ROW_NUMBER() OVER (
+            ORDER BY sort_position IS NULL ASC, sort_position ASC, id DESC
+          ) AS row_position
+        FROM tasks
+        WHERE project_id = ? AND deleted_at IS NULL
+      ) AS ranked ON ranked.id = target.id
+      SET target.sort_position = ranked.row_position * ?
+    `,
+    [projectId, SORT_POSITION_GAP]
+  );
+};
+
+const updateSortPositionById = async (id, { sortPosition, status }, trx = getDb()) => {
+  const updates = { sort_position: sortPosition };
+
+  if (status) {
+    updates.status = status;
+  }
+
+  return trx("tasks").where({ id }).whereNull("deleted_at").update(updates);
+};
+
 const create = async (
   {
     projectId,
@@ -273,10 +351,16 @@ const create = async (
     dueDate,
     completedAt,
     taskType,
+    sortPosition,
     tags,
   },
   trx = getDb()
 ) => {
+  const resolvedSortPosition =
+    sortPosition === null || sortPosition === undefined
+      ? await getTopSortPosition(projectId, trx)
+      : sortPosition;
+
   const result = await trx("tasks").insert({
     project_id: projectId,
     project_task_number: projectTaskNumber,
@@ -294,6 +378,7 @@ const create = async (
     due_date: dueDate,
     completed_at: completedAt,
     task_type: taskType,
+    sort_position: resolvedSortPosition,
     tags: JSON.stringify(tags),
   });
 
@@ -354,8 +439,10 @@ const findAll = async (filters = {}, trx = getDb()) => {
     }
   });
 
+  // With no explicit column sort the list falls back to the manual drag order.
+  // Tasks that predate a rank sort last rather than jumping to the top.
   if (sortRules.length === 0) {
-    query.orderBy("tasks.created_at", "desc");
+    query.orderByRaw("tasks.sort_position IS NULL asc, tasks.sort_position asc");
   }
 
   if (!sortRules.some(({ field }) => field === "id")) {
@@ -405,12 +492,18 @@ const updateById = async (id, updates, trx = getDb()) =>
   });
 
 module.exports = {
+  SORT_POSITION_GAP,
   countAll,
   create,
   findAll,
   findById,
   findBySlug,
+  getBottomSortPosition,
   getNextProjectTaskNumber,
+  getTopSortPosition,
+  lockTasksForSort,
+  rebalanceProjectSortPositions,
   softDeleteById,
   updateById,
+  updateSortPositionById,
 };
