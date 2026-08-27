@@ -5,6 +5,7 @@ import AppLayout from "../components/app/AppLayout";
 import OverviewMetricGrid from "../components/workspace/OverviewMetricGrid";
 import OverviewTaskSection from "../components/workspace/OverviewTaskSection";
 import ProjectUsersMain from "../components/workspace/ProjectUsersMain";
+import ProjectCalendarMain from "../components/workspace/ProjectCalendarMain";
 import ProjectTasksMain from "../components/workspace/ProjectTasksMain";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotificationsMain";
@@ -696,6 +697,12 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
             projectName={projectTitle}
           />
         </Box>
+      ) : section === "calendar" ? (
+        <ProjectCalendarMain
+          project={project}
+          workspace={workspace}
+          projectTitle={projectTitle}
+        />
       ) : (
         <Box
           sx={{

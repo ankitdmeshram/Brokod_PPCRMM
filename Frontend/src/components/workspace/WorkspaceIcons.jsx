@@ -29,3 +29,5 @@ export { default as AuditLogsIcon } from "@mui/icons-material/FactCheckOutlined"
 export { default as ActivityLogsIcon } from "@mui/icons-material/HistoryOutlined";
 export { default as RolesIcon } from "@mui/icons-material/AdminPanelSettingsOutlined";
 export { default as AccessIcon } from "@mui/icons-material/LockOutlined";
+export { default as PrevIcon } from "@mui/icons-material/ChevronLeftRounded";
+export { default as NextIcon } from "@mui/icons-material/ChevronRightRounded";
