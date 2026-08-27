@@ -7,6 +7,7 @@ import {
   FolderIcon,
   GridIcon,
   NotificationIcon,
+  TasksIcon,
   UsersIcon,
 } from "../components/workspace/WorkspaceIcons";
 import WorkspaceOverviewMain from "../components/workspace/WorkspaceOverviewMain";
@@ -18,6 +19,7 @@ import {
   buildWorkspaceOverviewRoute,
   buildWorkspaceProjectsRoute,
   buildWorkspaceNotificationsRoute,
+  buildWorkspaceTasksRoute,
   buildWorkspaceUsersRoute,
 } from "../router/authRoutes";
 import { fetchWorkspaces } from "../services/workspace.service";
@@ -26,6 +28,7 @@ import WorkspaceUsersMain from "../components/workspace/WorkspaceUsersMain";
 import { Box, Typography } from "@mui/joy";
 import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotificationsMain";
 import ApplicationsMain from "../components/workspace/ApplicationsMain";
+import AllTasksMain from "../components/workspace/AllTasksMain";
 
 const formatWorkspaceTitle = (workspaceName = "") =>
   workspaceName
@@ -68,6 +71,13 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
       to: buildWorkspaceApplicationsRoute(workspaceSlug),
       active: section === "applications",
     };
+    const tasksItem = {
+      key: "tasks",
+      icon: <TasksIcon />,
+      label: "Tasks",
+      to: buildWorkspaceTasksRoute(workspaceSlug),
+      active: section === "tasks",
+    };
     const usersItem = canViewWorkspaceUsers
       ? {
           key: "users",
@@ -84,13 +94,12 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
       to: buildWorkspaceNotificationsRoute(workspaceSlug),
       active: section === "notifications",
     };
-
     if (section === "applications") {
-      return [applicationsItem, usersItem, notificationsItem].filter(Boolean);
+      return [applicationsItem, tasksItem, usersItem, notificationsItem].filter(Boolean);
     }
 
     return [
-      ["users", "notifications"].includes(section) ? applicationsItem : null,
+      ["users", "notifications", "tasks"].includes(section) ? applicationsItem : null,
       !["users", "notifications"].includes(section)
         ? {
             key: "overview",
@@ -109,8 +118,9 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
             active: section === "projects",
           }
         : null,
-      !["overview", "projects"].includes(section) ? usersItem : null,
-      !["overview", "projects"].includes(section) ? notificationsItem : null,
+      tasksItem,
+      usersItem,
+      notificationsItem,
     ].filter(Boolean);
   }, [canViewWorkspaceUsers, section, workspaceSlug]);
 
@@ -164,6 +174,7 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
 
   return (
     <AppLayout
+      initialSidebarCollapsed={section === "tasks"}
       sidebar={
         <ProjectsSidebar
           sectionLabel={workspaceTitle}
@@ -190,6 +201,8 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
         <ApplicationsMain workspace={workspace} />
       ) : section === "overview" ? (
         <WorkspaceOverviewMain workspace={workspace} workspaceTitle={workspaceTitle} />
+      ) : section === "tasks" ? (
+        <AllTasksMain workspace={workspace} workspaceTitle={workspaceTitle} />
       ) : section === "users" ? (
         <Box
           sx={{

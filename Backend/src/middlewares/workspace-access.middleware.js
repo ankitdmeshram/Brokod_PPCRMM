@@ -119,6 +119,51 @@ const requireActiveWorkspaceUserByProjectId = async (request, _response, next) =
   }
 };
 
+// Accepts either a projectId (scoped to that project) or, when absent, a
+// workspaceId (scoped to every project in the workspace the user can see).
+// Used by task endpoints that can list or bulk-update across projects.
+const requireActiveWorkspaceUserByProjectOrWorkspace = async (request, _response, next) => {
+  try {
+    const projectIdSource =
+      request.params.projectId ?? request.query.projectId ?? request.body?.projectId;
+    const normalizedProjectId = Number(projectIdSource);
+
+    if (Number.isInteger(normalizedProjectId) && normalizedProjectId > 0) {
+      const project = await projectRepository.findById(normalizedProjectId);
+
+      if (!project) {
+        throw new AppError("Project not found.", 404);
+      }
+
+      const access = await assertActiveWorkspaceAccess(
+        project.workspace_id ?? project.workspaceId,
+        request.user.sub
+      );
+
+      request.project = project;
+      attachWorkspaceAccess(request, access);
+      next();
+      return;
+    }
+
+    const workspaceIdSource = request.query.workspaceId ?? request.body?.workspaceId;
+
+    if (
+      workspaceIdSource === undefined ||
+      workspaceIdSource === null ||
+      String(workspaceIdSource).trim() === ""
+    ) {
+      throw new AppError("Please provide a valid project id or workspace id.", 400);
+    }
+
+    const access = await assertActiveWorkspaceAccess(workspaceIdSource, request.user.sub);
+    attachWorkspaceAccess(request, access);
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 const requireActiveWorkspaceUserByProjectSlug = async (request, _response, next) => {
   try {
     const projectSlug = String(request.params.projectSlug || "").trim();
@@ -249,6 +294,7 @@ const requireWorkspaceOwnerAdminOrMember = (request, _response, next) => {
 module.exports = {
   requireActiveWorkspaceUser,
   requireActiveWorkspaceUserByProjectId,
+  requireActiveWorkspaceUserByProjectOrWorkspace,
   requireActiveWorkspaceUserByProjectSlug,
   requireActiveWorkspaceUserByTaskId,
   requireActiveWorkspaceUserByTaskSlug,

@@ -5,6 +5,7 @@ const taskController = require("../controllers/task.controller");
 const { requireAuth } = require("../middlewares/auth.middleware");
 const {
   requireActiveWorkspaceUserByProjectId,
+  requireActiveWorkspaceUserByProjectOrWorkspace,
   requireActiveWorkspaceUserByTaskId,
   requireActiveWorkspaceUserByTaskSlug,
 } = require("../middlewares/workspace-access.middleware");
@@ -69,7 +70,7 @@ const upload = multer({
  *         description: Legacy single-column sort field. Use sort for multi-column sorting.
  *         schema:
  *           type: string
- *           enum: [id, title, status, priority, dueDate, assignedTo, assignedBy]
+ *           enum: [id, title, project, status, priority, dueDate, assignedTo, assignedBy]
  *       - in: query
  *         name: sortOrder
  *         description: Legacy direction required when sortBy is provided.
@@ -440,7 +441,7 @@ const upload = multer({
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/", requireAuth, requireActiveWorkspaceUserByProjectId, taskController.getTasks);
+router.get("/", requireAuth, requireActiveWorkspaceUserByProjectOrWorkspace, taskController.getTasks);
 router.get(
   "/export/json",
   requireAuth,
@@ -457,7 +458,7 @@ router.post(
 router.patch(
   "/bulk",
   requireAuth,
-  requireActiveWorkspaceUserByProjectId,
+  requireActiveWorkspaceUserByProjectOrWorkspace,
   taskController.bulkUpdateTasks
 );
 router.post("/", requireAuth, requireActiveWorkspaceUserByProjectId, taskController.createTask);

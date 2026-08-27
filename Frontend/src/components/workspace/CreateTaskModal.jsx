@@ -63,6 +63,7 @@ export default function CreateTaskModal({
   open,
   initialValues,
   projectUserOptions = [],
+  projectOptions = [],
   loading,
   onClose,
   onSubmit,
@@ -167,6 +168,25 @@ export default function CreateTaskModal({
                 Create task
               </Typography>
             </Stack>
+
+            {projectOptions.length > 0 ? (
+              <Stack spacing={1}>
+                <FormControl required>
+                  <FormLabel>Project</FormLabel>
+                  <Select
+                    value={values.projectId || null}
+                    onChange={(_, value) => handleFieldChange("projectId", value || "")}
+                    placeholder="Select project"
+                  >
+                    {projectOptions.map((option) => (
+                      <Option key={option.id} value={String(option.id)}>
+                        {option.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+            ) : null}
 
             <Stack spacing={1}>
               <FormControl required>

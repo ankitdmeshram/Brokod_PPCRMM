@@ -52,6 +52,8 @@ const sanitizeFileNamePart = (value, fallback) => {
 const mapTask = (task) => ({
   id: task.id,
   projectId: task.project_id ?? task.projectId,
+  projectName: task.project_name ?? task.projectName ?? null,
+  projectSlug: task.project_slug ?? task.projectSlug ?? null,
   projectTaskNumber: task.project_task_number ?? task.projectTaskNumber ?? null,
   parentTaskId: task.parent_task_id ?? task.parentTaskId ?? null,
   workspaceId: task.workspace_id ?? task.workspaceId,
@@ -376,6 +378,71 @@ const getTasks = async (filters = {}, userId, userRole = "") => {
     offset,
   } = validateGetTasksFilters(filters);
 
+  const sharedFilters = {
+    search,
+    id,
+    title,
+    status,
+    priority,
+    dueDate,
+    assignedTo,
+    assignedBy,
+    tags,
+    updatedAt,
+    createdAt,
+    advancedFilters,
+  };
+
+  // With no projectId, the request spans every project in the workspace the
+  // user can see rather than a single project's task list.
+  if (!projectId) {
+    const workspace = isSuperAdmin(userRole)
+      ? await workspaceRepository.findById(workspaceId)
+      : await workspaceRepository.findByIdForUser(workspaceId, userId);
+
+    if (!workspace) {
+      throw new AppError("Workspace not found.", 404);
+    }
+
+    const accessibleProjects = isSuperAdmin(userRole)
+      ? await projectRepository.findAll({ workspaceId })
+      : await projectRepository.findAllByUserId(userId, { workspaceId });
+    const projectIds = accessibleProjects.map((accessibleProject) => Number(accessibleProject.id));
+
+    if (projectIds.length === 0) {
+      return {
+        tasks: [],
+        pagination: { page, limit, total: 0, totalPages: 1 },
+      };
+    }
+
+    const [tasks, total] = await Promise.all([
+      taskRepository.findAll({
+        projectIds,
+        workspaceId,
+        ...sharedFilters,
+        sortRules,
+        limit,
+        offset,
+      }),
+      taskRepository.countAll({
+        projectIds,
+        workspaceId,
+        ...sharedFilters,
+      }),
+    ]);
+
+    return {
+      tasks: tasks.map(mapTask),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
+
   const project = isSuperAdmin(userRole)
     ? await projectRepository.findById(projectId)
     : await projectRepository.findByIdForUser(projectId, userId);
@@ -394,18 +461,7 @@ const getTasks = async (filters = {}, userId, userRole = "") => {
     taskRepository.findAll({
       projectId,
       workspaceId: workspaceId ?? resolvedWorkspaceId,
-      search,
-      id,
-      title,
-      status,
-      priority,
-      dueDate,
-      assignedTo,
-      assignedBy,
-      tags,
-      updatedAt,
-      createdAt,
-      advancedFilters,
+      ...sharedFilters,
       sortRules,
       limit,
       offset,
@@ -413,18 +469,7 @@ const getTasks = async (filters = {}, userId, userRole = "") => {
     taskRepository.countAll({
       projectId,
       workspaceId: workspaceId ?? resolvedWorkspaceId,
-      search,
-      id,
-      title,
-      status,
-      priority,
-      dueDate,
-      assignedTo,
-      assignedBy,
-      tags,
-      updatedAt,
-      createdAt,
-      advancedFilters,
+      ...sharedFilters,
     }),
   ]);
 
@@ -787,11 +832,17 @@ const bulkUpdateTasks = async (payload, userId, userRole = "") => {
   const hasUpdate = (field) => Object.prototype.hasOwnProperty.call(updates, field);
 
   return getDb().transaction(async (trx) => {
-    const project = isSuperAdmin(userRole)
-      ? await projectRepository.findById(projectId, trx)
-      : await projectRepository.findByIdForUser(projectId, userId, trx);
+    // A shared projectId means every selected task must belong to it (the
+    // per-project task list). Without one, the selection can span projects
+    // (the workspace-wide task list), so each task's own project is resolved
+    // and authorized individually below.
+    const sharedProject = projectId
+      ? isSuperAdmin(userRole)
+        ? await projectRepository.findById(projectId, trx)
+        : await projectRepository.findByIdForUser(projectId, userId, trx)
+      : null;
 
-    if (!project) {
+    if (projectId && !sharedProject) {
       throw new AppError("Project not found.", 404);
     }
 
@@ -799,9 +850,20 @@ const bulkUpdateTasks = async (payload, userId, userRole = "") => {
 
     for (const taskId of taskIds) {
       const task = await taskRepository.findById(taskId, trx);
+      const taskProjectId = task ? Number(task.project_id ?? task.projectId) : null;
 
-      if (!task || Number(task.project_id ?? task.projectId) !== projectId) {
+      if (!task || (projectId && taskProjectId !== projectId)) {
         throw new AppError(`Task ${taskId} was not found in this project.`, 404);
+      }
+
+      const project = sharedProject
+        ? sharedProject
+        : isSuperAdmin(userRole)
+          ? await projectRepository.findById(taskProjectId, trx)
+          : await projectRepository.findByIdForUser(taskProjectId, userId, trx);
+
+      if (!project) {
+        throw new AppError(`Task ${taskId} was not found.`, 404);
       }
 
       if (!isSuperAdmin(userRole)) {
@@ -843,7 +905,7 @@ const bulkUpdateTasks = async (payload, userId, userRole = "") => {
       const parentTaskId = await assertParentTaskValid(
         normalizedUpdates.parentTaskId,
         {
-          projectId,
+          projectId: taskProjectId,
           workspaceId: Number(task.workspace_id ?? task.workspaceId),
           currentTaskId: taskId,
         },

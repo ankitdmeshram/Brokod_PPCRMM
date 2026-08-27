@@ -59,11 +59,14 @@ const taskSortColumns = {
 const buildTaskBaseQuery = (trx = getDb()) =>
   trx("tasks")
     .leftJoin({ parent_task: "tasks" }, "parent_task.id", "tasks.parent_task_id")
+    .leftJoin({ owning_project: "projects" }, "owning_project.id", "tasks.project_id")
     .leftJoin({ assigned_by_user: "users" }, "assigned_by_user.id", "tasks.assigned_by")
     .leftJoin({ assigned_to_user: "users" }, "assigned_to_user.id", "tasks.assigned_to")
     .leftJoin({ created_by_user: "users" }, "created_by_user.id", "tasks.created_by")
     .select(
       ...taskSelectColumns,
+      "owning_project.project_name as project_name",
+      "owning_project.slug as project_slug",
       "assigned_by_user.first_name as assigned_by_first_name",
       "assigned_by_user.last_name as assigned_by_last_name",
       "assigned_by_user.email as assigned_by_email",
@@ -95,6 +98,10 @@ const buildTaskBaseQuery = (trx = getDb()) =>
 const applyTaskFilters = (query, filters = {}) => {
   if (filters.projectId) {
     query.andWhere("tasks.project_id", filters.projectId);
+  }
+
+  if (Array.isArray(filters.projectIds) && filters.projectIds.length > 0) {
+    query.whereIn("tasks.project_id", filters.projectIds);
   }
 
   if (filters.workspaceId) {
@@ -434,6 +441,8 @@ const findAll = async (filters = {}, trx = getDb()) => {
       query.orderByRaw(
         `LOWER(TRIM(CONCAT(COALESCE(assigned_by_user.first_name, ''), ' ', COALESCE(assigned_by_user.last_name, '')))) ${order}`
       );
+    } else if (field === "project") {
+      query.orderByRaw(`LOWER(owning_project.project_name) ${order}`);
     } else {
       query.orderBy(taskSortColumns[field], order);
     }

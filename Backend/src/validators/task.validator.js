@@ -10,6 +10,7 @@ const booleanFilterOperators = new Set(["eq", "neq"]);
 const allowedTaskSortFields = new Set([
   "id",
   "title",
+  "project",
   "status",
   "priority",
   "dueDate",
@@ -511,14 +512,18 @@ const validateUpdateTaskPayload = (payload) => {
 };
 
 const validateBulkUpdateTasksPayload = (payload = {}) => {
-  const projectId = Number(payload?.projectId);
+  const rawProjectId = payload?.projectId;
+  const projectId =
+    rawProjectId === undefined || rawProjectId === null || rawProjectId === ""
+      ? null
+      : Number(rawProjectId);
   const taskIds = Array.isArray(payload?.taskIds)
     ? [...new Set(payload.taskIds.map(Number))]
     : [];
   const updates = payload?.updates;
 
-  if (!Number.isInteger(projectId) || projectId <= 0) {
-    throw new AppError("projectId is required and must be a valid integer.", 400);
+  if (projectId !== null && (!Number.isInteger(projectId) || projectId <= 0)) {
+    throw new AppError("projectId must be a valid integer when provided.", 400);
   }
 
   if (
@@ -549,7 +554,11 @@ const validateBulkUpdateTasksPayload = (payload = {}) => {
 };
 
 const validateGetTasksFilters = (filters = {}) => {
-  const projectId = Number(filters?.projectId);
+  const rawProjectId = filters?.projectId;
+  const projectId =
+    rawProjectId === undefined || rawProjectId === null || rawProjectId === ""
+      ? null
+      : Number(rawProjectId);
   const workspaceId =
     filters?.workspaceId === undefined || filters?.workspaceId === null || filters?.workspaceId === ""
       ? null
@@ -574,12 +583,16 @@ const validateGetTasksFilters = (filters = {}) => {
     sortOrder: filters?.sortOrder,
   });
 
-  if (!Number.isInteger(projectId) || projectId <= 0) {
-    throw new AppError("projectId is required and must be a valid integer.", 400);
+  if (projectId !== null && (!Number.isInteger(projectId) || projectId <= 0)) {
+    throw new AppError("projectId must be a valid integer when provided.", 400);
   }
 
   if (workspaceId !== null && (!Number.isInteger(workspaceId) || workspaceId <= 0)) {
     throw new AppError("workspaceId must be a valid integer when provided.", 400);
+  }
+
+  if (projectId === null && workspaceId === null) {
+    throw new AppError("Please provide either a projectId or a workspaceId.", 400);
   }
 
   if (!Number.isInteger(page) || page <= 0) {

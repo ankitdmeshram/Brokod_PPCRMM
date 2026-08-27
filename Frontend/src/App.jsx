@@ -59,6 +59,14 @@ export default function App() {
             }
           />
           <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/tasks`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="tasks" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={`${APP_ROUTES.workspace}/:workspaceSlug/users`}
             element={
               <ProtectedRoute>

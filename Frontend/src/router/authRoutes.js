@@ -39,6 +39,9 @@ export const buildWorkspaceUsersRoute = (workspaceSlug) =>
 export const buildWorkspaceNotificationsRoute = (workspaceSlug) =>
   `/workspace/${workspaceSlug}/notifications`;
 
+export const buildWorkspaceTasksRoute = (workspaceSlug) =>
+  `/workspace/${workspaceSlug}/projects/tasks`;
+
 export const buildProjectSectionRoute = (workspaceSlug, projectRouteSegment, section) =>
   `/workspace/${workspaceSlug}/projects/${projectRouteSegment}/${section}`;
 
