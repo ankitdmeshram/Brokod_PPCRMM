@@ -37,6 +37,7 @@ import { Box, Typography } from "@mui/joy";
 import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotificationsMain";
 import ApplicationsMain from "../components/workspace/ApplicationsMain";
 import AllTasksMain from "../components/workspace/AllTasksMain";
+import AllProjectsCalendarMain from "../components/workspace/AllProjectsCalendarMain";
 
 const formatWorkspaceTitle = (workspaceName = "") =>
   workspaceName
@@ -342,11 +343,7 @@ export default function WorkspaceProjectsPage({ section = "projects" }) {
           description="General workspace configuration — name, branding, and defaults — will be managed here."
         />
       ) : section === "calendar" ? (
-        <ComingSoonPanel
-          eyebrow="Projects"
-          title="Calendar"
-          description="A shared calendar of milestones and due dates across every project in this workspace."
-        />
+        <AllProjectsCalendarMain workspace={workspace} workspaceTitle={workspaceTitle} />
       ) : section === "activityLogs" ? (
         <ComingSoonPanel
           eyebrow="Projects"
