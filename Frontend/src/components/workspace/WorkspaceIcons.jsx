@@ -23,3 +23,9 @@ export { default as AuthTrailIcon } from "@mui/icons-material/ManageHistoryOutli
 export { default as FilterIcon } from "@mui/icons-material/FilterAltOutlined";
 export { default as RefreshIcon } from "@mui/icons-material/RefreshOutlined";
 export { default as ViewColumnIcon } from "@mui/icons-material/ViewColumnOutlined";
+export { default as CalendarIcon } from "@mui/icons-material/CalendarMonthOutlined";
+export { default as DocumentsIcon } from "@mui/icons-material/DescriptionOutlined";
+export { default as AuditLogsIcon } from "@mui/icons-material/FactCheckOutlined";
+export { default as ActivityLogsIcon } from "@mui/icons-material/HistoryOutlined";
+export { default as RolesIcon } from "@mui/icons-material/AdminPanelSettingsOutlined";
+export { default as AccessIcon } from "@mui/icons-material/LockOutlined";

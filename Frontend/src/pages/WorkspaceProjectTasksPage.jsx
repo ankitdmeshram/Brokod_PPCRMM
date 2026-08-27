@@ -9,8 +9,11 @@ import ProjectTasksMain from "../components/workspace/ProjectTasksMain";
 import ProjectsSidebar from "../components/workspace/ProjectsSidebar";
 import WorkspaceNotificationsMain from "../components/workspace/WorkspaceNotificationsMain";
 import {
+  ActivityLogsIcon,
+  CalendarIcon,
+  DocumentsIcon,
   GridIcon,
-  NotificationIcon,
+  SettingsIcon,
   TasksIcon,
   UsersIcon,
 } from "../components/workspace/WorkspaceIcons";
@@ -51,12 +54,24 @@ const sectionContent = {
     description: "Project tasks are coming soon. This space will hold task planning, status, ownership, and delivery flow.",
   },
   users: {
-    label: "Users",
+    label: "Users Management",
     description: "Project users are coming soon. This space will show assigned members and their project roles.",
   },
   notifications: {
     label: "Notifications",
     description: "Project notifications are coming soon. This space will collect alerts, updates, and activity for the team.",
+  },
+  calendar: {
+    label: "Calendar",
+    description: "Project calendar is coming soon. This space will surface milestones and due dates on a timeline.",
+  },
+  documents: {
+    label: "Documents",
+    description: "Project documents are coming soon. This space will hold files and references shared with the team.",
+  },
+  activityLogs: {
+    label: "Activity Logs",
+    description: "Project activity logs are coming soon. This space will show a timeline of task and project changes.",
   },
   settings: {
     label: "Settings",
@@ -263,18 +278,39 @@ export default function WorkspaceProjectTasksPage({ section = "tasks" }) {
         active: section === "tasks",
       },
       {
+        key: "calendar",
+        icon: <CalendarIcon />,
+        label: "Calendar",
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "calendar"),
+        active: section === "calendar",
+      },
+      {
+        key: "documents",
+        icon: <DocumentsIcon />,
+        label: "Documents",
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "documents"),
+        active: section === "documents",
+      },
+      {
         key: "users",
         icon: <UsersIcon />,
-        label: "Users",
+        label: "Users Management",
         to: buildProjectSectionRoute(workspaceSlug, projectSlug, "users"),
         active: section === "users",
       },
       {
-        key: "notifications",
-        icon: <NotificationIcon />,
-        label: "Notifications",
-        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "notifications"),
-        active: section === "notifications",
+        key: "activityLogs",
+        icon: <ActivityLogsIcon />,
+        label: "Activity Logs",
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "activity-logs"),
+        active: section === "activityLogs",
+      },
+      {
+        key: "settings",
+        icon: <SettingsIcon />,
+        label: "Settings",
+        to: buildProjectSectionRoute(workspaceSlug, projectSlug, "settings"),
+        active: section === "settings",
       },
     ],
     [projectSlug, section, workspaceSlug]

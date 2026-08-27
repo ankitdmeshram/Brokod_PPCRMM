@@ -83,6 +83,78 @@ export default function App() {
             }
           />
           <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/audit-logs`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="auditLogs" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/settings/access`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="settingsAccess" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/settings/roles`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="settingsRoles" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/settings/workspace`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="settingsWorkspace" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/calendar`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="calendar" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/notifications`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="projectNotifications" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/users`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="projectUsers" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/activity-logs`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="activityLogs" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/settings`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectsPage section="appSettings" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/overview`}
             element={
               <ProtectedRoute>
@@ -119,6 +191,30 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <WorkspaceProjectTasksPage section="notifications" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/calendar`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectTasksPage section="calendar" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/documents`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectTasksPage section="documents" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={`${APP_ROUTES.workspace}/:workspaceSlug/projects/:projectSlug/activity-logs`}
+            element={
+              <ProtectedRoute>
+                <WorkspaceProjectTasksPage section="activityLogs" />
               </ProtectedRoute>
             }
           />

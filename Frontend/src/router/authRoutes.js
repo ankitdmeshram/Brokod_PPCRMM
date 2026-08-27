@@ -42,6 +42,15 @@ export const buildWorkspaceNotificationsRoute = (workspaceSlug) =>
 export const buildWorkspaceTasksRoute = (workspaceSlug) =>
   `/workspace/${workspaceSlug}/projects/tasks`;
 
+export const buildWorkspaceAuditLogsRoute = (workspaceSlug) =>
+  `/workspace/${workspaceSlug}/audit-logs`;
+
+export const buildWorkspaceSettingsRoute = (workspaceSlug, section) =>
+  `/workspace/${workspaceSlug}/settings/${section}`;
+
+export const buildProjectsAppSectionRoute = (workspaceSlug, section) =>
+  `/workspace/${workspaceSlug}/projects/${section}`;
+
 export const buildProjectSectionRoute = (workspaceSlug, projectRouteSegment, section) =>
   `/workspace/${workspaceSlug}/projects/${projectRouteSegment}/${section}`;
 

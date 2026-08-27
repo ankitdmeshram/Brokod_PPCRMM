@@ -66,15 +66,17 @@ export default function AppHeader({
       }}
     >
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
-        <IconButton
-          variant="plain"
-          color="neutral"
-          size="sm"
-          onClick={onMenuClick}
-          sx={{ color: "var(--color-font-secondary)" }}
-        >
-          <MenuIcon />
-        </IconButton>
+        {onMenuClick ? (
+          <IconButton
+            variant="plain"
+            color="neutral"
+            size="sm"
+            onClick={onMenuClick}
+            sx={{ color: "var(--color-font-secondary)" }}
+          >
+            <MenuIcon />
+          </IconButton>
+        ) : null}
       </Stack>
 
       <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexShrink: 0 }}>

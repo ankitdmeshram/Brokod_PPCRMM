@@ -1,5 +1,5 @@
 import { APP_ROUTES } from "../../router/authRoutes";
-import { Button, Sheet, Stack, Tooltip, Typography } from "@mui/joy";
+import { Button, Chip, Sheet, Stack, Tooltip, Typography } from "@mui/joy";
 import { Link as RouterLink } from "react-router-dom";
 import {
   ArrowIcon,
@@ -117,19 +117,35 @@ export default function ProjectsSidebar({
             </Typography>
           ) : null}
 
-          {items.map((item) =>
-            renderSidebarAction(
+          {items.map((item) => {
+            const isParentWithChildren = Array.isArray(item.children) && item.children.length > 0;
+            const navButton = (
               <Button
                 key={item.key}
-                {...buildNavigationProps(item.to)}
+                {...(item.disabled ? {} : buildNavigationProps(item.to))}
+                disabled={item.disabled}
                 variant={item.active ? "soft" : "plain"}
                 startDecorator={isCollapsed ? null : item.icon}
-                endDecorator={isCollapsed ? null : item.active ? <ArrowIcon /> : null}
+                endDecorator={
+                  isCollapsed
+                    ? null
+                    : item.disabled
+                      ? (
+                        <Chip size="sm" variant="soft" sx={{ fontSize: "0.62rem", fontWeight: 700 }}>
+                          Soon
+                        </Chip>
+                      )
+                      : item.active
+                        ? <ArrowIcon />
+                        : null
+                }
                 sx={{
                   justifyContent: isCollapsed ? "center" : "flex-start",
                   minHeight: "36px",
                   backgroundColor: item.active ? "rgba(255,255,255,0.08)" : "transparent",
-                  color: "var(--color-font-secondary)",
+                  color: item.disabled
+                    ? "rgba(255,255,255,0.45)"
+                    : "var(--color-font-secondary)",
                   px: isCollapsed ? 0.875 : 1.35,
                   minWidth: isCollapsed ? "36px" : "auto",
                   width: isCollapsed ? "36px" : "100%",
@@ -146,16 +162,60 @@ export default function ProjectsSidebar({
                     textAlign: "left",
                   },
                   "&:hover": {
-                    backgroundColor: "rgba(255,255,255,0.16)",
+                    backgroundColor: item.disabled ? "transparent" : "rgba(255,255,255,0.16)",
                   },
                 }}
               >
                 {isCollapsed ? item.icon : item.label}
-              </Button>,
-              item.label,
-              item.key
-            )
-          )}
+              </Button>
+            );
+
+            return (
+              <Stack key={item.key} spacing={0.35}>
+                {renderSidebarAction(navButton, item.label, item.key)}
+                {isParentWithChildren && !isCollapsed ? (
+                  <Stack spacing={0.35} sx={{ pl: 2.25 }}>
+                    {item.children.map((childItem) => (
+                      <Button
+                        key={childItem.key}
+                        {...(childItem.disabled ? {} : buildNavigationProps(childItem.to))}
+                        disabled={childItem.disabled}
+                        variant={childItem.active ? "soft" : "plain"}
+                        endDecorator={
+                          childItem.disabled ? (
+                            <Chip size="sm" variant="soft" sx={{ fontSize: "0.62rem", fontWeight: 700 }}>
+                              Soon
+                            </Chip>
+                          ) : null
+                        }
+                        sx={{
+                          justifyContent: "flex-start",
+                          minHeight: "32px",
+                          fontSize: "0.86rem",
+                          backgroundColor: childItem.active ? "rgba(255,255,255,0.08)" : "transparent",
+                          color: childItem.disabled
+                            ? "rgba(255,255,255,0.4)"
+                            : "var(--color-font-secondary)",
+                          px: 1.35,
+                          width: "100%",
+                          textDecoration: "none",
+                          "& .MuiButton-endDecorator": { ml: "auto" },
+                          "& .MuiButton-label": { flex: 1, textAlign: "left" },
+                          "&:hover": {
+                            backgroundColor: childItem.disabled
+                              ? "transparent"
+                              : "rgba(255,255,255,0.16)",
+                          },
+                        }}
+                      >
+                        {childItem.label}
+                      </Button>
+                    ))}
+                  </Stack>
+                ) : null}
+              </Stack>
+            );
+          })}
         </Stack>
 
         <Stack spacing={1} sx={{ mt: "auto", width: "100%" }}>

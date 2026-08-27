@@ -55,10 +55,12 @@ export default function AppLayout({
           "--app-scale": 0.92,
           minHeight: "100vh",
           display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            md: `${sidebarWidth} minmax(0, 1fr)`,
-          },
+          gridTemplateColumns: sidebar
+            ? {
+                xs: "1fr",
+                md: `${sidebarWidth} minmax(0, 1fr)`,
+              }
+            : "1fr",
           backgroundColor: "var(--color-background)",
           fontSize: "calc(1rem * var(--app-scale))",
           transition: "grid-template-columns 0.25s ease",
@@ -80,14 +82,14 @@ export default function AppLayout({
             initial={initial}
             userRole={userRole}
             showSuperAdminChip={showSuperAdminChip}
-            onMenuClick={handleMenuClick}
+            onMenuClick={sidebar ? handleMenuClick : undefined}
           />
           <AppMain>{children}</AppMain>
           <AppFooter currentYear={currentYear} />
         </Box>
       </Box>
 
-      <Modal open={isMobileSidebarOpen} onClose={() => setIsMobileSidebarOpen(false)}>
+      <Modal open={Boolean(sidebar) && isMobileSidebarOpen} onClose={() => setIsMobileSidebarOpen(false)}>
         <Sheet
           sx={{
             display: { xs: "flex", md: "none" },

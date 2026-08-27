@@ -1,7 +1,6 @@
 import { useAuthContext } from "../context/AuthContext";
 import AppLayout from "../components/app/AppLayout";
 import WorkspaceMain from "../components/workspace/WorkspaceMain";
-import WorkspaceSidebar from "../components/workspace/WorkspaceSidebar";
 
 export default function WorkspacePage() {
   const { authSession } = useAuthContext();
@@ -14,7 +13,6 @@ export default function WorkspacePage() {
 
   return (
     <AppLayout
-      sidebar={<WorkspaceSidebar />}
       title="Workspaces"
       fullName={fullName}
       initial={initial}
