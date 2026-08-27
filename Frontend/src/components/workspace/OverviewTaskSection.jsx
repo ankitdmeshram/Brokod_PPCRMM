@@ -118,6 +118,7 @@ export default function OverviewTaskSection({
                     </Typography>
                     <Typography level="body-sm" sx={{ color: "#60708e" }}>
                       Due {formatDateLabel(task.dueDate)}
+                      {task.projectName ? ` | ${task.projectName}` : ""}
                       {task.assignedToName ? ` | Assigned to ${task.assignedToName}` : ""}
                     </Typography>
                   </Stack>
