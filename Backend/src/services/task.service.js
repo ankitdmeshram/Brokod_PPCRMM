@@ -81,6 +81,14 @@ const mapTask = (task) => ({
       : Array.isArray(task.tags)
         ? task.tags
         : [],
+  customFieldValues:
+    typeof task.custom_field_values === "string"
+      ? JSON.parse(task.custom_field_values || "{}")
+      : task.custom_field_values && typeof task.custom_field_values === "object"
+        ? task.custom_field_values
+        : task.customFieldValues && typeof task.customFieldValues === "object"
+          ? task.customFieldValues
+          : {},
   assignedByName:
     `${String(task.assigned_by_first_name || "").trim()} ${String(task.assigned_by_last_name || "").trim()}`.trim() ||
     task.assigned_by_email ||
@@ -219,6 +227,7 @@ const createTaskRecord = async (
     completedAt,
     taskType,
     tags,
+    customFieldValues,
     initialComment,
     initialActivityLog,
   },
@@ -246,6 +255,7 @@ const createTaskRecord = async (
       completedAt,
       taskType,
       tags,
+      customFieldValues,
     },
     trx
   );
@@ -291,6 +301,7 @@ const createTask = async (payload, userId, userRole = "") => {
     completedAt,
     taskType,
     tags,
+    customFieldValues,
     initialComment,
     initialActivityLog,
   } = validateCreateTaskPayload(payload);
@@ -345,6 +356,7 @@ const createTask = async (payload, userId, userRole = "") => {
         completedAt,
         taskType,
         tags,
+        customFieldValues,
         initialComment,
         initialActivityLog,
       },

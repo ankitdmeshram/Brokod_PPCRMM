@@ -9,7 +9,7 @@ const allowedProjectUserInviteModes = new Set([
   "invite_user",
 ]);
 const allowedProjectUserStatuses = new Set(["active", "inactive"]);
-const allowedTaskListColumnKeys = [
+const staticTaskListColumnKeys = [
   "status",
   "priority",
   "dueDate",
@@ -238,13 +238,16 @@ const validateUpdateProjectUserPayload = (payload) => {
 };
 
 // The id and title task columns are always shown and are not part of this
-// managed set, so the modal only ever needs to reorder/hide the rest.
-const validateUpdateTaskColumnsPayload = (payload = {}) => {
+// managed set; every other built-in column plus every custom field is.
+// `allowedKeys` is the static keys plus this project's current custom field
+// keys (`customField:<id>`), resolved by the caller since it requires a
+// project-scoped lookup that a pure validator shouldn't perform itself.
+const validateUpdateTaskColumnsPayload = (payload = {}, allowedKeys = staticTaskListColumnKeys) => {
   const columns = Array.isArray(payload?.columns) ? payload.columns : null;
 
-  if (!columns || columns.length !== allowedTaskListColumnKeys.length) {
+  if (!columns || columns.length !== allowedKeys.length) {
     throw new AppError(
-      `columns must include exactly these keys: ${allowedTaskListColumnKeys.join(", ")}.`,
+      `columns must include exactly these keys: ${allowedKeys.join(", ")}.`,
       400
     );
   }
@@ -255,7 +258,7 @@ const validateUpdateTaskColumnsPayload = (payload = {}) => {
   const normalizedColumns = columns.map((column, index) => {
     const key = String(column?.key || "").trim();
 
-    if (!allowedTaskListColumnKeys.includes(key)) {
+    if (!allowedKeys.includes(key)) {
       throw new AppError(`columns[${index}].key is not a supported task column.`, 400);
     }
 
@@ -274,9 +277,9 @@ const validateUpdateTaskColumnsPayload = (payload = {}) => {
     return { key, visible };
   });
 
-  if (seenKeys.size !== allowedTaskListColumnKeys.length) {
+  if (seenKeys.size !== allowedKeys.length) {
     throw new AppError(
-      `columns must include exactly these keys: ${allowedTaskListColumnKeys.join(", ")}.`,
+      `columns must include exactly these keys: ${allowedKeys.join(", ")}.`,
       400
     );
   }
@@ -289,6 +292,7 @@ const validateUpdateTaskColumnsPayload = (payload = {}) => {
 };
 
 module.exports = {
+  staticTaskListColumnKeys,
   validateAddProjectUserPayload,
   validateCreateProjectPayload,
   validateUpdateProjectUserPayload,

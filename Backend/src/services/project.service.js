@@ -1,4 +1,5 @@
 const { getDb } = require("../config/database");
+const customFieldRepository = require("../repositories/custom-field.repository");
 const projectUserRepository = require("../repositories/project-user.repository");
 const projectRepository = require("../repositories/project.repository");
 const workspaceUserRepository = require("../repositories/workspace-user.repository");
@@ -8,12 +9,36 @@ const AppError = require("../utils/app-error");
 const { hashPassword } = require("../utils/password");
 const { buildTimestampedSlug, slugify } = require("../utils/slug");
 const {
+  staticTaskListColumnKeys,
   validateAddProjectUserPayload,
   validateCreateProjectPayload,
   validateUpdateProjectUserPayload,
   validateUpdateProjectPayload,
   validateUpdateTaskColumnsPayload,
 } = require("../validators/project.validator");
+const {
+  validateCreateCustomFieldPayload,
+  validateUpdateCustomFieldPayload,
+} = require("../validators/custom-field.validator");
+
+const buildCustomFieldColumnKey = (fieldId) => `customField:${fieldId}`;
+
+const mapCustomField = (field) => ({
+  id: field.id,
+  projectId: field.project_id ?? field.projectId,
+  label: field.label,
+  fieldType: field.field_type ?? field.fieldType,
+  options:
+    typeof field.options === "string"
+      ? JSON.parse(field.options || "null")
+      : Array.isArray(field.options)
+        ? field.options
+        : field.options ?? null,
+  sortPosition: field.sort_position ?? field.sortPosition ?? 0,
+  createdBy: field.created_by ?? field.createdBy,
+  createdAt: field.created_at ?? field.createdAt ?? null,
+  updatedAt: field.updated_at ?? field.updatedAt ?? null,
+});
 
 const mapProject = (project) => ({
   id: project.id,
@@ -703,7 +728,13 @@ const updateProjectTaskColumns = async (projectId, payload, userId, userRole = "
     );
   }
 
-  const columns = validateUpdateTaskColumnsPayload(payload);
+  const customFields = await customFieldRepository.findAllByProjectId(normalizedProjectId);
+  const allowedKeys = [
+    ...staticTaskListColumnKeys,
+    ...customFields.map((field) => buildCustomFieldColumnKey(field.id)),
+  ];
+
+  const columns = validateUpdateTaskColumnsPayload(payload, allowedKeys);
 
   await projectRepository.updateById(normalizedProjectId, { taskListColumns: columns });
 
@@ -712,6 +743,143 @@ const updateProjectTaskColumns = async (projectId, payload, userId, userRole = "
     : await projectRepository.findByIdForUser(normalizedProjectId, userId);
 
   return mapProject(updatedProject);
+};
+
+const getProjectCustomFields = async (projectId, userId, userRole = "") => {
+  const normalizedProjectId = Number(projectId);
+
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  if (!existingProject) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  const customFields = await customFieldRepository.findAllByProjectId(normalizedProjectId);
+
+  return customFields.map(mapCustomField);
+};
+
+const createProjectCustomField = async (projectId, payload, userId, userRole = "") => {
+  const normalizedProjectId = Number(projectId);
+
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  if (!existingProject) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  if (!canManageProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only the project owner or a workspace owner/admin can manage custom fields.",
+      403
+    );
+  }
+
+  const { label, fieldType, options } = validateCreateCustomFieldPayload(payload);
+  const sortPosition = await customFieldRepository.getNextSortPosition(normalizedProjectId);
+
+  const fieldId = await customFieldRepository.create({
+    projectId: normalizedProjectId,
+    label,
+    fieldType,
+    options,
+    sortPosition,
+    createdBy: userId,
+  });
+
+  const createdField = await customFieldRepository.findById(fieldId);
+
+  return mapCustomField(createdField);
+};
+
+const updateProjectCustomField = async (projectId, fieldId, payload, userId, userRole = "") => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedFieldId = Number(fieldId);
+
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  if (!Number.isInteger(normalizedFieldId) || normalizedFieldId <= 0) {
+    throw new AppError("Please provide a valid custom field id.", 400);
+  }
+
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  if (!existingProject) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  if (!canManageProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only the project owner or a workspace owner/admin can manage custom fields.",
+      403
+    );
+  }
+
+  const existingField = await customFieldRepository.findById(normalizedFieldId);
+
+  if (!existingField || Number(existingField.project_id) !== normalizedProjectId) {
+    throw new AppError("Custom field not found.", 404);
+  }
+
+  const updates = validateUpdateCustomFieldPayload(payload, existingField);
+
+  await customFieldRepository.updateById(normalizedFieldId, updates);
+
+  const updatedField = await customFieldRepository.findById(normalizedFieldId);
+
+  return mapCustomField(updatedField);
+};
+
+const deleteProjectCustomField = async (projectId, fieldId, userId, userRole = "") => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedFieldId = Number(fieldId);
+
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    throw new AppError("Please provide a valid project id.", 400);
+  }
+
+  if (!Number.isInteger(normalizedFieldId) || normalizedFieldId <= 0) {
+    throw new AppError("Please provide a valid custom field id.", 400);
+  }
+
+  const existingProject = isSuperAdmin(userRole)
+    ? await projectRepository.findById(normalizedProjectId)
+    : await projectRepository.findByIdForUser(normalizedProjectId, userId);
+
+  if (!existingProject) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  if (!canManageProject(existingProject, userRole)) {
+    throw new AppError(
+      "Only the project owner or a workspace owner/admin can manage custom fields.",
+      403
+    );
+  }
+
+  const existingField = await customFieldRepository.findById(normalizedFieldId);
+
+  if (!existingField || Number(existingField.project_id) !== normalizedProjectId) {
+    throw new AppError("Custom field not found.", 404);
+  }
+
+  await customFieldRepository.deleteById(normalizedFieldId);
 };
 
 const deleteProject = async (projectId, userId, userRole = "") => {
@@ -742,13 +910,17 @@ const deleteProject = async (projectId, userId, userRole = "") => {
 module.exports = {
   addProjectUser,
   createProject,
+  createProjectCustomField,
   deleteProjectUser,
   deleteProject,
+  deleteProjectCustomField,
   getProjectById,
   getProjectBySlug,
+  getProjectCustomFields,
   getProjects,
   getProjectUsers,
   updateProjectUser,
   updateProject,
+  updateProjectCustomField,
   updateProjectTaskColumns,
 };

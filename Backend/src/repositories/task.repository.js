@@ -20,6 +20,7 @@ const taskSelectColumns = [
   "tasks.task_type",
   "tasks.sort_position",
   "tasks.tags",
+  "tasks.custom_field_values",
   "tasks.created_at",
   "tasks.updated_at",
   "tasks.deleted_at",
@@ -360,6 +361,7 @@ const create = async (
     taskType,
     sortPosition,
     tags,
+    customFieldValues,
   },
   trx = getDb()
 ) => {
@@ -387,6 +389,7 @@ const create = async (
     task_type: taskType,
     sort_position: resolvedSortPosition,
     tags: JSON.stringify(tags),
+    custom_field_values: JSON.stringify(customFieldValues || {}),
   });
 
   return result[0];
@@ -498,6 +501,7 @@ const updateById = async (id, updates, trx = getDb()) =>
     completed_at: updates.completedAt,
     task_type: updates.taskType,
     tags: JSON.stringify(updates.tags),
+    custom_field_values: JSON.stringify(updates.customFieldValues || {}),
   });
 
 module.exports = {

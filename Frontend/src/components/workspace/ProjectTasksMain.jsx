@@ -8,7 +8,7 @@ import UnfoldMoreRounded from "@mui/icons-material/UnfoldMoreRounded";
 import { Box, Button, Checkbox, Chip, DialogContent, DialogTitle, Dropdown, FormControl, FormLabel, IconButton, Input, Menu, MenuButton, MenuItem, Modal, ModalClose, ModalDialog, Option, Select, Sheet, Stack, Table, Tooltip, Typography } from "@mui/joy";
 import { useTheme } from "@mui/joy/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthContext } from "../../context/AuthContext";
 import {
@@ -16,7 +16,14 @@ import {
   showErrorAlert,
   showSuccessAlert,
 } from "../../services/alert.service";
-import { fetchProjectUsers, updateProjectTaskColumns } from "../../services/project.service";
+import {
+  createProjectCustomField,
+  deleteProjectCustomField,
+  fetchProjectCustomFields,
+  fetchProjectUsers,
+  updateProjectCustomField,
+  updateProjectTaskColumns,
+} from "../../services/project.service";
 import { fetchAllWorkspaceUsers } from "../../services/workspace.service";
 import {
   bulkUpdateTasks,
@@ -36,6 +43,7 @@ import CreateTaskModal from "./CreateTaskModal";
 import {
   DeleteIcon,
   EyeIcon,
+  EyeOffIcon,
   EditIcon,
   ExportIcon,
   FilterIcon,
@@ -113,19 +121,50 @@ const sortableTaskColumns = [
   { key: "assignedBy", label: "Assigned By", style: { width: "160px", minWidth: "160px" } },
 ];
 
-// ID and Task Name anchor the sticky columns and always stay put; only the
-// columns after them can be hidden or reordered from Manage Columns.
+// ID and Task Name anchor the sticky columns and always stay put; every
+// other built-in column plus every custom field can be shown/hidden and
+// reordered from Manage Task Columns.
 const pinnedTaskColumnKeys = ["id", "title"];
-const manageableTaskColumnKeys = sortableTaskColumns
-  .map((column) => column.key)
-  .filter((key) => !pinnedTaskColumnKeys.includes(key));
 
-const buildDefaultTaskColumnSettings = () =>
-  manageableTaskColumnKeys.map((key) => ({ key, visible: true }));
+const buildCustomFieldColumnKey = (fieldId) => `customField:${fieldId}`;
+const isCustomFieldColumnKey = (key) => String(key || "").startsWith("customField:");
+const parseCustomFieldIdFromColumnKey = (key) => String(key || "").slice("customField:".length);
 
-const normalizeTaskColumnSettings = (rawColumns) => {
+// Appends newly-seen custom field keys and drops removed ones, but leaves
+// every already-tracked key exactly where it is. Rebuilding from
+// `manageableKeys` (a fixed, un-reordered list) instead of preserving
+// `currentSettings`'s order here would silently discard any drag-reorder
+// the moment another custom field is added or removed elsewhere.
+const reconcileTaskColumnSettings = (currentSettings, manageableKeys) => {
+  const manageableKeySet = new Set(manageableKeys);
+  const reconciled = currentSettings.filter((column) => manageableKeySet.has(column.key));
+  const seenKeys = new Set(reconciled.map((column) => column.key));
+
+  manageableKeys.forEach((key) => {
+    if (!seenKeys.has(key)) {
+      reconciled.push({ key, visible: true });
+    }
+  });
+
+  return reconciled;
+};
+
+const customFieldTypeOptions = [
+  { value: "text", label: "Text" },
+  { value: "number", label: "Number" },
+  { value: "date", label: "Date" },
+  { value: "select", label: "Select" },
+  { value: "checkbox", label: "Checkbox" },
+];
+
+// `manageableKeys` is passed in rather than read off a module constant since
+// it now depends on the project's custom fields, which load asynchronously.
+const buildDefaultTaskColumnSettings = (manageableKeys) =>
+  manageableKeys.map((key) => ({ key, visible: true }));
+
+const normalizeTaskColumnSettings = (rawColumns, manageableKeys) => {
   if (!Array.isArray(rawColumns) || rawColumns.length === 0) {
-    return buildDefaultTaskColumnSettings();
+    return buildDefaultTaskColumnSettings(manageableKeys);
   }
 
   const seenKeys = new Set();
@@ -134,7 +173,7 @@ const normalizeTaskColumnSettings = (rawColumns) => {
   rawColumns.forEach((column) => {
     const key = String(column?.key || "");
 
-    if (!manageableTaskColumnKeys.includes(key) || seenKeys.has(key)) {
+    if (!manageableKeys.includes(key) || seenKeys.has(key)) {
       return;
     }
 
@@ -142,7 +181,7 @@ const normalizeTaskColumnSettings = (rawColumns) => {
     normalized.push({ key, visible: column?.visible !== false });
   });
 
-  manageableTaskColumnKeys.forEach((key) => {
+  manageableKeys.forEach((key) => {
     if (!seenKeys.has(key)) {
       normalized.push({ key, visible: true });
     }
@@ -406,6 +445,7 @@ const buildEditableTaskValues = (task) => ({
   tags: Array.isArray(task?.rawTask?.tags)
     ? task.rawTask.tags.join(", ")
     : "",
+  customFieldValues: { ...(task?.rawTask?.customFieldValues || {}) },
 });
 
 function OverflowTooltip({ title, children, maxLines = 1 }) {
@@ -778,17 +818,54 @@ export default function ProjectTasksMain({
   const [copiedTaskId, setCopiedTaskId] = useState("");
   const [draggedRowTaskId, setDraggedRowTaskId] = useState(null);
   const [rowDropTarget, setRowDropTarget] = useState(null);
-  const [taskColumnSettings, setTaskColumnSettings] = useState(() =>
-    normalizeTaskColumnSettings(project?.taskListColumns)
+  const [customFields, setCustomFields] = useState([]);
+  const [isCustomFieldFormOpen, setIsCustomFieldFormOpen] = useState(false);
+  const [editingCustomFieldId, setEditingCustomFieldId] = useState(null);
+  const [newCustomFieldLabel, setNewCustomFieldLabel] = useState("");
+  const [newCustomFieldType, setNewCustomFieldType] = useState("text");
+  const [newCustomFieldOptionsText, setNewCustomFieldOptionsText] = useState("");
+  const [newCustomFieldRequired, setNewCustomFieldRequired] = useState(true);
+  const [isSavingCustomField, setIsSavingCustomField] = useState(false);
+  const [deletingCustomFieldId, setDeletingCustomFieldId] = useState(null);
+  const [savingColumnKey, setSavingColumnKey] = useState(null);
+  const customFieldColumns = useMemo(
+    () =>
+      customFields.map((field) => ({
+        key: buildCustomFieldColumnKey(field.id),
+        label: field.label,
+        style: { width: "160px", minWidth: "160px" },
+        isCustomField: true,
+        fieldType: field.fieldType,
+        options: field.options,
+      })),
+    [customFields]
   );
+  const allTaskColumns = useMemo(
+    () => [...sortableTaskColumns, ...customFieldColumns],
+    [customFieldColumns]
+  );
+  const manageableTaskColumnKeys = useMemo(
+    () =>
+      allTaskColumns
+        .map((column) => column.key)
+        .filter((key) => !pinnedTaskColumnKeys.includes(key)),
+    [allTaskColumns]
+  );
+  const [taskColumnSettings, setTaskColumnSettings] = useState(() =>
+    normalizeTaskColumnSettings(project?.taskListColumns, manageableTaskColumnKeys)
+  );
+  const [hasLoadedCustomFieldsOnce, setHasLoadedCustomFieldsOnce] = useState(false);
   const [isManageColumnsModalOpen, setIsManageColumnsModalOpen] = useState(false);
-  const [draftColumnSettings, setDraftColumnSettings] = useState([]);
-  const [isSavingColumnSettings, setIsSavingColumnSettings] = useState(false);
   const [draggedColumnKey, setDraggedColumnKey] = useState(null);
   const [columnDropTarget, setColumnDropTarget] = useState(null);
   const importFileInputRef = useRef(null);
   const copiedTaskIdTimeoutRef = useRef(null);
   const hasMountedTaskViewRef = useRef(false);
+  // Custom fields load asynchronously, so the very first order-preserving
+  // read of project.taskListColumns has to wait for them — otherwise it
+  // would only ever see the 5 built-in keys and place every custom field
+  // at the end instead of wherever it was actually saved.
+  const hasNormalizedTaskColumnSettingsRef = useRef(false);
   // The saved drag order is what the list falls back to when no column sort is
   // applied, so manual reordering is only meaningful (and only offered) then.
   const isManualOrderActive = sortRules.length === 0;
@@ -819,16 +896,16 @@ export default function ProjectTasksMain({
   const canManageTaskColumns = isWorkspaceOwnerOrAdmin || isProjectOwner;
 
   const orderedVisibleTaskColumns = useMemo(() => {
-    const pinnedColumns = sortableTaskColumns.filter((column) =>
+    const pinnedColumns = allTaskColumns.filter((column) =>
       pinnedTaskColumnKeys.includes(column.key)
     );
     const visibleManageableColumns = taskColumnSettings
       .filter((setting) => setting.visible)
-      .map((setting) => sortableTaskColumns.find((column) => column.key === setting.key))
+      .map((setting) => allTaskColumns.find((column) => column.key === setting.key))
       .filter(Boolean);
 
     return [...pinnedColumns, ...visibleManageableColumns];
-  }, [taskColumnSettings]);
+  }, [taskColumnSettings, allTaskColumns]);
   const taskTableColumnCount = orderedVisibleTaskColumns.length + 2;
 
   const initialTaskFormValues = useMemo(
@@ -897,8 +974,55 @@ export default function ProjectTasksMain({
   }, [searchValue]);
 
   useEffect(() => {
-    setTaskColumnSettings(normalizeTaskColumnSettings(project?.taskListColumns));
-  }, [project?.taskListColumns]);
+    if (!hasNormalizedTaskColumnSettingsRef.current) {
+      // Custom field keys aren't known yet on the very first render, so
+      // wait until they've loaded at least once before doing the one
+      // order-preserving read of the saved project.taskListColumns —
+      // otherwise custom field columns would always land at the end
+      // instead of wherever they were actually saved/reordered to.
+      if (!hasLoadedCustomFieldsOnce) {
+        return;
+      }
+
+      hasNormalizedTaskColumnSettingsRef.current = true;
+      setTaskColumnSettings(
+        normalizeTaskColumnSettings(project?.taskListColumns, manageableTaskColumnKeys)
+      );
+      return;
+    }
+
+    // After that first normalize, only merge in newly added/removed custom
+    // field keys — never re-derive from project?.taskListColumns again, so
+    // a reorder or toggle saved moments ago isn't clobbered by this effect
+    // re-running for an unrelated reason (another field added/removed).
+    setTaskColumnSettings((current) =>
+      reconcileTaskColumnSettings(current, manageableTaskColumnKeys)
+    );
+  }, [hasLoadedCustomFieldsOnce, manageableTaskColumnKeys, project?.taskListColumns]);
+
+  useEffect(() => {
+    const loadCustomFields = async () => {
+      if (!authSession?.token || !project?.id) {
+        setCustomFields([]);
+        hasNormalizedTaskColumnSettingsRef.current = false;
+        setHasLoadedCustomFieldsOnce(false);
+        return;
+      }
+
+      try {
+        const result = await fetchProjectCustomFields(project.id, authSession.token);
+        setCustomFields(Array.isArray(result?.customFields) ? result.customFields : []);
+      } catch {
+        setCustomFields([]);
+      } finally {
+        setHasLoadedCustomFieldsOnce(true);
+      }
+    };
+
+    hasNormalizedTaskColumnSettingsRef.current = false;
+    setHasLoadedCustomFieldsOnce(false);
+    void loadCustomFields();
+  }, [authSession?.token, project?.id]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1192,6 +1316,7 @@ export default function ProjectTasksMain({
       dueDate: draft.dueDate || undefined,
       completedAt: task.rawTask?.completedAt || undefined,
       tags: normalizedTags,
+      customFieldValues: draft.customFieldValues ?? task.rawTask?.customFieldValues ?? {},
     };
 
     const hasChanges =
@@ -1202,7 +1327,9 @@ export default function ProjectTasksMain({
       String(nextPayload.assignedTo || "") !== String(task.rawTask?.assignedTo || "") ||
       String(nextPayload.assignedBy || "") !== String(task.rawTask?.assignedBy || "") ||
       JSON.stringify(normalizedTags) !==
-      JSON.stringify(Array.isArray(task.rawTask?.tags) ? task.rawTask.tags : []);
+      JSON.stringify(Array.isArray(task.rawTask?.tags) ? task.rawTask.tags : []) ||
+      JSON.stringify(nextPayload.customFieldValues) !==
+      JSON.stringify(task.rawTask?.customFieldValues || {});
 
     if (!hasChanges) {
       return;
@@ -1430,6 +1557,7 @@ export default function ProjectTasksMain({
           dueDate: task.rawTask?.dueDate ?? null,
           completedAt: task.rawTask?.completedAt ?? null,
           tags: Array.isArray(task.rawTask?.tags) ? task.rawTask.tags : [],
+          customFieldValues: task.rawTask?.customFieldValues || {},
         },
         authSession.token
       );
@@ -1898,71 +2026,208 @@ export default function ProjectTasksMain({
     }
   };
 
+  const resetCustomFieldForm = () => {
+    setIsCustomFieldFormOpen(false);
+    setEditingCustomFieldId(null);
+    setNewCustomFieldLabel("");
+    setNewCustomFieldType("text");
+    setNewCustomFieldOptionsText("");
+    setNewCustomFieldRequired(true);
+  };
+
   const handleOpenManageColumnsModal = () => {
-    setDraftColumnSettings(taskColumnSettings.map((column) => ({ ...column })));
-    setDraggedColumnKey(null);
-    setColumnDropTarget(null);
+    resetCustomFieldForm();
     setIsManageColumnsModalOpen(true);
   };
 
   const handleCloseManageColumnsModal = () => {
-    if (isSavingColumnSettings) {
-      return;
-    }
-
     setIsManageColumnsModalOpen(false);
   };
 
-  const handleToggleColumnVisible = (key) => {
-    setDraftColumnSettings((currentSettings) =>
-      currentSettings.map((column) =>
-        column.key === key ? { ...column, visible: !column.visible } : column
-      )
-    );
+  const handleOpenAddCustomFieldForm = () => {
+    setEditingCustomFieldId(null);
+    setNewCustomFieldLabel("");
+    setNewCustomFieldType("text");
+    setNewCustomFieldOptionsText("");
+    setNewCustomFieldRequired(true);
+    setIsCustomFieldFormOpen(true);
   };
 
-  const handleColumnDragEnd = () => {
-    setDraggedColumnKey(null);
-    setColumnDropTarget(null);
+  // Editing renders inline under the field's own row, not in the "Add
+  // column" section, so it only needs the editing id set, not the add form.
+  const handleOpenEditCustomFieldForm = (field) => {
+    setIsCustomFieldFormOpen(false);
+    setEditingCustomFieldId(field.id);
+    setNewCustomFieldLabel(field.label);
+    setNewCustomFieldType(field.fieldType);
+    setNewCustomFieldOptionsText(Array.isArray(field.options) ? field.options.join(", ") : "");
   };
 
-  const handleColumnDrop = (targetKey, placeAfter) => {
-    setDraftColumnSettings((currentSettings) => {
-      const draggedIndex = currentSettings.findIndex((column) => column.key === draggedColumnKey);
-
-      if (draggedIndex === -1 || draggedColumnKey === targetKey) {
-        return currentSettings;
-      }
-
-      const nextSettings = [...currentSettings];
-      const [draggedColumn] = nextSettings.splice(draggedIndex, 1);
-      let targetIndex = nextSettings.findIndex((column) => column.key === targetKey);
-
-      if (targetIndex === -1) {
-        return currentSettings;
-      }
-
-      if (placeAfter) {
-        targetIndex += 1;
-      }
-
-      nextSettings.splice(targetIndex, 0, draggedColumn);
-      return nextSettings;
-    });
-
-    handleColumnDragEnd();
-  };
-
-  const handleResetColumnDefaults = () => {
-    setDraftColumnSettings(buildDefaultTaskColumnSettings());
-  };
-
-  const handleSaveColumnSettings = async () => {
+  const handleSaveCustomField = async () => {
     if (!authSession?.token || !project?.id) {
       return;
     }
 
-    if (!draftColumnSettings.some((column) => column.visible)) {
+    const label = newCustomFieldLabel.trim();
+
+    if (!label) {
+      await showErrorAlert("Field name required", "Please give the custom field a name.");
+      return;
+    }
+
+    const payload = { label, fieldType: newCustomFieldType };
+
+    if (newCustomFieldType === "select") {
+      const options = newCustomFieldOptionsText
+        .split(",")
+        .map((option) => option.trim())
+        .filter(Boolean);
+
+      if (options.length === 0) {
+        await showErrorAlert(
+          "Options required",
+          "Please provide at least one option, separated by commas."
+        );
+        return;
+      }
+
+      payload.options = options;
+    }
+
+    setIsSavingCustomField(true);
+
+    try {
+      if (editingCustomFieldId) {
+        const result = await updateProjectCustomField(
+          project.id,
+          editingCustomFieldId,
+          payload,
+          authSession.token
+        );
+        const updatedField = result?.customField;
+
+        if (updatedField) {
+          setCustomFields((currentFields) =>
+            currentFields.map((field) => (field.id === editingCustomFieldId ? updatedField : field))
+          );
+        }
+
+        resetCustomFieldForm();
+        await showSuccessAlert(
+          "Column updated",
+          result?.message || "The custom field has been updated successfully."
+        );
+      } else {
+        const result = await createProjectCustomField(project.id, payload, authSession.token);
+        const createdField = result?.customField;
+
+        if (createdField) {
+          setCustomFields((currentFields) => [...currentFields, createdField]);
+
+          const columnKey = buildCustomFieldColumnKey(createdField.id);
+          const nextSettings = [
+            ...taskColumnSettings,
+            { key: columnKey, visible: newCustomFieldRequired },
+          ];
+
+          setTaskColumnSettings(nextSettings);
+
+          // A new field defaults to visible with no saved entry at all, so a
+          // save call is only needed when the user opts out of that default.
+          if (!newCustomFieldRequired) {
+            await updateProjectTaskColumns(project.id, { columns: nextSettings }, authSession.token);
+          }
+        }
+
+        resetCustomFieldForm();
+        await showSuccessAlert(
+          "Column added",
+          result?.message || "The custom field has been added successfully."
+        );
+      }
+    } catch (error) {
+      await showErrorAlert(
+        editingCustomFieldId ? "Unable to update custom field" : "Unable to add custom field",
+        error.message || "Something went wrong while saving the custom field."
+      );
+    } finally {
+      setIsSavingCustomField(false);
+    }
+  };
+
+  const handleDeleteCustomField = async (fieldId) => {
+    if (!authSession?.token || !project?.id) {
+      return;
+    }
+
+    const confirmation = await showConfirmAlert(
+      "Delete custom field?",
+      "This removes the field and its values from every task. This cannot be undone.",
+      {
+        confirmButtonText: "Delete",
+        cancelButtonText: "Cancel",
+      }
+    );
+
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    setDeletingCustomFieldId(fieldId);
+
+    try {
+      await deleteProjectCustomField(project.id, fieldId, authSession.token);
+      const columnKey = buildCustomFieldColumnKey(fieldId);
+
+      setCustomFields((currentFields) => currentFields.filter((field) => field.id !== fieldId));
+      setTaskColumnSettings((currentSettings) =>
+        currentSettings.filter((column) => column.key !== columnKey)
+      );
+      await showSuccessAlert(
+        "Column removed",
+        "The custom field has been deleted successfully."
+      );
+    } catch (error) {
+      await showErrorAlert(
+        "Unable to delete custom field",
+        error.message || "Something went wrong while deleting the custom field."
+      );
+    } finally {
+      setDeletingCustomFieldId(null);
+    }
+  };
+
+  const persistTaskColumnSettings = async (
+    nextSettings,
+    previousSettings,
+    errorTitle,
+    successTitle,
+    successMessage
+  ) => {
+    setTaskColumnSettings(nextSettings);
+
+    try {
+      await updateProjectTaskColumns(project.id, { columns: nextSettings }, authSession.token);
+      await showSuccessAlert(successTitle, successMessage);
+    } catch (error) {
+      setTaskColumnSettings(previousSettings);
+      await showErrorAlert(errorTitle, error.message || "Something went wrong while saving.");
+    }
+  };
+
+  const handleToggleColumnRequired = async (columnKey, nextVisible) => {
+    if (!authSession?.token || !project?.id) {
+      return;
+    }
+
+    const previousSettings = taskColumnSettings;
+    const nextSettings = previousSettings.some((column) => column.key === columnKey)
+      ? previousSettings.map((column) =>
+          column.key === columnKey ? { ...column, visible: nextVisible } : column
+        )
+      : [...previousSettings, { key: columnKey, visible: nextVisible }];
+
+    if (!nextSettings.some((column) => column.visible)) {
       await showErrorAlert(
         "At least one column required",
         "Please keep at least one column visible."
@@ -1970,29 +2235,63 @@ export default function ProjectTasksMain({
       return;
     }
 
-    setIsSavingColumnSettings(true);
+    setSavingColumnKey(columnKey);
 
     try {
-      const result = await updateProjectTaskColumns(
-        project.id,
-        { columns: draftColumnSettings },
-        authSession.token
-      );
-
-      setTaskColumnSettings(normalizeTaskColumnSettings(result?.project?.taskListColumns));
-      setIsManageColumnsModalOpen(false);
-      await showSuccessAlert(
-        "Columns updated",
-        result?.message || "The task list columns have been updated successfully."
-      );
-    } catch (error) {
-      await showErrorAlert(
-        "Unable to update columns",
-        error.message || "Something went wrong while saving column settings."
+      await persistTaskColumnSettings(
+        nextSettings,
+        previousSettings,
+        "Unable to update column",
+        "Column updated",
+        nextVisible ? "This column is now visible on the task list." : "This column is now hidden from the task list."
       );
     } finally {
-      setIsSavingColumnSettings(false);
+      setSavingColumnKey(null);
     }
+  };
+
+  const handleColumnDragEnd = () => {
+    setDraggedColumnKey(null);
+    setColumnDropTarget(null);
+  };
+
+  const handleColumnDrop = async (targetKey, placeAfter) => {
+    const draggedKey = draggedColumnKey;
+
+    handleColumnDragEnd();
+
+    if (!draggedKey || draggedKey === targetKey || !authSession?.token || !project?.id) {
+      return;
+    }
+
+    const previousSettings = taskColumnSettings;
+    const draggedIndex = previousSettings.findIndex((column) => column.key === draggedKey);
+
+    if (draggedIndex === -1) {
+      return;
+    }
+
+    const reordered = [...previousSettings];
+    const [draggedColumn] = reordered.splice(draggedIndex, 1);
+    let targetIndex = reordered.findIndex((column) => column.key === targetKey);
+
+    if (targetIndex === -1) {
+      return;
+    }
+
+    if (placeAfter) {
+      targetIndex += 1;
+    }
+
+    reordered.splice(targetIndex, 0, draggedColumn);
+
+    await persistTaskColumnSettings(
+      reordered,
+      previousSettings,
+      "Unable to reorder columns",
+      "Columns reordered",
+      "The task list column order has been updated successfully."
+    );
   };
 
   const renderTaskColumnCell = (task, columnKey) => {
@@ -2164,8 +2463,107 @@ export default function ProjectTasksMain({
             )}
           </td>
         );
-      default:
-        return null;
+      default: {
+        if (!isCustomFieldColumnKey(columnKey)) {
+          return null;
+        }
+
+        const fieldId = parseCustomFieldIdFromColumnKey(columnKey);
+        const fieldDef = customFields.find((field) => String(field.id) === fieldId);
+
+        if (!fieldDef) {
+          return null;
+        }
+
+        const draftValues =
+          taskDrafts[task.rawId]?.customFieldValues ?? task.rawTask?.customFieldValues ?? {};
+        const currentValue = draftValues[fieldId];
+        const cellHoverKey = buildHoveredCellKey(task.rawId, columnKey);
+
+        const commitValue = (nextValue, options = {}) => {
+          const baseValues =
+            taskDrafts[task.rawId]?.customFieldValues ?? task.rawTask?.customFieldValues ?? {};
+          handleInlineTaskChange(
+            task.rawId,
+            "customFieldValues",
+            { ...baseValues, [fieldId]: nextValue },
+            options
+          );
+        };
+
+        if (fieldDef.fieldType === "checkbox") {
+          return (
+            <td key={columnKey}>
+              <Checkbox
+                size="sm"
+                checked={Boolean(currentValue)}
+                onChange={(event) => commitValue(event.target.checked, { saveImmediately: true })}
+              />
+            </td>
+          );
+        }
+
+        if (fieldDef.fieldType === "select") {
+          return (
+            <td
+              key={columnKey}
+              onMouseEnter={() => setHoveredCellKey(cellHoverKey)}
+              onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, columnKey)}
+              onBlurCapture={() => handleInlineTaskBlur(task.rawId)}
+            >
+              {hoveredCellKey === cellHoverKey ? (
+                <Select
+                  size="sm"
+                  value={currentValue || ""}
+                  onChange={(_, value) => commitValue(value || "", { saveImmediately: true })}
+                  onClose={() => handleInlineTaskBlur(task.rawId)}
+                  sx={{ minHeight: "34px", fontSize: "0.82rem" }}
+                >
+                  <Option value="">Not set</Option>
+                  {(fieldDef.options || []).map((option) => (
+                    <Option key={`inline-${columnKey}-${task.rawId}-${option}`} value={option}>
+                      {option}
+                    </Option>
+                  ))}
+                </Select>
+              ) : (
+                currentValue || "-"
+              )}
+            </td>
+          );
+        }
+
+        const inputType =
+          fieldDef.fieldType === "number" ? "number" : fieldDef.fieldType === "date" ? "date" : "text";
+
+        return (
+          <td
+            key={columnKey}
+            onMouseEnter={() => setHoveredCellKey(cellHoverKey)}
+            onMouseLeave={() => handleInlineCellMouseLeave(task.rawId, columnKey)}
+          >
+            {hoveredCellKey === cellHoverKey ? (
+              <Input
+                size="sm"
+                type={inputType}
+                value={currentValue ?? ""}
+                onChange={(event) =>
+                  commitValue(
+                    event.target.value,
+                    inputType === "date" ? { saveImmediately: true } : {}
+                  )
+                }
+                onBlur={() => handleInlineTaskBlur(task.rawId)}
+                sx={{ "--Input-minHeight": "34px", fontSize: "0.82rem" }}
+              />
+            ) : inputType === "date" ? (
+              formatDateLabel(currentValue)
+            ) : (
+              currentValue || "-"
+            )}
+          </td>
+        );
+      }
     }
   };
 
@@ -3016,6 +3414,19 @@ export default function ProjectTasksMain({
                         : ArrowDownwardRounded
                       : UnfoldMoreRounded;
 
+                    if (column.isCustomField) {
+                      return (
+                        <th key={column.key} style={column.style}>
+                          <Typography
+                            level="body-xs"
+                            sx={{ fontWeight: 700, color: "inherit", whiteSpace: "nowrap" }}
+                          >
+                            {column.label}
+                          </Typography>
+                        </th>
+                      );
+                    }
+
                     return (
                       <th
                         key={column.key}
@@ -3362,8 +3773,8 @@ export default function ProjectTasksMain({
                         </Stack>
                       )}
                     </td>
-                    {taskColumnSettings
-                      .filter((column) => column.visible)
+                    {orderedVisibleTaskColumns
+                      .filter((column) => column.key !== "id" && column.key !== "title")
                       .map((column) => renderTaskColumnCell(task, column.key))}
                     <td>
                       <Stack direction="row" spacing={0.5} alignItems="center">
@@ -3549,149 +3960,350 @@ export default function ProjectTasksMain({
       />
 
       <Modal open={isManageColumnsModalOpen} onClose={handleCloseManageColumnsModal}>
-        <ModalDialog layout="center" sx={{ width: "100%", maxWidth: 440, borderRadius: "16px" }}>
+        <ModalDialog
+          layout="center"
+          sx={{ width: "100%", maxWidth: 780, maxHeight: "85vh", borderRadius: "16px" }}
+        >
           <ModalClose onClick={handleCloseManageColumnsModal} />
-          <DialogTitle sx={{ fontWeight: 700 }}>Manage columns</DialogTitle>
-          <DialogContent>
-            <Typography level="body-sm" sx={{ color: "#60708e", mb: 1.5 }}>
-              Show, hide, or reorder the columns everyone sees on this project&apos;s task list.
-              ID and Task Name always stay visible.
+          <DialogTitle sx={{ fontWeight: 700, fontSize: "1.15rem" }}>
+            Manage task columns
+          </DialogTitle>
+          <DialogContent sx={{ overflowY: "auto" }}>
+            <Typography level="body-sm" sx={{ color: "#60708e", mb: 2 }}>
+              Drag to reorder, toggle Required to show or hide a column, or add a new custom
+              column below. ID and Task Name always stay visible.
             </Typography>
-            <Stack spacing={0.75}>
-              {draftColumnSettings.map((column) => {
-                const columnDefinition = sortableTaskColumns.find(
-                  (definition) => definition.key === column.key
-                );
-                const isDraggedColumn = draggedColumnKey === column.key;
-                const isDropTarget =
-                  columnDropTarget?.key === column.key && !isDraggedColumn;
-                const dropEdge = isDropTarget
-                  ? columnDropTarget.placeAfter
-                    ? "after"
-                    : "before"
-                  : undefined;
 
-                return (
-                  <Stack
-                    key={column.key}
-                    data-column-row
-                    direction="row"
-                    alignItems="center"
-                    justifyContent="space-between"
-                    onDragOver={(event) => {
-                      if (!draggedColumnKey || isDraggedColumn) {
-                        return;
-                      }
+            <Sheet
+              variant="outlined"
+              sx={{ borderRadius: "10px", overflow: "hidden", overflowX: "auto" }}
+            >
+              <Table borderAxis="xBetween" sx={{ minWidth: 560 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: "30%" }}>Column name</th>
+                    <th style={{ width: "20%" }}>Column type</th>
+                    <th style={{ width: "20%" }}>Required</th>
+                    <th style={{ width: "20%" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taskColumnSettings.map((setting) => {
+                    const columnDefinition = allTaskColumns.find(
+                      (definition) => definition.key === setting.key
+                    );
 
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                      setColumnDropTarget({
-                        key: column.key,
-                        placeAfter: shouldDropAfter(event, event.currentTarget),
-                      });
-                    }}
-                    onDrop={(event) => {
-                      if (!draggedColumnKey) {
-                        return;
-                      }
+                    if (!columnDefinition) {
+                      return null;
+                    }
 
-                      event.preventDefault();
-                      handleColumnDrop(column.key, shouldDropAfter(event, event.currentTarget));
-                    }}
-                    data-drop-edge={dropEdge}
-                    sx={{
-                      px: 1.25,
-                      py: 0.75,
-                      border: "1px solid #e4e9f5",
-                      borderRadius: "10px",
-                      backgroundColor: "#f7f9fc",
-                      opacity: isDraggedColumn ? 0.45 : 1,
-                      transition: "opacity 0.15s ease",
-                      "&[data-drop-edge='before']": {
-                        boxShadow: "inset 0 2px 0 0 #3155ff",
-                      },
-                      "&[data-drop-edge='after']": {
-                        boxShadow: "inset 0 -2px 0 0 #3155ff",
-                      },
-                    }}
-                  >
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <Tooltip title="Drag to reorder">
-                        <Box
-                          component="span"
-                          draggable
-                          aria-label={`Drag to reorder ${columnDefinition?.label || column.key}`}
-                          onDragStart={(event) => {
-                            event.dataTransfer.effectAllowed = "move";
-                            event.dataTransfer.setData("text/plain", column.key);
+                    const isCustomField = Boolean(columnDefinition.isCustomField);
+                    const isDraggedColumn = draggedColumnKey === setting.key;
+                    const isDropTarget =
+                      columnDropTarget?.key === setting.key && !isDraggedColumn;
+                    const dropEdge = isDropTarget
+                      ? columnDropTarget.placeAfter
+                        ? "after"
+                        : "before"
+                      : undefined;
+                    const fieldId = isCustomField
+                      ? Number(parseCustomFieldIdFromColumnKey(setting.key))
+                      : null;
+                    const customField = isCustomField
+                      ? customFields.find((field) => field.id === fieldId)
+                      : null;
 
-                            const rowElement = event.currentTarget.closest("[data-column-row]");
+                    const isEditingThisField = isCustomField && editingCustomFieldId === fieldId;
 
-                            if (rowElement) {
-                              event.dataTransfer.setDragImage(rowElement, 24, 16);
+                    return (
+                      <Fragment key={setting.key}>
+                      <tr
+                        data-drop-edge={dropEdge}
+                        onDragOver={(event) => {
+                          if (!draggedColumnKey || isDraggedColumn) {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "move";
+                          setColumnDropTarget({
+                            key: setting.key,
+                            placeAfter: shouldDropAfter(event, event.currentTarget),
+                          });
+                        }}
+                        onDrop={(event) => {
+                          if (!draggedColumnKey) {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          void handleColumnDrop(
+                            setting.key,
+                            shouldDropAfter(event, event.currentTarget)
+                          );
+                        }}
+                        style={{
+                          opacity: isDraggedColumn ? 0.45 : 1,
+                          boxShadow:
+                            dropEdge === "before"
+                              ? "inset 0 2px 0 0 #3155ff"
+                              : dropEdge === "after"
+                                ? "inset 0 -2px 0 0 #3155ff"
+                                : undefined,
+                        }}
+                      >
+                        <td>
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            {canManageTaskColumns ? (
+                              <Tooltip title="Drag to reorder">
+                                <Box
+                                  component="span"
+                                  draggable
+                                  aria-label={`Drag to reorder ${columnDefinition.label}`}
+                                  onDragStart={(event) => {
+                                    event.dataTransfer.effectAllowed = "move";
+                                    event.dataTransfer.setData("text/plain", setting.key);
+                                    setDraggedColumnKey(setting.key);
+                                  }}
+                                  onDragEnd={handleColumnDragEnd}
+                                  sx={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    color: "#b3bcd2",
+                                    cursor: "grab",
+                                    "&:active": { cursor: "grabbing" },
+                                    "&:hover": { color: "#3155ff" },
+                                  }}
+                                >
+                                  <DragIndicatorRounded sx={{ fontSize: "1.1rem" }} />
+                                </Box>
+                              </Tooltip>
+                            ) : null}
+                            <Typography level="body-sm">{columnDefinition.label}</Typography>
+                          </Stack>
+                        </td>
+                        <td>
+                          {isCustomField
+                            ? customFieldTypeOptions.find(
+                                (option) => option.value === columnDefinition.fieldType
+                              )?.label || columnDefinition.fieldType
+                            : "Built-in"}
+                        </td>
+                        <td>
+                          <Checkbox
+                            size="sm"
+                            checked={setting.visible}
+                            disabled={!canManageTaskColumns || savingColumnKey === setting.key}
+                            onChange={(event) =>
+                              handleToggleColumnRequired(setting.key, event.target.checked)
                             }
+                          />
+                        </td>
+                        <td>
+                          {canManageTaskColumns ? (
+                            <Stack direction="row" spacing={0.5}>
+                              <Tooltip title={setting.visible ? "Hide column" : "Unhide column"}>
+                                <IconButton
+                                  size="sm"
+                                  variant="plain"
+                                  color="neutral"
+                                  disabled={savingColumnKey === setting.key}
+                                  onClick={() =>
+                                    handleToggleColumnRequired(setting.key, !setting.visible)
+                                  }
+                                  aria-label={
+                                    setting.visible
+                                      ? `Hide ${columnDefinition.label}`
+                                      : `Unhide ${columnDefinition.label}`
+                                  }
+                                >
+                                  {setting.visible ? (
+                                    <EyeIcon sx={{ fontSize: "1.1rem" }} />
+                                  ) : (
+                                    <EyeOffIcon sx={{ fontSize: "1.1rem" }} />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
+                              {isCustomField ? (
+                                <>
+                                  <Tooltip title="Edit column">
+                                    <IconButton
+                                      size="sm"
+                                      variant="plain"
+                                      color="neutral"
+                                      onClick={() =>
+                                        customField && handleOpenEditCustomFieldForm(customField)
+                                      }
+                                      aria-label={`Edit ${columnDefinition.label}`}
+                                    >
+                                      <EditIcon sx={{ fontSize: "1.1rem" }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Remove column">
+                                    <IconButton
+                                      size="sm"
+                                      variant="plain"
+                                      color="danger"
+                                      loading={deletingCustomFieldId === fieldId}
+                                      onClick={() => handleDeleteCustomField(fieldId)}
+                                      aria-label={`Remove ${columnDefinition.label}`}
+                                    >
+                                      <DeleteIcon sx={{ fontSize: "1.1rem" }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              ) : null}
+                            </Stack>
+                          ) : null}
+                        </td>
+                      </tr>
+                      {isEditingThisField ? (
+                        <tr>
+                          <td colSpan={4} style={{ backgroundColor: "#f7f9fc" }}>
+                            <Stack spacing={1.25} sx={{ p: 1 }}>
+                              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                                <Input
+                                  size="sm"
+                                  placeholder="Column name"
+                                  value={newCustomFieldLabel}
+                                  onChange={(event) => setNewCustomFieldLabel(event.target.value)}
+                                  sx={{ flex: 1 }}
+                                  autoFocus
+                                />
+                                <Select
+                                  size="sm"
+                                  placeholder="Column type"
+                                  value={newCustomFieldType}
+                                  onChange={(_, value) => setNewCustomFieldType(value || "text")}
+                                  sx={{ minWidth: 150 }}
+                                >
+                                  {customFieldTypeOptions.map((option) => (
+                                    <Option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </Option>
+                                  ))}
+                                </Select>
+                              </Stack>
+                              {newCustomFieldType === "select" ? (
+                                <Input
+                                  size="sm"
+                                  placeholder="Options, separated by commas"
+                                  value={newCustomFieldOptionsText}
+                                  onChange={(event) =>
+                                    setNewCustomFieldOptionsText(event.target.value)
+                                  }
+                                />
+                              ) : null}
+                              <Stack direction="row" spacing={1}>
+                                <Button
+                                  size="sm"
+                                  loading={isSavingCustomField}
+                                  onClick={() => {
+                                    void handleSaveCustomField();
+                                  }}
+                                >
+                                  Save column
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="plain"
+                                  color="neutral"
+                                  disabled={isSavingCustomField}
+                                  onClick={resetCustomFieldForm}
+                                >
+                                  Cancel
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          </td>
+                        </tr>
+                      ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </Sheet>
 
-                            setDraggedColumnKey(column.key);
-                          }}
-                          onDragEnd={handleColumnDragEnd}
-                          sx={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            color: "#b3bcd2",
-                            cursor: "grab",
-                            "&:active": { cursor: "grabbing" },
-                            "&:hover": { color: "#3155ff" },
-                          }}
-                        >
-                          <DragIndicatorRounded sx={{ fontSize: "1.1rem" }} />
-                        </Box>
-                      </Tooltip>
-                      <Checkbox
+            {canManageTaskColumns ? (
+              <Box sx={{ mt: 2 }}>
+                {isCustomFieldFormOpen ? (
+                  <Stack
+                    spacing={1.25}
+                    sx={{ p: 1.5, border: "1px dashed #d6dcec", borderRadius: "10px" }}
+                  >
+                    <Typography level="body-sm" sx={{ fontWeight: 700, color: "#3d4a68" }}>
+                      Add column
+                    </Typography>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                      <Input
                         size="sm"
-                        label={columnDefinition?.label || column.key}
-                        checked={column.visible}
-                        onChange={() => handleToggleColumnVisible(column.key)}
+                        placeholder="Column name"
+                        value={newCustomFieldLabel}
+                        onChange={(event) => setNewCustomFieldLabel(event.target.value)}
+                        sx={{ flex: 1 }}
+                        autoFocus
                       />
+                      <Select
+                        size="sm"
+                        placeholder="Column type"
+                        value={newCustomFieldType}
+                        onChange={(_, value) => setNewCustomFieldType(value || "text")}
+                        sx={{ minWidth: 150 }}
+                      >
+                        {customFieldTypeOptions.map((option) => (
+                          <Option key={option.value} value={option.value}>
+                            {option.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Stack>
+                    {newCustomFieldType === "select" ? (
+                      <Input
+                        size="sm"
+                        placeholder="Options, separated by commas"
+                        value={newCustomFieldOptionsText}
+                        onChange={(event) => setNewCustomFieldOptionsText(event.target.value)}
+                      />
+                    ) : null}
+                    <Checkbox
+                      size="sm"
+                      label="Required"
+                      checked={newCustomFieldRequired}
+                      onChange={(event) => setNewCustomFieldRequired(event.target.checked)}
+                    />
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        size="sm"
+                        loading={isSavingCustomField}
+                        onClick={() => {
+                          void handleSaveCustomField();
+                        }}
+                      >
+                        Save column
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="plain"
+                        color="neutral"
+                        disabled={isSavingCustomField}
+                        onClick={resetCustomFieldForm}
+                      >
+                        Cancel
+                      </Button>
                     </Stack>
                   </Stack>
-                );
-              })}
-            </Stack>
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mt: 2.5 }}
-            >
-              <Button
-                variant="plain"
-                color="neutral"
-                disabled={isSavingColumnSettings}
-                onClick={handleResetColumnDefaults}
-                sx={{ px: 0.5 }}
-              >
-                Reset to default
-              </Button>
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="plain"
-                  color="neutral"
-                  disabled={isSavingColumnSettings}
-                  onClick={handleCloseManageColumnsModal}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  loading={isSavingColumnSettings}
-                  onClick={() => {
-                    void handleSaveColumnSettings();
-                  }}
-                  sx={{ color: "var(--color-font-secondary)" }}
-                >
-                  Save changes
-                </Button>
-              </Stack>
-            </Stack>
+                ) : (
+                  <Button
+                    variant="soft"
+                    startDecorator={<PlusIcon sx={{ fontSize: "1.1rem" }} />}
+                    onClick={handleOpenAddCustomFieldForm}
+                  >
+                    Add column
+                  </Button>
+                )}
+              </Box>
+            ) : null}
           </DialogContent>
         </ModalDialog>
       </Modal>

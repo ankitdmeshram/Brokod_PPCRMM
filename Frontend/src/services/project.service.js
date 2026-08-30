@@ -160,6 +160,54 @@ export async function updateProjectTaskColumns(projectId, payload, token) {
   return parseApiResponse(response);
 }
 
+export async function fetchProjectCustomFields(projectId, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/custom-fields`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function createProjectCustomField(projectId, payload, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/custom-fields`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function updateProjectCustomField(projectId, fieldId, payload, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/custom-fields/${fieldId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse(response);
+}
+
+export async function deleteProjectCustomField(projectId, fieldId, token) {
+  const response = await fetch(`${PROJECT_API_BASE}/${projectId}/custom-fields/${fieldId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseApiResponse(response);
+}
+
 export async function deleteProject(projectId, token) {
   const response = await fetch(`${PROJECT_API_BASE}/${projectId}`, {
     method: "DELETE",

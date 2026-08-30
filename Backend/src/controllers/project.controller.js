@@ -137,6 +137,58 @@ const updateProjectTaskColumns = asyncHandler(async (request, response) => {
   });
 });
 
+const getProjectCustomFields = asyncHandler(async (request, response) => {
+  const customFields = await projectService.getProjectCustomFields(
+    request.params.projectId,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({ customFields });
+});
+
+const createProjectCustomField = asyncHandler(async (request, response) => {
+  const customField = await projectService.createProjectCustomField(
+    request.params.projectId,
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(201).json({
+    message: "Custom field created successfully.",
+    customField,
+  });
+});
+
+const updateProjectCustomField = asyncHandler(async (request, response) => {
+  const customField = await projectService.updateProjectCustomField(
+    request.params.projectId,
+    request.params.fieldId,
+    request.body,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    message: "Custom field updated successfully.",
+    customField,
+  });
+});
+
+const deleteProjectCustomField = asyncHandler(async (request, response) => {
+  await projectService.deleteProjectCustomField(
+    request.params.projectId,
+    request.params.fieldId,
+    request.user.sub,
+    request.user.role
+  );
+
+  response.status(200).json({
+    message: "Custom field deleted successfully.",
+  });
+});
+
 const deleteProject = asyncHandler(async (request, response) => {
   await projectService.deleteProject(
     request.params.projectId,
@@ -152,13 +204,17 @@ const deleteProject = asyncHandler(async (request, response) => {
 module.exports = {
   addProjectUser,
   createProject,
+  createProjectCustomField,
   deleteProjectUser,
   deleteProject,
+  deleteProjectCustomField,
   getProjectById,
   getProjectBySlug,
+  getProjectCustomFields,
   getProjects,
   getProjectUsers,
   updateProjectUser,
   updateProject,
+  updateProjectCustomField,
   updateProjectTaskColumns,
 };

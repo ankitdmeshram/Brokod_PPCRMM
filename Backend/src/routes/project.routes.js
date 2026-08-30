@@ -320,6 +320,30 @@ router.patch(
   projectController.updateProjectTaskColumns
 );
 router.get(
+  "/:projectId/custom-fields",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.getProjectCustomFields
+);
+router.post(
+  "/:projectId/custom-fields",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.createProjectCustomField
+);
+router.patch(
+  "/:projectId/custom-fields/:fieldId",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.updateProjectCustomField
+);
+router.delete(
+  "/:projectId/custom-fields/:fieldId",
+  requireAuth,
+  requireActiveWorkspaceUserByProjectId,
+  projectController.deleteProjectCustomField
+);
+router.get(
   "/:projectId",
   requireAuth,
   requireActiveWorkspaceUserByProjectId,

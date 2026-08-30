@@ -333,6 +333,38 @@ const normalizeAdvancedFilters = (advancedFilters) => {
   });
 };
 
+const MAX_CUSTOM_FIELD_VALUES = 50;
+
+// Custom field ids are resolved/validated against the project's live field
+// list at render time, not here, so this only guards against malformed
+// shapes (non-object payloads, non-numeric keys, oversized objects).
+const normalizeCustomFieldValues = (rawValues) => {
+  if (!rawValues || typeof rawValues !== "object" || Array.isArray(rawValues)) {
+    return {};
+  }
+
+  const normalized = {};
+
+  Object.entries(rawValues)
+    .slice(0, MAX_CUSTOM_FIELD_VALUES)
+    .forEach(([key, value]) => {
+      if (!/^\d+$/.test(String(key))) {
+        return;
+      }
+
+      if (value === null || typeof value === "boolean") {
+        normalized[key] = value;
+        return;
+      }
+
+      if (typeof value === "string" || typeof value === "number") {
+        normalized[key] = String(value);
+      }
+    });
+
+  return normalized;
+};
+
 const normalizeTaskPayload = (payload = {}) => {
   const title = String(payload?.title || "").trim();
   const description = String(payload?.description || "").trim();
@@ -355,6 +387,7 @@ const normalizeTaskPayload = (payload = {}) => {
     "completedAt"
   );
   const tags = normalizeTags(payload?.tags);
+  const customFieldValues = normalizeCustomFieldValues(payload?.customFieldValues);
 
   return {
     title,
@@ -369,6 +402,7 @@ const normalizeTaskPayload = (payload = {}) => {
     dueDate,
     completedAt,
     tags,
+    customFieldValues,
   };
 };
 
@@ -388,6 +422,7 @@ const validateCreateTaskPayload = (payload) => {
     dueDate,
     completedAt,
     tags,
+    customFieldValues,
   } = normalizeTaskPayload(payload);
   const initialComment = String(payload?.initialComment || payload?.comments || "").trim();
   const initialActivityLog = String(payload?.initialActivityLog || payload?.activityLogs || "").trim();
@@ -451,6 +486,7 @@ const validateCreateTaskPayload = (payload) => {
     completedAt,
     taskType,
     tags,
+    customFieldValues,
     initialComment,
     initialActivityLog,
   };
